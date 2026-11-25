@@ -41,6 +41,17 @@ class RackDevice final : public Device, public RackCore {
     // ---- in-place processing: Parallel / Series / Select + dry-wet + gain ----
     void process(float* buf, int32_t frames) override;
 
+    bool hasTail() const override { return chainsHaveTail(); }
+    bool isIdle() const override {
+        if (sleepMode() == dsp::PluginSleepMode::Never || hasPendingRetire()) return false;
+        return chainsIdle(false);
+    }
+    void wake() override { wakeChains(false); }
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Device::setSleepMode(mode);
+        wake();
+    }
+
     // PDC: report chain latency only when compensation is on. Series accumulates
     // along the path; parallel/select align to the longest chain.
     int32_t latencySamples() const override;
@@ -55,7 +66,10 @@ class RackDevice final : public Device, public RackCore {
 
     // ---- persistence + clone (shared blob) ----------------------------------
     std::vector<uint8_t> getState() const override { return serialize(); }
-    void setState(const uint8_t* data, int32_t size) override { deserialize(data, size); }
+    void setState(const uint8_t* data, int32_t size) override {
+        deserialize(data, size);
+        wake();
+    }
     std::shared_ptr<Device> clone() const override;
 
   private:

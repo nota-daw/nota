@@ -92,7 +92,9 @@ class AutoGain : public Device {
     // engine-visible tail. The device's own silence-hold keeps frozen gains
     // correct across the sleep.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override {
+        return idle_ && silent_.load(std::memory_order_relaxed) != 0 && msMom_ < kGateMs && msOutMom_ < kGateMs;
+    }
     void wake() override;
 
     const char* displayName() const override { return "Nota Level"; }

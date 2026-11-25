@@ -18,6 +18,7 @@
 
 #include "devices/EditorPreview.h"
 #include "dsp/core/DeviceTelemetry.h"
+#include "dsp/core/SilenceGate.h"
 #include "engine/MidiController.h"
 #include "engine/NoteExpression.h"
 #include "engine/TransportInfo.h"
@@ -262,7 +263,16 @@ class Instrument {
     // with no MIDI this block can skip rendering entirely. Defaults never-idle.
     virtual bool hasTail() const { return false; }
     virtual bool isIdle() const { return false; }
+    // True when a sleeping instrument still needs render() called for cheap phase/clock continuity.
+    virtual bool needsIdleRender() const { return false; }
     virtual void wake() {}
+    virtual void setSleepMode(dsp::PluginSleepMode mode) {
+        sleepMode_.store(mode, std::memory_order_release);
+        wake();
+    }
+    virtual dsp::PluginSleepMode sleepMode() const {
+        return sleepMode_.load(std::memory_order_relaxed);
+    }
 
     // Currently sounding voice count, for a synth editor's voice meter. -1 = the
     // instrument doesn't expose one. Message-thread read of an audio-thread snapshot.
@@ -430,6 +440,7 @@ class Instrument {
 
   private:
     mutable dsp::DeviceTelemetry telemetry_;
+    std::atomic<dsp::PluginSleepMode> sleepMode_{dsp::PluginSleepMode::Auto};
     static uint64_t nextUid() {
         static std::atomic<uint64_t> next{1};
         return next.fetch_add(1, std::memory_order_relaxed);

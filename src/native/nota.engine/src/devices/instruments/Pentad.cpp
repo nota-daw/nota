@@ -172,6 +172,7 @@ void Pentad::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> Pentad::clone() const {
@@ -288,6 +289,7 @@ void Pentad::noteOff(int32_t pitch) {
 }
 
 void Pentad::noteExpression(int32_t pitch, int32_t dim, float value) {
+    wake();
     if (pitch < 0) {
         gexpr_.set(dim, value);
         return;
@@ -300,8 +302,11 @@ void Pentad::noteExpression(int32_t pitch, int32_t dim, float value) {
 }
 
 void Pentad::render(float* out, int32_t frames) {
-    dsp::ScopedNoDenormals ftz;
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
     const double pr = pendingRate_.load(std::memory_order_relaxed);
+    if (skip && pr == sampleRate_) return;
+    dsp::ScopedNoDenormals ftz;
     const auto cpuTimer = blockTimer(frames, pr, 0.05);
     if (pr != sampleRate_) { // voices keep playing; only rate-derived state restarts
         sampleRate_ = pr;
@@ -319,20 +324,14 @@ void Pentad::render(float* out, int32_t frames) {
     }
     // Sleep: no sounding voice plus a silent block means the tail (voices and
     // the HIIR decimator drain) has settled; the hangover covers the drain.
-    if (activeCount_ == 0 && chunkOutPeak_ <= 1.0e-5f) quietSamples_ += (uint64_t)frames;
-    else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
-    if (quietSamples_ > kIdleHangover) idle_ = true;
+    gate_.observe(activeCount_ > 0 || chunkOutPeak_ > 1.0e-5f, frames, gateEpoch);
     chunkOutPeak_ = 0.0f;
     tFrames_ += frames;
     publishTelemetry(frames);
 }
 
 void Pentad::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 int Pentad::allocate(int N, bool& fade) {

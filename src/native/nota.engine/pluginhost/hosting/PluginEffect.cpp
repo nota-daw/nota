@@ -53,6 +53,7 @@ bool PluginEffect::attach(std::unique_ptr<juce::AudioPluginInstance> p) {
     if (!pendingState_.empty()) {
         writeState(plugin_.get(), pendingState_.data(), (int32_t)pendingState_.size());
         std::vector<uint8_t>().swap(pendingState_);
+        refreshGateConfig(sr_);
     }
     plugin_->addListener(this); // "Learn" (M9-B3)
     // Per-instance VST3 buffers/playhead/sidechain data permit an exclusive worker
@@ -120,6 +121,14 @@ void PluginEffect::setSampleRate(double sr, int32_t maxBlock) {
     }
     plugin_->setPlayHead(&playHead_); // DAW transport sync
     workgroup_.bind(*plugin_);
+    refreshGateConfig(sr);
+}
+
+void PluginEffect::refreshGateConfig(double sr) noexcept {
+    const double tailSec = plugin_ ? plugin_->getTailLengthSeconds() : 0.0;
+    hasTail_.store(plugin_ != nullptr && tailSec > 0.0, std::memory_order_relaxed);
+    gate_.prepare(sr);
+    gate_.setPluginTailSeconds(tailSec);
 }
 
 int32_t PluginEffect::latencySamples() const {
@@ -130,23 +139,38 @@ void PluginEffect::process(float* buf, int32_t frames) {
     const float* sc = scBuf_;
     const int32_t scFrames = scFrames_;
     scBuf_ = nullptr; // consume once; the engine re-hands it each block if a source is set
+    scFrames_ = 0;
     // Not loaded yet (or couldn't load): the track's audio goes through untouched.
     if (frames <= 0 || !live_.load(std::memory_order_acquire)) return;
+
+    const bool mainInSilent =
+        dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
+    const bool scInActive = hasSidechain_ && sc != nullptr && scFrames > 0
+        && !dsp::SilenceGate::isBufferSilent(
+            sc, std::min(frames, scFrames) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
+
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip && mainInSilent && !scInActive) return;
+
+    bool outputSilent = true;
     if (frames <= maxBlock_) {
-        processPiece(buf, frames, sc, scFrames);
-        return;
+        outputSilent = processPiece(buf, frames, sc, scFrames);
+    } else {
+        // Longer than the plug-in was prepared for (#447): in pieces, the key and the transport
+        // moving along with them.
+        const double sr = plugin_->getSampleRate();
+        for (int32_t off = 0; off < frames; off += maxBlock_) {
+            const int32_t n = juce::jmin(frames - off, maxBlock_);
+            if (!processPiece(buf + (size_t)off * 2, n, sc != nullptr ? sc + (size_t)off * 2 : nullptr, scFrames - off))
+                outputSilent = false;
+            advanceTransport(playHead_.info, n, sr);
+        }
     }
-    // Longer than the plug-in was prepared for (#447): in pieces, the key and the transport
-    // moving along with them.
-    const double sr = plugin_->getSampleRate();
-    for (int32_t off = 0; off < frames; off += maxBlock_) {
-        const int32_t n = juce::jmin(frames - off, maxBlock_);
-        processPiece(buf + (size_t)off * 2, n, sc != nullptr ? sc + (size_t)off * 2 : nullptr, scFrames - off);
-        advanceTransport(playHead_.info, n, sr);
-    }
+    gate_.observe(!mainInSilent || scInActive || !outputSilent, frames, gateEpoch);
 }
 
-void PluginEffect::processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames) {
+bool PluginEffect::processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames) {
     const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
     storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
     float* l = storage_.getWritePointer(0);
@@ -180,6 +204,7 @@ void PluginEffect::processPiece(float* buf, int32_t frames, const float* scBuf, 
     const float* ol = block.getReadPointer(0);
     const float* orr = stereoOut_ ? block.getReadPointer(1) : ol;
     simd_audio::interleaveStereoWetDryMix(buf, ol, orr, frames, sidechainMix(), 1.0f - sidechainMix());
+    return dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
 }
 
 void PluginEffect::openEditor() {
@@ -197,17 +222,18 @@ std::vector<uint8_t> PluginEffect::getState() const {
 }
 
 void PluginEffect::setState(const uint8_t* data, int32_t size) {
-    if (plugin_) writeState(plugin_.get(), data, size);
-    else if (data != nullptr && size > 0) pendingState_.assign(data, data + size);
+    if (plugin_) {
+        writeState(plugin_.get(), data, size);
+        const double sr = plugin_->getSampleRate() > 0 ? plugin_->getSampleRate() : sr_;
+        refreshGateConfig(sr);
+    } else if (data != nullptr && size > 0) {
+        pendingState_.assign(data, data + size);
+    }
 }
 
 std::string PluginEffect::pluginIdentifier() const {
     if (plugin_) return plugin_->getPluginDescription().createIdentifierString().toStdString();
     return desc_.name.isNotEmpty() ? desc_.createIdentifierString().toStdString() : std::string{};
-}
-
-bool PluginEffect::hasTail() const {
-    return live_.load(std::memory_order_acquire) && plugin_->getTailLengthSeconds() > 0.0;
 }
 
 int32_t PluginEffect::pluginParamCount() const {
@@ -231,7 +257,10 @@ float PluginEffect::pluginParamGet(int32_t i) const {
     return live_.load(std::memory_order_acquire) ? paramGetImpl(plugin_.get(), i) : 0.0f;
 }
 void PluginEffect::pluginParamSet(int32_t i, float v) {
-    if (live_.load(std::memory_order_acquire)) paramSetImpl(plugin_.get(), i, v);
+    if (live_.load(std::memory_order_acquire)) {
+        paramSetImpl(plugin_.get(), i, v);
+        gate_.wake();
+    }
 }
 int32_t PluginEffect::pluginParamIndexOfId(const std::string& id) const {
     return paramIndexOfIdImpl(plugin_.get(), id);
@@ -271,11 +300,13 @@ std::shared_ptr<nota::Device> PluginEffect::clone() const {
     const auto st = getState();
     if (!st.empty()) d->setState(st.data(), (int32_t)st.size());
     d->setSidechainSourceTrackId(scTrackId_.load(std::memory_order_relaxed));
+    d->setSleepMode(sleepMode());
     return d;
 }
 
 void PluginEffect::audioProcessorParameterChanged(juce::AudioProcessor*, int index, float) {
     lastTouched_.store(index, std::memory_order_relaxed);
+    gate_.wake();
 }
 
 void PluginEffect::audioProcessorParameterChangeGestureBegin(juce::AudioProcessor*, int index) {

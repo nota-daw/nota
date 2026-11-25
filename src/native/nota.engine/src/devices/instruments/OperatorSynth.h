@@ -126,8 +126,12 @@ class OperatorSynth final : public Instrument {
     // Sleep contract: release envelopes ring past note-off (the engine-visible tail).
     // Settles after the hangover; noteOn/noteOff/setParam wake.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -231,8 +235,7 @@ class OperatorSynth final : public Instrument {
 
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;
-    uint64_t quietSamples_ = 0;
-    bool idle_ = false;
+    dsp::SilenceGate gate_{kIdleSamples};
 };
 
 } // namespace nota

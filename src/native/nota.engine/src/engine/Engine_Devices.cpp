@@ -2062,6 +2062,31 @@ bool Engine::trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const {
     return t->devices[deviceIndex] && t->devices[deviceIndex]->bypassed();
 }
 
+bool Engine::setPluginSleepMode(int32_t trackId, int32_t deviceIndex, int32_t mode) {
+    if (mode != NOTA_PLUGIN_SLEEP_AUTO && mode != NOTA_PLUGIN_SLEEP_NEVER) return false;
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return false;
+    const auto policy = static_cast<dsp::PluginSleepMode>(mode);
+    if (deviceIndex == -1) {
+        if (!t->instrument) return false;
+        t->instrument->setSleepMode(policy);
+        return true;
+    }
+    if (deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size()) || !t->devices[deviceIndex]) return false;
+    t->devices[deviceIndex]->setSleepMode(policy);
+    return true;
+}
+
+int32_t Engine::pluginSleepMode(int32_t trackId, int32_t deviceIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return NOTA_PLUGIN_SLEEP_AUTO;
+    if (deviceIndex == -1)
+        return t->instrument ? static_cast<int32_t>(t->instrument->sleepMode()) : NOTA_PLUGIN_SLEEP_AUTO;
+    if (deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size()) || !t->devices[deviceIndex])
+        return NOTA_PLUGIN_SLEEP_AUTO;
+    return static_cast<int32_t>(t->devices[deviceIndex]->sleepMode());
+}
+
 void Engine::setTrackDeviceFolded(int32_t trackId, int32_t deviceIndex, bool folded) {
     auto t = findTrackAuthoring(trackId);
     if (!t) return;

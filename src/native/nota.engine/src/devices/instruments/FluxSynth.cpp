@@ -40,8 +40,7 @@ void FluxSynth::setTransport(double beatStart, double spb, bool playing) {
 }
 
 void FluxSynth::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 std::string FluxSynth::pluginParamId(int32_t i) const {
@@ -84,6 +83,7 @@ void FluxSynth::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> FluxSynth::clone() const {
@@ -135,6 +135,16 @@ void FluxSynth::allNotesOff() {
 }
 
 void FluxSynth::render(float* out, int32_t frames) {
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    const bool sidechainActive = scTrackId_.load(std::memory_order_relaxed) >= 0 && scBuf_ != nullptr && scFrames_ > 0
+        && !dsp::SilenceGate::isBufferSilent(
+            scBuf_, std::min(frames, scFrames_) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
+    if (skip && !sidechainActive) {
+        scBuf_ = nullptr;
+        scFrames_ = 0;
+        return;
+    }
     // ---- 1) React: analyse the sidechain (or self) once per block ------
     analyzeSidechain(frames);
     const int target = std::clamp((int)std::lround(get(Target) * 3.0f), 0, 3);
@@ -268,13 +278,7 @@ void FluxSynth::render(float* out, int32_t frames) {
 
     // Auto-sleep flag only (the engine skips render while idle): no voice sounding
     // and this block silent. noteOn/noteOff/setParam wake.
-    if (active == 0 && peak <= 1.0e-5f) {
-        quietSamples_ += (uint64_t)frames;
-        if (quietSamples_ > kIdleSamples) idle_ = true;
-    } else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
+    gate_.observe(active > 0 || peak > 1.0e-5f || sidechainActive, frames, gateEpoch);
 
     // Publish telemetry for the editor.
     scope_[S_Env].store(scFast_, std::memory_order_relaxed);

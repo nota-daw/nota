@@ -387,6 +387,13 @@ public enum DeviceTelemetryMode
     AlwaysOn = 2,
 }
 
+/// <summary>Auto-sleep policy for hosted plugins and instruments (matches native NotaPluginSleepMode).</summary>
+public enum PluginSleepMode
+{
+    Auto = 0,
+    Never = 1,
+}
+
 /// <summary>Single track's post-fader meter reading returned by <see cref="IAudioEngine.ReadTrackMeters"/>.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public readonly record struct TrackMeterReading(int TrackId, NotaMeter Meter);

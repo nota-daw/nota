@@ -42,6 +42,7 @@ class MidiRack final : public MidiDevice, public RackCore {
         double spb, bool playing) override;
     void reset() override;
     void timeJump(double deltaBeats) override;
+    bool isIdle() const override;
 
     // The eight macros are the rack's parameters (automation, MIDI Learn, presets).
     int32_t paramCount() const override { return kNumMacros; }

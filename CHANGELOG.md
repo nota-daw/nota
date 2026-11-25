@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Changed
+- **Idle instrument, plugin, and submix-bus sleep gating** (#1050, specs/115) removes silent-track
+  DSP overhead via a shared lock-free `SilenceGate` and per-block `ActiveBusMask`. All 10 remaining
+  built-in synths, nested racks (`RackInstrument`, `DrumRack`, `RackDevice`), and hosted plugins now
+  auto-sleep cleanly once tails finish (with per-device `PluginSleepMode` `Auto` / `Never`
+  control across the C ABI and `IAudioEngine`), while idle Group and Return buses skip redundant
+  clearing, chain execution, panning, and metering.
 - **Large-project meter polling and built-in device CPU timing** (#1050, specs/114) cut idle and UI
   overhead without changing audio output. Desktop views (`ArrangementView`, `MixerView`,
   `SessionView`) read all post-fader track meters in one engine snapshot (`nota_engine_read_track_meters`)

@@ -57,12 +57,13 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
 
     std::string pluginIdentifier() const override;
 
-    // Sleep contract : tail length comes from the plugin; idle is
-    // never reported — tail decay state is opaque to the host, so the engine
-    // keeps rendering (safe against dropped reverb/delay tails).
-    bool hasTail() const override;
-    bool isIdle() const override { return false; }
-    void wake() override {}
+    bool hasTail() const override { return live_.load(std::memory_order_acquire) && hasTail_.load(std::memory_order_relaxed); }
+    bool isIdle() const override { return gate_.isSleeping(); }
+    void wake() override { gate_.wake(); }
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Device::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     int32_t pluginParamCount() const override;
     std::string pluginParamId(int32_t i) const override;
@@ -91,8 +92,9 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     void audioProcessorParameterChangeGestureEnd(juce::AudioProcessor*, int index) override;
     void audioProcessorChanged(juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override {}
 
-    void processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames); // frames <= maxBlock_
+    bool processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames); // frames <= maxBlock_
     bool attach(std::unique_ptr<juce::AudioPluginInstance> p); // the loaded instance (message thread)
+    void refreshGateConfig(double sr) noexcept;
 
     NotaPlayHead playHead_; // declared first: outlives plugin_ (which points at it)
     std::unique_ptr<juce::AudioPluginInstance> plugin_; // null until loaded; set once, message thread
@@ -104,6 +106,8 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     double sr_ = 44100.0;                  // the rate to prepare a late instance for
     int requestedBlock_ = kPluginMaxBlock; // the block size to prepare it for
     std::string name_;
+    dsp::SilenceGate gate_;
+    std::atomic<bool> hasTail_{false};
     std::atomic<int32_t> lastTouched_{-1};                   // "Learn" (M9-B3)
     std::atomic<int32_t> gestureBegin_{-1}, gestureEnd_{-1}; // write gestures (M9-C)
     std::atomic<int32_t> scTrackId_{-1};                     // sidechain source track (Phase C)

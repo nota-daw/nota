@@ -218,6 +218,7 @@ void Consort::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> Consort::clone() const {
@@ -281,8 +282,11 @@ void Consort::noteOff(int32_t pitch) {
 }
 
 void Consort::render(float* out, int32_t frames) {
-    dsp::ScopedNoDenormals noDenormals;
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
     const double pr = pendingRate_.load(std::memory_order_relaxed);
+    if (skip && pr == sampleRate_) return;
+    dsp::ScopedNoDenormals noDenormals;
     const auto cpuTimer = blockTimer(frames, pr, 0.05);
     if (pr != sampleRate_) { // voices keep playing; only rate-derived state restarts
         sampleRate_ = pr;
@@ -305,19 +309,14 @@ void Consort::render(float* out, int32_t frames) {
     // A running sequencer (latched) blocks sleep — render advances its clock.
     const double flight = std::max(
         dlyTimeCur_[0] > 0.0f ? (double)dlyTimeCur_[0] : 0.0, dlyTimeCur_[1] > 0.0f ? (double)dlyTimeCur_[1] : 0.0);
-    if (!seqRun_ && activeCount_ == 0 && chunkOutPeak_ <= 1.0e-5f) quietSamples_ += (uint64_t)frames;
-    else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
-    if (quietSamples_ > (uint64_t)flight + kIdleSamples) idle_ = true;
+    gate_.setHangoverSamples(static_cast<uint64_t>(std::max(0.0, flight)) + kIdleSamples);
+    gate_.observe(seqRun_ || activeCount_ > 0 || chunkOutPeak_ > 1.0e-5f, frames, gateEpoch);
     chunkOutPeak_ = 0.0f;
     publishTelemetry();
 }
 
 void Consort::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 void Consort::setOscTarget(Voice& V, int k, int note, bool glide) {

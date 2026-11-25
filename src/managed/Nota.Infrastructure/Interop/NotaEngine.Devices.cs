@@ -517,6 +517,20 @@ public sealed partial class NotaEngine
         return NativeMethods.DeviceBypassed(_handle, trackId, deviceIndex) != 0;
     }
 
+    /// <summary>Configures auto-sleep policy for an instrument (-1) or insert device (>= 0).</summary>
+    public void SetPluginSleepMode(int trackId, int deviceIndex, PluginSleepMode mode)
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.PluginSetSleepMode(_handle, trackId, deviceIndex, (int)mode));
+    }
+
+    /// <summary>Returns the current auto-sleep policy for an instrument (-1) or insert device (>= 0).</summary>
+    public PluginSleepMode GetPluginSleepMode(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        return (PluginSleepMode)NativeMethods.PluginSleepMode(_handle, trackId, deviceIndex);
+    }
+
     /// <summary>Folds (or unfolds) the device at deviceIndex in the Devices panel (specs/022);
     /// -1 = the instrument. A view flag, saved with the project.</summary>
     public void SetDeviceFolded(int trackId, int deviceIndex, bool folded)

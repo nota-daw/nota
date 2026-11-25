@@ -16413,6 +16413,8 @@ Console.WriteLine("-- dsp silence bypass --");
 foreach (var (ok, label) in DspSilenceBypassTests.Run()) Check(ok, label);
 Console.WriteLine("-- phase 1 meters & telemetry --");
 foreach (var (ok, label) in Phase1MeterTelemetryTests.Run()) Check(ok, label);
+Console.WriteLine("-- phase 2 silence gate & active buses --");
+foreach (var (ok, label) in Phase2SleepGateTests.Run()) Check(ok, label);
 Console.WriteLine("-- render pool --");
 foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 

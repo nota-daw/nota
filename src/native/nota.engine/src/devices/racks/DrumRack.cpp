@@ -90,7 +90,7 @@ void DrumRack::render(float* out, int32_t frames) {
     const auto done = renderScope();
     const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
-    if (!st || frames <= 0 || frames > kMaxBlock) return;
+    if (!st || frames <= 0 || frames > kMaxBlock || isIdle()) return;
     beginRender(*st, frames);
     const float rv = rackVolume_.load(std::memory_order_relaxed);
     for (auto& c : st->chains) {

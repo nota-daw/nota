@@ -2757,6 +2757,20 @@ NOTA_API int32_t    nota_plugin_preview_serial(const NotaEngine* engine, int32_t
 NOTA_API NotaResult nota_track_set_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t bypassed);
 NOTA_API int32_t    nota_track_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
+/* Auto-sleep policy for hosted plugins and instruments (Phase 2).
+ * AUTO wakes automatically on MIDI, audio, sidechain, or parameter changes and
+ * sleeps once silent past the declared tail length + hangover. NEVER keeps the
+ * device rendering every block (e.g. free-running generators or noise units). */
+typedef enum NotaPluginSleepMode {
+    NOTA_PLUGIN_SLEEP_AUTO  = 0,
+    NOTA_PLUGIN_SLEEP_NEVER = 1
+} NotaPluginSleepMode;
+
+/* Controls auto-sleep policy for a device or instrument (device_index == -1 targets the
+ * track's instrument; >= 0 targets an insert device). Lock-free across the audio thread. */
+NOTA_API NotaResult nota_plugin_set_sleep_mode(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t mode);
+NOTA_API int32_t    nota_plugin_sleep_mode(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
 /* Device fold (specs/022): a view flag the Devices panel draws as a narrow strip. Saved with
  * the project, never read by the audio thread. Kept on the device, so it follows moves and
  * undo/redo. device_index -1 = the track's instrument. Out of range: set is a no-op, get

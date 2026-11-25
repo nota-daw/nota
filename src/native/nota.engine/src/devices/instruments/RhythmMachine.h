@@ -242,6 +242,7 @@ class RhythmMachine final : public Instrument {
     // transport start (a stopped machine with a pattern must not sleep through the downbeat).
     bool hasTail() const override { return true; }
     bool isIdle() const override { return idle_; }
+    bool needsIdleRender() const override { return true; }
     void wake() override {
         idle_ = false;
         quietSamples_ = 0;

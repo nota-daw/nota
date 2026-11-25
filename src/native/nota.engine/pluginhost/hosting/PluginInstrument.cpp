@@ -30,8 +30,14 @@ PluginInstrument::PluginInstrument(const juce::PluginDescription& desc, double s
     piece_.ensureSize(8192 + kArtBytes);
     name_ = desc.name.toStdString(); // the instance's own name replaces it at attach
     // Editor-window computer keyboard -> this plugin (drained on the audio thread).
-    editor_.onNoteOn = [this](int32_t pitch, float vel) { guiNotes_.push({true, pitch, vel}); };
-    editor_.onNoteOff = [this](int32_t pitch) { guiNotes_.push({false, pitch, 0.0f}); };
+    editor_.onNoteOn = [this](int32_t pitch, float vel) {
+        guiNotes_.push({true, pitch, vel});
+        gate_.wake();
+    };
+    editor_.onNoteOff = [this](int32_t pitch) {
+        guiNotes_.push({false, pitch, 0.0f});
+        gate_.wake();
+    };
     // The window's picture, taken each time it is hidden, goes on the card (specs/046).
     editor_.onPreview = [this](std::vector<uint8_t> jpeg) { editorPreview = nota::EditorPreview::make(std::move(jpeg)); };
     if (desc.name.isEmpty()) return; // the instance comes from the other constructor
@@ -56,6 +62,7 @@ bool PluginInstrument::attach(std::unique_ptr<juce::AudioPluginInstance> p) {
     if (!pendingState_.empty()) {
         writeState(plugin_.get(), pendingState_.data(), (int32_t)pendingState_.size());
         std::vector<uint8_t>().swap(pendingState_);
+        refreshGateConfig(sr_);
     }
     plugin_->addListener(this); // "Learn" (M9-B3)
     // VST3 process calls may run on audio workers. All MIDI, channel storage and
@@ -88,14 +95,32 @@ void PluginInstrument::setSampleRate(double sr) {
     if (plugin_) prepare(sr); // else prepared at attach, for this rate
 }
 
+void PluginInstrument::trackNoteOn(int32_t pitch, float velocity) noexcept {
+    if (velocity <= 0.0f) {
+        trackNoteOff(pitch);
+        return;
+    }
+    if (pitch < 0 || pitch >= 128) return;
+    if (noteCounts_[pitch] < 255 && noteCounts_[pitch]++ == 0) ++heldNotesCount_;
+}
+
+void PluginInstrument::trackNoteOff(int32_t pitch) noexcept {
+    if (pitch < 0 || pitch >= 128) return;
+    if (noteCounts_[pitch] > 0 && --noteCounts_[pitch] == 0) --heldNotesCount_;
+}
+
 // Every engine-driven event goes out on chan(): channel 1, or an articulation's explicit channel
 // (specs/085). The editor window's own keyboard notes (render) stay on channel 1.
 void PluginInstrument::noteOn(int32_t pitch, float velocity) {
     pending_.addEvent(juce::MidiMessage::noteOn(chan(), pitch, (float)velocity), eventOffset);
+    trackNoteOn(pitch, velocity);
+    gate_.wake();
 }
 
 void PluginInstrument::noteOff(int32_t pitch) {
     pending_.addEvent(juce::MidiMessage::noteOff(chan(), pitch), eventOffset);
+    trackNoteOff(pitch);
+    gate_.wake();
 }
 
 void PluginInstrument::allNotesOff() {
@@ -103,17 +128,24 @@ void PluginInstrument::allNotesOff() {
     // sent on, so a note held on it can't hang. A plug-in never driven off channel 1 sees one message.
     for (int c = 1; c <= 16; ++c)
         if ((usedChannels_ >> (c - 1)) & 1u) pending_.addEvent(juce::MidiMessage::allNotesOff(c), eventOffset);
+    heldNotesCount_ = 0;
+    std::memset(noteCounts_, 0, sizeof(noteCounts_));
+    sustainDown_ = false;
+    gate_.wake();
 }
 
 void PluginInstrument::noteExpression(int32_t pitch, int32_t dim, float value) {
     if (pitch >= 0 && dim == 1) pending_.addEvent(juce::MidiMessage::aftertouchChange(chan(), pitch, u7(value)), eventOffset);
+    gate_.wake();
 }
 
 void PluginInstrument::programChange(int32_t program) {
     if (program >= 0 && program < 128) pending_.addEvent(juce::MidiMessage::programChange(chan(), program), eventOffset);
+    gate_.wake();
 }
 
 void PluginInstrument::controller(int32_t ctl, float value) {
+    if (ctl == nota::kCtlSustain) sustainDown_ = (value >= 0.5f);
     if (ctl == nota::kCtlPitchWheel)
         pending_.addEvent(
             juce::MidiMessage::pitchWheel(chan(), juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), eventOffset);
@@ -121,6 +153,7 @@ void PluginInstrument::controller(int32_t ctl, float value) {
         pending_.addEvent(juce::MidiMessage::channelPressureChange(chan(), u7(value)), eventOffset);
     else if (ctl >= 0 && ctl < 128)
         pending_.addEvent(juce::MidiMessage::controllerEvent(chan(), ctl, u7(value)), eventOffset);
+    gate_.wake();
 }
 
 void PluginInstrument::render(float* out, int32_t frames) {
@@ -133,11 +166,20 @@ void PluginInstrument::render(float* out, int32_t frames) {
     if (frames <= 0) return;
     // Drain computer-keyboard notes from the editor window (message thread) into
     // this block's MIDI buffer — audio thread only touches pending_ here.
-    for (GuiNote g; guiNotes_.pop(g);)
+    for (GuiNote g; guiNotes_.pop(g);) {
         pending_.addEvent(
             g.on ? juce::MidiMessage::noteOn(1, g.pitch, g.velocity) : juce::MidiMessage::noteOff(1, g.pitch), 0);
+        if (g.on) trackNoteOn(g.pitch, g.velocity);
+        else trackNoteOff(g.pitch);
+    }
+
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip && pending_.isEmpty()) return;
+
+    bool allPiecesSilent = true;
     if (frames <= maxBlock_) {
-        renderPiece(out, frames, pending_);
+        allPiecesSilent = renderPiece(out, frames, pending_);
     } else {
         // Longer than the plug-in was prepared for (#447): in pieces, each with its own events
         // (moved to the piece's start) and the transport where the piece begins.
@@ -150,14 +192,15 @@ void PluginInstrument::render(float* out, int32_t frames) {
                 const int pos = juce::jmax(0, m.samplePosition);
                 if (pos >= off && (pos < off + n || last)) piece_.addEvent(m.data, m.numBytes, juce::jmin(pos - off, n - 1));
             }
-            renderPiece(out + (size_t)off * 2, n, piece_);
+            if (!renderPiece(out + (size_t)off * 2, n, piece_)) allPiecesSilent = false;
             advanceTransport(playHead_.info, n, sr);
         }
     }
     pending_.clear();
+    gate_.observe(heldNotesCount_ > 0 || sustainDown_ || !allPiecesSilent, frames, gateEpoch);
 }
 
-void PluginInstrument::renderPiece(float* out, int32_t frames, juce::MidiBuffer& midi) {
+bool PluginInstrument::renderPiece(float* out, int32_t frames, juce::MidiBuffer& midi) {
     storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
     float* ptrs[kMaxChans];
     juce::AudioBuffer<float> block(
@@ -166,7 +209,10 @@ void PluginInstrument::renderPiece(float* out, int32_t frames, juce::MidiBuffer&
     plugin_->processBlock(block, midi);
     const float* l = block.getReadPointer(0);
     const float* r = stereoOut_ ? block.getReadPointer(1) : l; // channel 1 of a mono main is another bus
+    const bool silent = dsp::SilenceGate::isBufferSilent(l, frames, dsp::SilenceGate::kDefaultReleaseThreshold)
+        && (!stereoOut_ || dsp::SilenceGate::isBufferSilent(r, frames, dsp::SilenceGate::kDefaultReleaseThreshold));
     simd_audio::interleaveStereoAdd(out, l, r, frames);
+    return silent;
 }
 
 void PluginInstrument::openEditor() {
@@ -183,8 +229,13 @@ std::vector<uint8_t> PluginInstrument::getState() const {
 }
 
 void PluginInstrument::setState(const uint8_t* data, int32_t size) {
-    if (plugin_) writeState(plugin_.get(), data, size);
-    else if (data != nullptr && size > 0) pendingState_.assign(data, data + size);
+    if (plugin_) {
+        writeState(plugin_.get(), data, size);
+        const double sr = plugin_->getSampleRate() > 0 ? plugin_->getSampleRate() : sr_;
+        refreshGateConfig(sr);
+    } else if (data != nullptr && size > 0) {
+        pendingState_.assign(data, data + size);
+    }
 }
 
 std::string PluginInstrument::pluginIdentifier() const {
@@ -194,10 +245,6 @@ std::string PluginInstrument::pluginIdentifier() const {
 
 int32_t PluginInstrument::latencySamples() const {
     return live_.load(std::memory_order_acquire) ? plugin_->getLatencySamples() : 0;
-}
-
-bool PluginInstrument::hasTail() const {
-    return live_.load(std::memory_order_acquire) && plugin_->getTailLengthSeconds() > 0.0;
 }
 
 int32_t PluginInstrument::pluginParamCount() const {
@@ -221,7 +268,10 @@ float PluginInstrument::pluginParamGet(int32_t i) const {
     return live_.load(std::memory_order_acquire) ? paramGetImpl(plugin_.get(), i) : 0.0f;
 }
 void PluginInstrument::pluginParamSet(int32_t i, float v) {
-    if (live_.load(std::memory_order_acquire)) paramSetImpl(plugin_.get(), i, v);
+    if (live_.load(std::memory_order_acquire)) {
+        paramSetImpl(plugin_.get(), i, v);
+        gate_.wake();
+    }
 }
 int32_t PluginInstrument::pluginParamIndexOfId(const std::string& id) const {
     return paramIndexOfIdImpl(plugin_.get(), id);
@@ -247,11 +297,13 @@ std::shared_ptr<nota::Instrument> PluginInstrument::clone() const {
     auto c = std::make_shared<PluginInstrument>(desc, sr_, maxBlock_);
     const auto st = getState();
     if (!st.empty()) c->setState(st.data(), (int32_t)st.size());
+    c->setSleepMode(sleepMode());
     return c;
 }
 
 void PluginInstrument::audioProcessorParameterChanged(juce::AudioProcessor*, int index, float) {
     lastTouched_.store(index, std::memory_order_relaxed);
+    gate_.wake();
 }
 
 void PluginInstrument::audioProcessorParameterChangeGestureBegin(juce::AudioProcessor*, int index) {
@@ -277,6 +329,14 @@ void PluginInstrument::prepare(double sr) {
     stereoOut_ = plugin_->getBusCount(false) > 0 && plugin_->getChannelCountOfBus(false, 0) > 1;
     spare_.assign((size_t)maxBlock_, 0.0f);
     chanFloor_ = minProcessChannels(*plugin_);
+    refreshGateConfig(sr);
+}
+
+void PluginInstrument::refreshGateConfig(double sr) noexcept {
+    const double tailSec = plugin_ ? plugin_->getTailLengthSeconds() : 0.0;
+    hasTail_.store(plugin_ != nullptr && tailSec > 0.0, std::memory_order_relaxed);
+    gate_.prepare(sr);
+    gate_.setPluginTailSeconds(tailSec);
 }
 
 } // namespace hosting

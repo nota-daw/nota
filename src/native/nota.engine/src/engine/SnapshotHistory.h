@@ -33,12 +33,20 @@ template <class T> class SnapshotHistory {
     // The snapshot last published (message thread), e.g. for a clone to share.
     std::shared_ptr<T> current() const { return current_; }
 
+    // True while a recently retired snapshot has not yet cleared two audio render epochs.
+    bool hasPendingRetire() const noexcept {
+        return epoch_.load(std::memory_order_acquire) < drainTarget_.load(std::memory_order_acquire);
+    }
+
     // Publish `next` and retire the current one; frees retirees no render can still hold.
     void publish(std::shared_ptr<T> next) {
         live_.store(next.get(), std::memory_order_seq_cst);
         // Read after the swap: a render that saw the old pointer has finished by epoch now + 2.
         const uint64_t now = epoch_.load(std::memory_order_seq_cst);
-        if (current_) retired_.emplace_back(now, std::move(current_));
+        if (current_) {
+            retired_.emplace_back(now, std::move(current_));
+            drainTarget_.store(now + 2, std::memory_order_release);
+        }
         current_ = std::move(next);
         retired_.erase(
             std::remove_if(retired_.begin(), retired_.end(), [&](const auto& r) { return now >= r.first + 2; }),
@@ -63,6 +71,7 @@ template <class T> class SnapshotHistory {
     std::vector<std::pair<uint64_t, std::shared_ptr<T>>> retired_;
     std::atomic<T*> live_{nullptr};
     std::atomic<uint64_t> epoch_{0};
+    std::atomic<uint64_t> drainTarget_{0};
 };
 
 } // namespace nota

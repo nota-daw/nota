@@ -41,6 +41,11 @@ class DrumRack final : public RackInstrument {
     // RackInstrument::render with the pad envelope folded into the mix loop.
     void render(float* out, int32_t frames) override;
 
+    bool isIdle() const override {
+        if (sleepMode() == dsp::PluginSleepMode::Never) return false;
+        return chainsIdle(true);
+    }
+
     std::shared_ptr<Instrument> clone() const override;
 
   private:

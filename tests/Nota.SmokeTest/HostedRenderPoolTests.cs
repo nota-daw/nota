@@ -256,6 +256,8 @@ internal static class HostedRenderPoolTests
                     "hosted instrument rack retains serial fallback and audible output");
             }
 
+            foreach (var result in SleepGateChecks(catalog)) yield return result;
+
             using (var live = Session(catalog, 4, 32))
             {
                 bool stop = false, finite = true;
@@ -295,12 +297,105 @@ internal static class HostedRenderPoolTests
         finally { NotaEngine.SetDataDir(null); }
     }
 
+    private static IEnumerable<(bool Ok, string Label)> SleepGateChecks(int catalog)
+    {
+        NotaEngine MakeIdleInstEngine(PluginSleepMode mode, int helpers = 0)
+        {
+            var e = new NotaEngine { RenderThreads = helpers };
+            e.RenderOffline(new float[Block * 2], Block, Rate);
+            e.SetBpm(120);
+            int t = e.AddPluginInstrumentTrack(catalog);
+            e.SetTrackVolume(t, 0.5f);
+            e.PluginParamSet(t, -1, Param(e, t, -1, "Work"), 1.0f);
+            e.PluginParamSet(t, -1, Param(e, t, -1, "Gain"), 1.0f);
+            e.SetPluginSleepMode(t, -1, mode);
+            int c1 = e.AddMidiClip(t, 0.0, 0.15);
+            e.SetClipNotes(t, c1, [new NotaNote(60, 0.0, 0.05, 0.9f)]);
+            int c2 = e.AddMidiClip(t, 2.0, 0.5);
+            e.SetClipNotes(t, c2, [new NotaNote(67, 0.0, 0.4, 0.9f)]);
+            e.Seek(0);
+            e.Play();
+            return e;
+        }
+
+        // Measure Auto vs Never while silent past the 250 ms hangover (beat 0.2..1.9 = ~640 blocks @ 128 frames).
+        static double MeasureQuietRegionMs(int cat, PluginSleepMode mode)
+        {
+            using var e = new NotaEngine { RenderThreads = 0 };
+            e.RenderOffline(new float[Block * 2], Block, Rate);
+            e.SetBpm(120);
+            int t = e.AddPluginInstrumentTrack(cat);
+            e.PluginParamSet(t, -1, Param(e, t, -1, "Work"), 0.5f); // 2048 trig ops/sample
+            e.SetPluginSleepMode(t, -1, mode);
+            var buf = new float[Block * 2];
+            for (int i = 0; i < 120; i++) e.RenderOffline(buf, Block); // settle past 250 ms
+            long t0 = Stopwatch.GetTimestamp();
+            for (int i = 0; i < 120; i++) e.RenderOffline(buf, Block);
+            return Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
+        }
+
+        double autoMs = MeasureQuietRegionMs(catalog, PluginSleepMode.Auto);
+        double neverMs = MeasureQuietRegionMs(catalog, PluginSleepMode.Never);
+        yield return (autoMs < neverMs * 0.2,
+            $"VST3 PluginInstrument sleeps on silence vs Never ({autoMs:0.00} ms vs {neverMs:0.00} ms)");
+
+        using (var a0 = MakeIdleInstEngine(PluginSleepMode.Auto, 0))
+        using (var a4 = MakeIdleInstEngine(PluginSleepMode.Auto, 4))
+        {
+            const int blocks = 550; // > 1.46 s @ 128 frames: beat 0 hit -> >0.9s silence -> beat 2..2.5 wake (blocks 375..469)
+            var r0 = Render(a0, blocks);
+            var r4 = Render(a4, blocks);
+            float quietPeak = r0.Skip(200 * Block * 2).Take(160 * Block * 2).Select(Math.Abs).Max();
+            float wakePeak = r0.Skip(375 * Block * 2).Take(94 * Block * 2).Select(Math.Abs).Max();
+            yield return (quietPeak == 0f && wakePeak > 0.005f && r0.SequenceEqual(r4) && r0.All(float.IsFinite),
+                $"VST3 PluginInstrument sleeps on quiet gap (quiet={quietPeak:0.0000}) and wakes cleanly (wakePeak={wakePeak:0.000})");
+        }
+
+        // VST3 PluginEffect: settles on silence, wakes cleanly on sidechain and main audio input.
+        using (var fxAuto = new NotaEngine { RenderThreads = 0 })
+        using (var fxAutoMt = new NotaEngine { RenderThreads = 4 })
+        {
+            static float[] RenderFx(NotaEngine e, int cat)
+            {
+                e.RenderOffline(new float[Block * 2], Block, Rate);
+                e.SetBpm(120);
+                int src = e.AddBassSynthTrack();
+                int main = e.AddInstrumentTrack();
+                int eff = e.AddTrackEffectPlugin(main, cat);
+                e.PluginParamSet(main, eff, Param(e, main, eff, "Work"), 0.0f);
+                e.PluginParamSet(main, eff, Param(e, main, eff, "Gain"), 1.0f);
+                e.SetDeviceSidechainSource(main, eff, src);
+                e.SetDeviceSidechainMix(main, eff, 1.0f);
+                int cSrc = e.AddMidiClip(src, 1.5, 0.5); // sidechain wakes sleeping PluginEffect at beat 1.5 (blocks 281..375)
+                e.SetClipNotes(src, cSrc, [new NotaNote(48, 0.0, 0.4, 0.9f)]);
+                e.Seek(0);
+                e.Play();
+                return Render(e, 450);
+            }
+            var f0 = RenderFx(fxAuto, catalog);
+            var f4 = RenderFx(fxAutoMt, catalog);
+            float quietPeak = f0.Skip(150 * Block * 2).Take(120 * Block * 2).Select(Math.Abs).Max();
+            float scWakePeak = f0.Skip(281 * Block * 2).Take(94 * Block * 2).Select(Math.Abs).Max();
+            yield return (quietPeak == 0f && scWakePeak > 0.001f && f0.SequenceEqual(f4) && f0.All(float.IsFinite),
+                $"VST3 PluginEffect sleeps past hangover (quiet={quietPeak:0.0000}) and wakes on sidechain audio (peak={scWakePeak:0.000})");
+        }
+    }
+
     private static IEnumerable<(bool Ok, string Label)> BufferChecks(int catalog)
     {
         foreach (bool inserts in new[] { false, true })
         {
             using var smallEngine = Session(catalog, 0, 0, inserts);
             using var largeEngine = Session(catalog, 0, 0, inserts);
+            foreach (var eng in new[] { smallEngine, largeEngine })
+            {
+                for (int i = 0; i < eng.TrackCount; i++)
+                {
+                    if (!eng.TryGetTrackInfo(i, out var tr)) continue;
+                    eng.SetPluginSleepMode(tr.Id, -1, PluginSleepMode.Never);
+                    if (inserts) eng.SetPluginSleepMode(tr.Id, 0, PluginSleepMode.Never);
+                }
+            }
             smallEngine.StopTransport(); largeEngine.StopTransport();
             bool clean = true;
             foreach (int frames in new[] { 128, 16, 8192, 64, 1024, 16384, 128 })

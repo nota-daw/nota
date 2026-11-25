@@ -507,6 +507,54 @@ class RackCore {
     // Audio thread: hold one for the whole render/process call (it ends the render
     // epoch that frees retired snapshots).
     SnapshotHistory<RackState>::RenderScope renderScope() { return SnapshotHistory<RackState>::RenderScope(states_); }
+    bool hasPendingRetire() const noexcept { return states_.hasPendingRetire(); }
+
+    bool chainsHaveTail() const {
+        RackState* st = live();
+        if (!st) return false;
+        for (const auto& c : st->chains) {
+            if (c.instrument && !c.instrument->bypassed() && c.instrument->hasTail()) return true;
+            for (const auto& d : c.devices)
+                if (d && !d->bypassed() && d->hasTail()) return true;
+        }
+        return false;
+    }
+
+    bool chainsIdle(bool includeInstruments) const {
+        RackState* st = live();
+        if (!st) return true;
+        for (const auto& c : st->chains) {
+            if (includeInstruments && c.instrument && !c.instrument->bypassed() && !c.instrument->isIdle())
+                return false;
+            for (const auto& d : c.devices)
+                if (d && !d->bypassed() && !d->isIdle()) return false;
+        }
+        return true;
+    }
+
+    static bool chainMidiDevicesIdle(const RackChain& c) {
+        for (const auto& d : c.midiDevices)
+            if (d && !d->isIdle()) return false;
+        return true;
+    }
+
+    bool allChainMidiDevicesIdle() const {
+        RackState* st = live();
+        if (!st) return true;
+        for (const auto& c : st->chains)
+            if (!chainMidiDevicesIdle(c)) return false;
+        return true;
+    }
+
+    void wakeChains(bool includeInstruments) {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains) {
+            if (includeInstruments && c.instrument) c.instrument->wake();
+            for (auto& d : c.devices)
+                if (d) d->wake();
+        }
+    }
 
     // Macro response curve applied to the 0..1 value before mapping to [min,max].
     static float applyCurve(float v, int32_t curve);

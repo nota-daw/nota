@@ -1045,6 +1045,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
     }
     graphHist_.publish(g); // frees the graphs no render can still be walking
+    busState_.requestInvalidate();
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
 }

@@ -506,8 +506,12 @@ class Consort final : public Instrument {
     // the rendered block (voices + delay tap) is silent, after the delay's
     // flight time has also passed — so an in-flight echo is never cut.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     // ---- render ---------------------------------------------------------------------
     void render(float* out, int32_t frames) override;
@@ -823,9 +827,8 @@ class Consort final : public Instrument {
     // Auto-sleep hangover (see render()): idle only after voices, delay tap
     // and the delay line's flight time have all settled.
     static constexpr uint64_t kIdleSamples = 16384; // hangover past the flight time
-    uint64_t quietSamples_ = 0;
     float chunkOutPeak_ = 0.0f; // our peak contribution across this render's chunks
-    bool idle_ = false;
+    dsp::SilenceGate gate_{kIdleSamples};
     mutable std::atomic<float> tele_[kScopeN] = {};
     std::atomic<float> pn_[kNumParams];
 };

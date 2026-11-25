@@ -18,6 +18,7 @@
 #include "dsp/core/DeviceTelemetry.h"
 #include "engine/AudioThreadPool.h"
 #include "engine/CaptureRing.h"
+#include "engine/RenderBusState.h"
 #include "engine/SessionPass.h"
 #include "engine/SnapshotHistory.h"
 #include "EngineTypes.h" // queue payloads, undo model, control events (from this header)
@@ -1073,6 +1074,9 @@ class Engine {
     // deviceIndex -1 is the instrument's on/off switch (#148).
     void setTrackDeviceBypassed(int32_t trackId, int32_t deviceIndex, bool bypassed);
     bool trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const;
+    // Auto-sleep policy (Phase 2): deviceIndex == -1 targets the instrument; >= 0 an insert.
+    bool setPluginSleepMode(int32_t trackId, int32_t deviceIndex, int32_t mode);
+    int32_t pluginSleepMode(int32_t trackId, int32_t deviceIndex) const;
     // Device fold (specs/022): a view flag on the device; deviceIndex -1 = the instrument.
     void setTrackDeviceFolded(int32_t trackId, int32_t deviceIndex, bool folded);
     bool trackDeviceFolded(int32_t trackId, int32_t deviceIndex) const;
@@ -2877,6 +2881,7 @@ class Engine {
         int wid = -1;           // pool worker that rendered this track (diagnostic)
         int64_t workNs = 0;     // time its parallel DSP took (sizes the next block's helpers)
         float* dest = nullptr;  // group bus or master out (stable during block)
+        int8_t destSlot = -1;   // parent group slot >= 0 when writing into groupBus_
         float* route = nullptr; // post-fader route tap or nullptr
         float sends[kMaxReturns] = {};
         bool anySend = false;
@@ -3046,6 +3051,7 @@ class Engine {
     // slot (nested) or the master. Fixed pool → no RT allocation.
     static constexpr int32_t kMaxGroups = 16;
     std::array<std::vector<float>, kMaxGroups> groupBus_;
+    mutable RenderBusState<kMaxGroups, kMaxReturns> busState_;
 
     // Signal routing (Phase B): a pool of route buses that source tracks tap their
     // post-fader signal into, for sidechain / inter-track routing. Double-buffered:

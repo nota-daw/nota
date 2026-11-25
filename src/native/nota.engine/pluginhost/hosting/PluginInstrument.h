@@ -69,12 +69,13 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
 
     int32_t latencySamples() const override;
 
-    // Sleep contract : plugin voice state is opaque to the host, so a
-    // hosted instrument never reports idle — the engine always renders it when
-    // the track is live. hasTail() still reports the plugin's tail length.
-    bool hasTail() const override;
-    bool isIdle() const override { return false; }
-    void wake() override {}
+    bool hasTail() const override { return live_.load(std::memory_order_acquire) && hasTail_.load(std::memory_order_relaxed); }
+    bool isIdle() const override { return gate_.isSleeping(); }
+    void wake() override { gate_.wake(); }
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     int32_t pluginParamCount() const override;
     std::string pluginParamId(int32_t i) const override;
@@ -106,8 +107,11 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     void audioProcessorChanged(juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override {}
 
     void prepare(double sr);
-    void renderPiece(float* out, int32_t frames, juce::MidiBuffer& midi); // frames <= maxBlock_
+    bool renderPiece(float* out, int32_t frames, juce::MidiBuffer& midi); // frames <= maxBlock_
     bool attach(std::unique_ptr<juce::AudioPluginInstance> p); // the loaded instance (message thread)
+    void refreshGateConfig(double sr) noexcept;
+    void trackNoteOn(int32_t pitch, float velocity) noexcept;
+    void trackNoteOff(int32_t pitch) noexcept;
 
     NotaPlayHead playHead_; // declared first: outlives plugin_ (which points at it)
     std::unique_ptr<juce::AudioPluginInstance> plugin_; // null until loaded; set once, message thread
@@ -118,6 +122,11 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     std::vector<uint8_t> pendingState_; // state handed over before the instance exists
     double sr_ = 44100.0;               // the rate to prepare a late instance for
     uint32_t usedChannels_ = 1u; // bit c-1 = channel c has been sent on (chan()); audio thread only
+    dsp::SilenceGate gate_;
+    std::atomic<bool> hasTail_{false};
+    uint8_t noteCounts_[128] = {};
+    int32_t heldNotesCount_ = 0;
+    bool sustainDown_ = false;
     juce::AudioBuffer<float> storage_;
     std::vector<float> spare_; // the channels past storage_ (see pluginChannelPtrs)
     int chanFloor_ = 0;        // pluginChannelPtrs floor (see minProcessChannels)

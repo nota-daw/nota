@@ -330,6 +330,7 @@ class Twin final : public Instrument {
     bool isIdle() const override {
         return idle_.load(std::memory_order_relaxed) && !wakeReq_.load(std::memory_order_relaxed);
     }
+    bool needsIdleRender() const override { return true; }
     void wake() override { wakeReq_.store(true, std::memory_order_release); }
 
     // ---- parameters -----------------------------------------------------------

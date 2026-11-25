@@ -244,6 +244,13 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         return;
     }
     if (off) n = xn = an = 0; // nothing new starts on the way out
+    if (!off && n == 0 && xn == 0 && an == 0 && inst.isIdle() && !inst.needsIdleRender()) {
+        live();
+        if (inst.isIdle()) {
+            inst.tapSilence(frames);
+            return;
+        }
+    }
     if (inst.takesBlockMidi()) inst.blockMidi(evs, n, frames, beat, spb, rolling); // a rack's chain MIDI effects (#329)
     int32_t cursor = 0;
     bool liveDone = false;
@@ -342,6 +349,82 @@ ChainRest chainRest(const Track& t) {
         r = ChainRest::Opaque;
     }
     return r;
+}
+
+bool hasNeverSleepDevice(const Track& t) {
+    if (t.instrument && !t.instrument->bypassed() && t.instrument->sleepMode() == dsp::PluginSleepMode::Never)
+        return true;
+    for (const auto& d : t.devices)
+        if (d && !d->bypassed() && d->sleepMode() == dsp::PluginSleepMode::Never) return true;
+    return false;
+}
+
+bool midiEffectsIdle(const Track& t) {
+    for (const auto& d : t.midiEffects)
+        if (d && !d->bypassed() && !d->isIdle()) return false;
+    return true;
+}
+
+bool instrumentHasBlockInput(const Graph& g, const Track& t, size_t trackPos, const std::vector<int>& blockMidiN,
+    const std::vector<int>& blockExprN, int32_t liveExprCount, bool playing, bool arrangementActive) {
+    if (liveExprCount > 0) return true;
+    if (trackPos < blockMidiN.size() && blockMidiN[trackPos] > 0) return true;
+    if (trackPos < blockExprN.size() && blockExprN[trackPos] > 0) return true;
+    if (!midiEffectsIdle(t)) return true;
+
+    const auto& held = t.liveHeld;
+    const int32_t srcId = t.midiFromTrackId();
+    if (srcId >= 0) {
+        if (held && held->routedFrom != srcId) return true;
+        for (size_t j = 0; j < g.tracks.size(); ++j) {
+            const Track* s = g.tracks[j].get();
+            if (!s || s->id() != srcId || s->type() != TrackType::Instrument) continue;
+            if ((j < blockMidiN.size() && blockMidiN[j] > 0) || (j < blockExprN.size() && blockExprN[j] > 0))
+                return true;
+        }
+    } else if (held && (held->routedFrom >= 0 || (held->routedBits[0] | held->routedBits[1]) != 0)) {
+        return true; // pending release of previously routed notes
+    }
+    if (t.articulationTable && playing && arrangementActive && t.instrument && t.instrument->takesArticulations())
+        return true;
+    return false;
+}
+
+bool instrumentLeafCanSkip(const Graph& g, const Track& t, size_t trackPos, bool capturing,
+    const std::vector<int>& blockMidiN, const std::vector<int>& blockExprN, int32_t liveExprCount, bool playing,
+    bool arrangementActive) {
+    if (capturing || hasNeverSleepDevice(t)) return false;
+    if (t.instrument) {
+        if (t.instrument->bypassed()) {
+            if (!t.instrument->offSettled.load(std::memory_order_relaxed)) return false;
+        } else {
+            if (!t.instrument->isIdle() || t.instrument->needsIdleRender()) return false;
+            if (t.instrument->acceptsSidechain() && t.instrument->sidechainSourceTrackId() >= 0) return false;
+        }
+    }
+    if (chainRest(t) != ChainRest::Settled) return false;
+    return !instrumentHasBlockInput(
+        g, t, trackPos, blockMidiN, blockExprN, liveExprCount, playing, arrangementActive);
+}
+
+bool canSkipInactiveBus(Track& t) {
+    return t.tailQuiet() < 0 && chainRest(t) == ChainRest::Settled && !hasNeverSleepDevice(t);
+}
+
+void settleInactiveBus(Track& t, const float* buf, int32_t frames, double sr, float tailFloor,
+    double tailQuietSec, double tailMaxQuietSec) {
+    int64_t& quiet = t.tailQuiet();
+    if (simd_audio::peakAbs(buf, frames * 2) > tailFloor || hasNeverSleepDevice(t)) {
+        quiet = 0;
+        return;
+    }
+    if (quiet < 0) quiet = 0;
+    quiet += frames;
+    const ChainRest rest = chainRest(t);
+    if (rest == ChainRest::Settled
+        || (rest == ChainRest::Opaque && quiet >= static_cast<int64_t>(tailQuietSec * sr))
+        || quiet >= static_cast<int64_t>(tailMaxQuietSec * sr))
+        quiet = -1;
 }
 
 } // namespace
@@ -3132,8 +3215,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             if (t->type() == TrackType::Return) ++numReturns;
         }
         if (numReturns > kMaxReturns) numReturns = kMaxReturns;
-        for (int b = 0; b < numReturns; ++b) // clear send buses for this block (M6-1)
-            std::fill_n(returnBus_[b].data(), frames * 2, 0.0f);
+        busState_.returns.beginBlock(static_cast<size_t>(numReturns), frames,
+            [&](size_t b) { std::fill_n(returnBus_[b].data(), frames * 2, 0.0f); });
         // Phase B/D: clear this block's route-write buffers (post + pre) for active slots.
         // None holds this block's signal yet (#676): every slot, so one claimed mid-block
         // never hands out a Next bus nobody cleared.
@@ -3187,7 +3270,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             grpDepth[i] = depth;
             if (depth > maxDepth) maxDepth = depth;
         }
-        for (int i = 0; i < numGroups; ++i) std::fill_n(groupBus_[i].data(), frames * 2, 0.0f);
+        busState_.groups.beginBlock(static_cast<size_t>(numGroups), frames,
+            [&](size_t i) { std::fill_n(groupBus_[i].data(), frames * 2, 0.0f); });
         // A leaf's effective mute/solo folds in any ancestor group's flag.
         auto leafMute = [&](Track& t) {
             if (t.mute()) return true;
@@ -3341,6 +3425,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             } else if (sessionActive && t.type() == TrackType::Audio) {
                 w.path = LeafPath::SessionAudio;
             } else if (t.type() == TrackType::Instrument) {
+                if (instrumentLeafCanSkip(*g, t, li, capturing, rs_->blockMidiN, rs_->blockExprN, liveExprCount_,
+                        playing, arrangementActive)) {
+                    t.tailQuiet() = -1;
+                    feedSilentMidiKeys(t);
+                    t.setMeter(0, 0, 0, 0);
+                    t.stereoFold(0, 0, 0, frames, stereoA);
+                    continue;
+                }
                 w.path = LeafPath::Instrument;
             } else if (playing && arrangementActive) {
                 w.path = LeafPath::AudioClips;
@@ -3356,6 +3448,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
 
             // Destination: this leaf's parent group's submix bus, else the master mix.
             const int destSlot = slotOf(t.groupId());
+            w.destSlot = static_cast<int8_t>(destSlot);
             w.dest = destSlot >= 0 ? groupBus_[destSlot].data() : out;
             const int32_t routeSlot = routeSlotForTrack(t.id()); // Phase B: this track is a sidechain source?
             w.route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
@@ -3784,6 +3877,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 t.stereoFold(0.0, 0.0, 0.0, frames, stereoA);
                 continue;
             }
+            if (pkL > 0.0f || pkR > 0.0f) {
+                if (w.destSlot >= 0) busState_.groups.markActive(static_cast<size_t>(w.destSlot));
+                if (w.anySend)
+                    for (int b = 0; b < numReturns; ++b)
+                        if (w.sends[b] != 0.0f) busState_.returns.markActive(static_cast<size_t>(b));
+            }
             t.stereoFold(sqL, sqR, sLR, frames, stereoA);
             t.setMeter(
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
@@ -3844,6 +3943,15 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     continue;
                 } // muted group (or muted ancestor)
 
+                const bool busActive = busState_.groups.isActive(static_cast<size_t>(gi));
+                if (busActive) {
+                    t.tailQuiet() = 0;
+                } else if (canSkipInactiveBus(t)) {
+                    t.setMeter(0, 0, 0, 0);
+                    markFresh(t.id());
+                    continue;
+                }
+
                 std::copy_n(groupBus_[gi].data(), frames * 2, scratch_.data()); // this group's summed children
                 {
                     // Phase D pre-FX tap. A group muted in Main (rendered only for Cue) keeps it
@@ -3862,6 +3970,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     }
                 // PDC left verbatim (see renderLeafDsp note).
                 if (t.pdc) t.pdc->process(scratch_.data(), frames);
+                if (!busActive)
+                    settleInactiveBus(
+                        t, scratch_.data(), frames, transport_.sampleRate(), kTailFloor, kTailQuietSeconds,
+                        kTailMaxQuietSeconds);
                 // Cue tap (specs/089): the bus after its devices, before its fader and mute.
                 if (cueOn && t.cue()) simd_audio::addStereoScaled(cueSeg_, scratch_.data(), 1.0f, 1.0f, frames);
                 if (t.mute()) { // muted but cued: heard in Cue only
@@ -3906,6 +4018,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     }
                 }
                 if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
+                if (pslot >= 0 && (pkL > 0.0f || pkR > 0.0f)) busState_.groups.markActive(static_cast<size_t>(pslot));
                 if (cueFeedOnly) t.setMeter(0, 0, 0, 0); // silent in Main, as its muted ancestor makes it
                 else
                     t.setMeter(pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)),
@@ -3928,6 +4041,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 continue;
             }
 
+            const bool busActive = busState_.returns.isActive(static_cast<size_t>(bus));
+            if (busActive) {
+                t.tailQuiet() = 0;
+            } else if (canSkipInactiveBus(t)) {
+                t.setMeter(0, 0, 0, 0);
+                t.stereoFold(0, 0, 0, frames, stereoA);
+                markFresh(t.id());
+                continue;
+            }
+
             std::copy_n(returnBus_[bus].data(), frames * 2, scratch_.data());
             {
                 // Phase D pre-FX tap; a muted return rendered only for Cue keeps it silent.
@@ -3944,6 +4067,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 }
             // PDC left verbatim (see renderLeafDsp note).
             if (t.pdc) t.pdc->process(scratch_.data(), frames);
+            if (!busActive)
+                settleInactiveBus(
+                    t, scratch_.data(), frames, transport_.sampleRate(), kTailFloor, kTailQuietSeconds,
+                    kTailMaxQuietSeconds);
             // Cue tap (specs/089): the return after its devices, before its fader and mute.
             if (returnCue) simd_audio::addStereoScaled(cueSeg_, scratch_.data(), 1.0f, 1.0f, frames);
             if (t.mute()) { // muted but cued: heard in Cue only

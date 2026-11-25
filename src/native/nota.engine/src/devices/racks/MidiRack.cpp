@@ -270,4 +270,18 @@ void MidiRack::timeJump(double deltaBeats) {
             if (d) d->timeJump(deltaBeats);
 }
 
+bool MidiRack::isIdle() const {
+    if (hasPendingRetire()) return false;
+    const auto& rt = *rt_;
+    for (uint8_t h : rt.held)
+        if (h > 0) return false;
+    for (uint8_t h : rt.rawHeld)
+        if (h > 0) return false;
+    RackState* st = live();
+    if (!st) return true;
+    for (const auto& c : st->chains)
+        if (!chainMidiDevicesIdle(c)) return false;
+    return true;
+}
+
 } // namespace nota

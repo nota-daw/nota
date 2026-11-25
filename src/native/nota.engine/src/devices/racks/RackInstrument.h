@@ -73,6 +73,15 @@ class RackInstrument : public Instrument, public RackCore {
     // ---- render: sum every audible chain into `out` -------------------------
     void render(float* out, int32_t frames) override;
 
+    bool hasTail() const override { return true; }
+    bool isIdle() const override;
+    bool needsIdleRender() const override { return hasPendingRetire(); }
+    void wake() override { wakeChains(true); }
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        wake();
+    }
+
     int32_t latencySamples() const override { return maxChainLatency(); }
 
     // ---- parts (specs/050): each chain is a sidechain sub-source, by its chain uid ----------
@@ -95,7 +104,10 @@ class RackInstrument : public Instrument, public RackCore {
 
     // ---- persistence + clone (shared blob) ----------------------------------
     std::vector<uint8_t> getState() const override { return serialize(); }
-    void setState(const uint8_t* data, int32_t size) override { deserialize(data, size); }
+    void setState(const uint8_t* data, int32_t size) override {
+        deserialize(data, size);
+        wake();
+    }
     std::shared_ptr<Instrument> clone() const override;
 
   protected:

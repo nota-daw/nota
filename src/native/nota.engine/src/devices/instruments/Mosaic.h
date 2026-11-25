@@ -196,6 +196,7 @@ class Mosaic final : public Instrument {
     // hangover. noteOn/noteOff/pluginParamSet/setProgram wake.
     bool hasTail() const override { return true; }
     bool isIdle() const override { return idle_; }
+    bool needsIdleRender() const override { return true; }
     void wake() override {
         idle_ = false;
         quietSamples_ = 0;

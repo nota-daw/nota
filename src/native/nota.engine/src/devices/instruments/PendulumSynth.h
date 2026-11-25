@@ -86,7 +86,10 @@ class PendulumSynth final : public Instrument {
     int32_t kind() const override { return 8; }
     const char* displayName() const override { return "Nota Pendulum"; }
 
-    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    void setSampleRate(double sr) override {
+        sampleRate_ = sr > 0 ? sr : 44100.0;
+        gate_.wake();
+    }
     void setTransport(double beatStart, double spb, bool playing) override;
     void setTransportInfo(const TransportInfo& ti) override;
 
@@ -115,8 +118,12 @@ class PendulumSynth final : public Instrument {
     // generating, so it must never sleep (no MIDI would wake it). Settles after the
     // hangover; noteOn/noteOff/setParam wake.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -239,8 +246,7 @@ class PendulumSynth final : public Instrument {
 
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;
-    uint64_t quietSamples_ = 0;
-    bool idle_ = false;
+    dsp::SilenceGate gate_{kIdleSamples};
 };
 
 } // namespace nota

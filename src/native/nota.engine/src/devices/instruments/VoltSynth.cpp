@@ -116,6 +116,7 @@ void VoltSynth::controller(int32_t ctl, float value) {
 }
 
 void VoltSynth::noteExpression(int32_t pitch, int32_t dim, float value) {
+    wake();
     if (pitch < 0) {
         gexpr_.set(dim, value);
         return;
@@ -209,6 +210,7 @@ void VoltSynth::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> VoltSynth::clone() const {
@@ -293,6 +295,9 @@ void VoltSynth::noteOff(int32_t pitch) {
 }
 
 void VoltSynth::render(float* out, int32_t frames) {
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip) return;
     // ---- macros first: six of the twelve destinations move the block snapshot
     //      below (levels, Filter 2, LFO rates), the other six ride the voice bus ----
     double macroDst[kDests] = {0, 0, 0, 0, 0, 0};
@@ -615,11 +620,11 @@ void VoltSynth::render(float* out, int32_t frames) {
         publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->fStage : Stage::Off, on ? &lv->fShape : nullptr, on ? lv->fEnv : 0.0f, fS);
     }
     // Sleep: with no sounding voice the loop above accumulated exact zeros.
-    idle_ = (countActive() == 0);
+    gate_.observe(countActive() > 0, frames, gateEpoch);
 }
 
 void VoltSynth::wake() {
-    idle_ = false;
+    gate_.wake();
 }
 
 void VoltSynth::resetExpr(Voice& v) {

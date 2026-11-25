@@ -192,6 +192,7 @@ void RackInstrument::fanOn(int32_t pitch, float velocity, int32_t glideFrom) {
         if (pitch < z->keyLo.load(std::memory_order_relaxed) || pitch > z->keyHi.load(std::memory_order_relaxed) ||
             v < z->velLo.load(std::memory_order_relaxed) || v > z->velHi.load(std::memory_order_relaxed))
             continue;
+        c.instrument->wake();
         c.instrument->noteOn(pitch, velocity);
         // Right after the note-on a bend lands without smoothing: the note starts at the old pitch.
         if (bend != 0.0f && c.instrument->supportsMpe())
@@ -208,6 +209,7 @@ void RackInstrument::fanOff(int32_t pitch) {
     const int32_t n = static_cast<int32_t>(st->chains.size());
     for (int32_t ci = 0; ci < n; ++ci)
         if (st->chains[ci].instrument && !midiChainAt(ci)) {
+            st->chains[ci].instrument->wake();
             if (relVel_ > 0.0f) st->chains[ci].instrument->noteOffVelocity(pitch, relVel_);
             else
                 st->chains[ci].instrument->noteOff(pitch);
@@ -391,11 +393,24 @@ bool RackInstrument::supportsMpe() const {
     return false;
 }
 
+bool RackInstrument::isIdle() const {
+    if (sleepMode() == dsp::PluginSleepMode::Never) return false;
+    const auto& m = *mono_;
+    if (m.heldN > 0 || m.glideLeft > 0) return false;
+    for (int32_t c = 0; c < kMaxMidiChains; ++c) {
+        if (chainCount_[c] > 0) return false;
+        for (int p = 0; p < 128; ++p)
+            if (m.outHeld[c][p] > 0) return false;
+    }
+    if (!allChainMidiDevicesIdle()) return false;
+    return chainsIdle(true);
+}
+
 void RackInstrument::render(float* out, int32_t frames) {
     const auto done = renderScope();
     const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
-    if (!st || frames <= 0 || frames > kMaxBlock) return;
+    if (!st || frames <= 0 || frames > kMaxBlock || isIdle()) return;
     bool anySolo = false;
     for (auto& c : st->chains)
         if (c.ctl->solo.load(std::memory_order_relaxed)) {

@@ -138,6 +138,7 @@ void WavetableSynth::setSampleRate(double sr) {
 }
 
 void WavetableSynth::noteExpression(int32_t pitch, int32_t dim, float value) {
+    wake();
     if (pitch < 0) {
         gexpr_.set(dim, value);
         return;
@@ -157,8 +158,7 @@ void WavetableSynth::setTransport(double beatStart, double samplesPerBeat, bool 
 }
 
 void WavetableSynth::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 std::string WavetableSynth::pluginParamId(int32_t i) const {
@@ -359,6 +359,7 @@ void WavetableSynth::setState(const uint8_t* data, int32_t size) {
             publishSet(std::make_shared<AuroraTableSet>());
         useCustom_[0].store(0, std::memory_order_relaxed);
         useCustom_[1].store(0, std::memory_order_relaxed);
+        wake();
         return;
     }
     Reader r{sec, secLen};
@@ -401,6 +402,7 @@ void WavetableSynth::setState(const uint8_t* data, int32_t size) {
     publishSet(std::move(next));
     useCustom_[0].store(flag[0] ? 1 : 0, std::memory_order_relaxed);
     useCustom_[1].store(flag[1] ? 1 : 0, std::memory_order_relaxed);
+    wake();
 }
 
 std::shared_ptr<Instrument> WavetableSynth::clone() const {
@@ -528,6 +530,9 @@ void WavetableSynth::allNotesOff() {
 
 void WavetableSynth::render(float* out, int32_t frames) {
     SnapshotHistory<const AuroraTableSet>::RenderScope tableScope(tableSet_);
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip) return;
     // ---- macros first: seven of the twelve destinations ride the per-voice bus
     //      below, the other five move this block's snapshot ----
     double macroDst[kDests] = {0, 0, 0, 0, 0, 0, 0};
@@ -892,13 +897,7 @@ void WavetableSynth::render(float* out, int32_t frames) {
         publishEnvTele(envTele_, on, on ? lv->stage : Stage::Off, on ? &lv->shape : nullptr, on ? lv->env : 0.0f, sus);
         publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->stage2 : Stage::Off, on ? &lv->shape2 : nullptr, on ? lv->env2 : 0.0f, sus2);
     }
-    if (live == 0 && peak <= 1.0e-5f) {
-        quietSamples_ += (uint64_t)frames;
-        if (quietSamples_ > kIdleSamples) idle_ = true;
-    } else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
+    gate_.observe(live > 0 || peak > 1.0e-5f, frames, gateEpoch);
 }
 
 

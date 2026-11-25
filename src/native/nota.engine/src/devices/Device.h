@@ -18,6 +18,7 @@
 
 #include "devices/EditorPreview.h"
 #include "dsp/core/DeviceTelemetry.h"
+#include "dsp/core/SilenceGate.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
@@ -210,6 +211,13 @@ class Device {
     virtual bool hasTail() const { return false; }
     virtual bool isIdle() const { return false; }
     virtual void wake() {}
+    virtual void setSleepMode(dsp::PluginSleepMode mode) {
+        sleepMode_.store(mode, std::memory_order_release);
+        wake();
+    }
+    virtual dsp::PluginSleepMode sleepMode() const {
+        return sleepMode_.load(std::memory_order_relaxed);
+    }
 
     // Live gain reduction (dB, >=0) for metering/visualization. Non-zero only for
     // dynamics devices (the built-in Compressor); others report 0. Audio thread
@@ -350,6 +358,7 @@ class Device {
 
   private:
     mutable dsp::DeviceTelemetry telemetry_;
+    std::atomic<dsp::PluginSleepMode> sleepMode_{dsp::PluginSleepMode::Auto};
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
     int32_t presetTag_ = 0;

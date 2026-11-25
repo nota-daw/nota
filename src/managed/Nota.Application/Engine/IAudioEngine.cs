@@ -885,6 +885,9 @@ public interface IAudioEngine : IDisposable
     int PluginPreviewSerial(int trackId, int deviceIndex);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);
     bool DeviceBypassed(int trackId, int deviceIndex);
+    /// <summary>Auto-sleep policy for hosted plugins and instruments (deviceIndex -1 = instrument).</summary>
+    void SetPluginSleepMode(int trackId, int deviceIndex, PluginSleepMode mode);
+    PluginSleepMode GetPluginSleepMode(int trackId, int deviceIndex);
     /// <summary>Fold (specs/022): the Devices panel draws the device as a narrow strip.
     /// deviceIndex -1 = the instrument. Kept on the device; saved with the project.</summary>
     void SetDeviceFolded(int trackId, int deviceIndex, bool folded);

@@ -666,6 +666,13 @@ NotaResult nota_track_set_device_bypassed(NotaEngine* e, int32_t track_id, int32
 int32_t nota_track_device_bypassed(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return (e && CENG(e)->trackDeviceBypassed(track_id, device_index)) ? 1 : 0;
 }
+NotaResult nota_plugin_set_sleep_mode(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t mode) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setPluginSleepMode(track_id, device_index, mode) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_plugin_sleep_mode(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? CENG(e)->pluginSleepMode(track_id, device_index) : NOTA_PLUGIN_SLEEP_AUTO;
+}
 void nota_track_set_device_folded(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t folded) {
     if (e) ENG(e)->setTrackDeviceFolded(track_id, device_index, folded != 0);
 }

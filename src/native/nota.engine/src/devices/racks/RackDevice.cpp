@@ -16,6 +16,8 @@ void RackDevice::process(float* buf, int32_t frames) {
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock) return;
     if (st->chains.empty()) return; // pass-through until chains exist
+    if (isIdle() && dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold))
+        return;
 
     const int32_t mode = mode_.load(std::memory_order_relaxed);
     const float gain = rackVolume_.load(std::memory_order_relaxed);
