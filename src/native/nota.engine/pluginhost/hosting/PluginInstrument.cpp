@@ -65,11 +65,11 @@ bool PluginInstrument::attach(std::unique_ptr<juce::AudioPluginInstance> p) {
         refreshGateConfig(sr_);
     }
     plugin_->addListener(this); // "Learn" (M9-B3)
-    // VST3 process calls may run on audio workers. All MIDI, channel storage and
-    // playhead state belong to this instance; the engine joins before the next
-    // block and never processes an instance concurrently. Lifecycle/editor work
+    // VST3 and vetted macOS AU process calls may run on audio workers. All MIDI,
+    // channel storage and playhead state belong to this instance; the engine joins
+    // before the next block and never processes an instance concurrently. Lifecycle/editor work
     // stays on the message thread. Other formats retain the serial fallback.
-    parallelRender_.store(plugin_->getPluginDescription().pluginFormatName == "VST3", std::memory_order_relaxed);
+    parallelRender_.store(isParallelRenderSafe(plugin_.get()), std::memory_order_relaxed);
     live_.store(true, std::memory_order_release); // everything above is visible to the audio thread
     return true;
 }

@@ -58,6 +58,7 @@
 #include "EnvShape.h"
 #include "Pentad.h"                     // pentad:: band-limited oscillator core + fast math, hiir decimators
 #include "dsp/core/ScopedNoDenormals.h" // unified denormal guard (replaces the local FtzGuard)
+#include "dsp/poly/PolyVoiceScheduler.h"
 
 #include <algorithm>
 #include <atomic>
@@ -734,7 +735,7 @@ class Consort final : public Instrument {
     // Per-voice patch sources (previous sample).
     static void fillVoiceSources(float* sv, const Voice& V, const VoiceCtl& c, float nz);
 
-    void renderVoice(Voice& V, int n, const VoiceCtl& c);
+    void renderVoice(Voice& V, int n, const VoiceCtl& c, float* outL, float* outR);
 
     // ===================================================================================
     // Bucket-brigade delay (stereo; line rate ≤ 50 kHz, decimated at higher host rates)
@@ -813,6 +814,7 @@ class Consort final : public Instrument {
     float gNoise_[kChunk * kMaxOs];
     float osL_[kChunk * kMaxOs], osR_[kChunk * kMaxOs], tmpL_[kChunk * 2], tmpR_[kChunk * 2], dsL_[kChunk],
         dsR_[kChunk];
+    dsp::PolyVoiceScratchBank voiceScratch_{kChunk * kMaxOs};
     hiir::Downsampler2xFpu<12> dnSteep_[2];
     hiir::Downsampler2xFpu<5> dnMid_[2];
     // delay

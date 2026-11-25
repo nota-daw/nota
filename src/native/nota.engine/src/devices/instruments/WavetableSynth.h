@@ -33,6 +33,7 @@
 #include "devices/Instrument.h"
 #include "EnvShape.h"
 #include "devices/instruments/AuroraTable.h"
+#include "dsp/poly/PolyVoiceScheduler.h"
 #include "engine/NoteExpression.h"
 #include "engine/SnapshotHistory.h"
 
@@ -404,6 +405,7 @@ class WavetableSynth final : public Instrument {
         int idx = 0;
     };
 
+    static constexpr int32_t kModChunk = 1024;
     Voice voices_[kVoices];
     double sampleRate_ = 44100.0, spb_ = 0.0;
     // The block's start beat and whether the transport plays (setTransport): a synced LFO
@@ -446,6 +448,10 @@ class WavetableSynth final : public Instrument {
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;
     dsp::SilenceGate gate_{kIdleSamples};
+    dsp::PolyVoiceScratchBank voiceScratch_{kModChunk};
+    double lfo1Buf_[kModChunk] = {}, lfo2Buf_[kModChunk] = {};
+    double f1Buf_[kModChunk] = {}, f2Buf_[kModChunk] = {}, r1Buf_[kModChunk] = {}, r2Buf_[kModChunk] = {};
+    float mixL_[kModChunk] = {}, mixR_[kModChunk] = {};
 };
 
 } // namespace nota

@@ -51,6 +51,33 @@ internal static class HostedRenderPoolTests
         Console.Write(stdout.GetAwaiter().GetResult());
         if (child.ExitCode != 0) Console.Write(stderr.GetAwaiter().GetResult());
         yield return (child.ExitCode == 0, "isolated real VST3 render-pool regressions");
+
+        if (OperatingSystem.IsMacOS())
+        {
+            var auStart = new ProcessStartInfo("dotnet")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            auStart.ArgumentList.Add(typeof(HostedRenderPoolTests).Assembly.Location);
+            auStart.ArgumentList.Add("--hosted-au-pool");
+            using var auChild = Process.Start(auStart)!;
+            var auOut = auChild.StandardOutput.ReadToEndAsync();
+            var auErr = auChild.StandardError.ReadToEndAsync();
+            if (!auChild.WaitForExit(TimeSpan.FromMinutes(3)))
+            {
+                try { auChild.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                auOut.GetAwaiter().GetResult();
+                auErr.GetAwaiter().GetResult();
+                yield return (false, "isolated macOS AU render-pool regressions (timed out, killed)");
+                yield break;
+            }
+            Console.Write(auOut.GetAwaiter().GetResult());
+            if (auChild.ExitCode != 0) Console.Write(auErr.GetAwaiter().GetResult());
+            yield return (auChild.ExitCode == 0, "isolated macOS real AudioUnit planar + parallel regressions");
+        }
     }
 
     private static int Param(NotaEngine e, int track, int device, string name)
@@ -258,6 +285,8 @@ internal static class HostedRenderPoolTests
 
             foreach (var result in SleepGateChecks(catalog)) yield return result;
 
+            foreach (var result in PlanarPluginChainChecks(catalog)) yield return result;
+
             using (var live = Session(catalog, 4, 32))
             {
                 bool stop = false, finite = true;
@@ -411,6 +440,125 @@ internal static class HostedRenderPoolTests
             yield return TimingBudget.Check(true, small.MedianMs * 32 < large.MedianMs,
                 $"56-channel VST3 {adapter}: 128-frame cost {small.MedianMs:0.0000} ms scales below 1/32 of 8192-frame cost {large.MedianMs:0.0000} ms");
             Console.WriteLine("HOSTED_BUFFER " + JsonSerializer.Serialize(new { adapter, channels = 56, small, large }));
+        }
+    }
+
+    private static IEnumerable<(bool Ok, string Label)> PlanarPluginChainChecks(int catalog)
+    {
+        static (float[] Pcm, double WorkerMs) RenderPlanarChain(int cat, int threads)
+        {
+            using var e = new NotaEngine { RenderThreads = threads };
+            e.RenderOffline(new float[Block * 2], Block, Rate);
+            e.SetBpm(120);
+            for (int t = 0; t < 4; t++)
+            {
+                int tr = e.AddVoltSynthTrack();
+                e.SetTrackVolume(tr, 0.2f);
+                for (int k = 0; k < 4; k++)
+                {
+                    int fx = e.AddTrackEffectPlugin(tr, cat);
+                    e.PluginParamSet(tr, fx, Param(e, tr, fx, "Work"), 0.02f);
+                    e.PluginParamSet(tr, fx, Param(e, tr, fx, "Gain"), 1.0f);
+                }
+                int clip = e.AddMidiClip(tr, 0, 8);
+                e.SetClipNotes(tr, clip, [new NotaNote(48 + t * 2, 0, 2, 0.8f), new NotaNote(60 + t, 0.5, 2, 0.7f)]);
+            }
+            e.Seek(0);
+            e.Play();
+            double cpu0 = e.RenderThreadsCpuSeconds;
+            var pcm = Render(e, 48);
+            return (pcm, (e.RenderThreadsCpuSeconds - cpu0) * 1000.0);
+        }
+
+        var c0 = RenderPlanarChain(catalog, 0);
+        var c4 = RenderPlanarChain(catalog, 4);
+        bool ok = c0.Pcm.Any(v => Math.Abs(v) > 0.001f) && c0.Pcm.All(float.IsFinite) && c0.Pcm.SequenceEqual(c4.Pcm) && c4.WorkerMs > 0.0;
+        yield return (ok, $"VST3 contiguous 4-plugin planar chain: 0 vs 4 threads sample-identical (worker={c4.WorkerMs:0.0} ms)");
+    }
+
+    public static IEnumerable<(bool Ok, string Label)> RunAuMacOs()
+    {
+        if (!OperatingSystem.IsMacOS()) yield break;
+
+        string scratch = Directory.CreateTempSubdirectory("nota-hosted-au-").FullName;
+        try
+        {
+            string auBundle = Path.Combine(NativeDir, "nota-render-probe_artefacts", "Release", "AU", "Nota Render Probe.component");
+            yield return (Directory.Exists(auBundle), $"macOS AU fixture bundle built at {auBundle}");
+
+            string worker = Path.Combine(NativeDir, "nota-scanworker");
+            string ProbeAuXml(string identifier)
+            {
+                var psi = new ProcessStartInfo(worker)
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                psi.ArgumentList.Add("AudioUnit");
+                psi.ArgumentList.Add(identifier);
+                using var p = Process.Start(psi)!;
+                string stdout = p.StandardOutput.ReadToEnd();
+                p.WaitForExit();
+                int s = stdout.IndexOf("<PLUGIN", StringComparison.Ordinal);
+                int e = stdout.LastIndexOf("</plugins>", StringComparison.Ordinal);
+                if (s < 0 || e < s) throw new InvalidOperationException($"Failed to probe macOS AU '{identifier}'");
+                return stdout[s..e].Trim();
+            }
+
+            string delyXml = ProbeAuXml("AudioUnit:Effects/aufx,dely,appl");
+            string bpasXml = ProbeAuXml("AudioUnit:Effects/aufx,bpas,appl");
+            File.WriteAllText(Path.Combine(scratch, "plugins.xml"),
+                $"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<KNOWNPLUGINS>\n{delyXml}\n{bpasXml}\n</KNOWNPLUGINS>\n");
+            NotaEngine.SetDataDir(scratch);
+
+            int delyIdx = -1, bpasIdx = -1;
+            for (int i = 0; i < NotaEngine.PluginCount; i++)
+            {
+                string desc = NotaEngine.PluginDescription(i) ?? "";
+                if (desc.Contains("AUDelay | AudioUnit", StringComparison.Ordinal)) delyIdx = i;
+                else if (desc.Contains("AUBandpass | AudioUnit", StringComparison.Ordinal)) bpasIdx = i;
+            }
+            yield return (delyIdx >= 0 && bpasIdx >= 0, $"Apple system AudioUnits registered into isolated catalog (dely={delyIdx}, bpas={bpasIdx})");
+
+            static (float[] Pcm, double WorkerMs) RenderAuSession(int fxA, int fxB, int threads)
+            {
+                using var e = new NotaEngine { RenderThreads = threads };
+                e.RenderOffline(new float[512 * 2], 512, Rate);
+                e.SetBpm(120);
+                for (int t = 0; t < 4; t++)
+                {
+                    int tr = e.AddVoltSynthTrack();
+                    e.SetTrackVolume(tr, 0.25f);
+                    e.AddTrackEffectPlugin(tr, fxA);
+                    e.AddTrackEffectPlugin(tr, fxB);
+                    int clip = e.AddMidiClip(tr, 0, 8);
+                    e.SetClipNotes(tr, clip, [new NotaNote(48 + t * 3, 0, 2, 0.8f), new NotaNote(60 + t, 0.25, 2, 0.7f)]);
+                }
+                e.Seek(0);
+                e.Play();
+                double cpu0 = e.RenderThreadsCpuSeconds;
+                var all = new float[32 * 512 * 2];
+                var buf = new float[512 * 2];
+                for (int b = 0; b < 32; b++)
+                {
+                    e.RenderOffline(buf, 512, Rate);
+                    buf.CopyTo(all, b * 512 * 2);
+                }
+                return (all, (e.RenderThreadsCpuSeconds - cpu0) * 1000.0);
+            }
+
+            var au0 = RenderAuSession(delyIdx, bpasIdx, 0);
+            var au4 = RenderAuSession(delyIdx, bpasIdx, 4);
+            double maxDiff = 0.0;
+            for (int i = 0; i < au0.Pcm.Length; i++) maxDiff = Math.Max(maxDiff, Math.Abs(au0.Pcm[i] - au4.Pcm[i]));
+            bool ok = au0.Pcm.Any(v => Math.Abs(v) > 0.001f) && au0.Pcm.All(float.IsFinite) && maxDiff < 1e-5 && au4.WorkerMs > 0.0;
+            yield return (ok, $"macOS real AUDelay+AUBandpass planar+parallel 4-track parity (maxDiff={maxDiff:0.0e0}, worker={au4.WorkerMs:0.0} ms)");
+        }
+        finally
+        {
+            if (Directory.Exists(scratch)) Directory.Delete(scratch, true);
         }
     }
 }

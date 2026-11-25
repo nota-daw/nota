@@ -15,7 +15,9 @@
 #include "audio_io/AudioConfig.h"
 #include "audio_io/AudioInput.h"
 #include "CommandQueue.h"
+#include "dsp/core/AudioBufferView.h"
 #include "dsp/core/DeviceTelemetry.h"
+#include "dsp/core/RtAttributes.h"
 #include "engine/AudioThreadPool.h"
 #include "engine/CaptureRing.h"
 #include "engine/RenderBusState.h"
@@ -57,8 +59,10 @@ class WavetableSynth;
 // Live MIDI event (UI/CoreMIDI -> audio), lock-free down-queue.
 class RackCore;       // shared rack guts (RackInstrument / RackDevice; see RackCore.h)
 class ClipWarpStream; // offline warp-cache builder (WarpStream.h); held by unique_ptr in wb_
+class RenderGraphExecutor;
 
 class Engine {
+    friend class RenderGraphExecutor;
   public:
     Engine();
     ~Engine();
@@ -2873,7 +2877,7 @@ class Engine {
     static constexpr double kTailQuietSeconds = 3.0;
     static constexpr double kTailMaxQuietSeconds = 30.0;
     static constexpr float kTailFloor = 1.0e-5f;
-    struct LeafWork {
+    struct NOTA_CACHE_ALIGNED LeafWork {
         Track* t = nullptr;
         bool audible = false, capturing = false, feeding = false, toMix = false;
         bool monitoring = false, frozenActive = false, sessionActive = false;
@@ -2898,6 +2902,21 @@ class Engine {
         bool preRendered = false, tapsDone = false;
         float vol = 1.0f, pan = 0.0f;
     };
+    struct NOTA_CACHE_ALIGNED BusWork {
+        Track* track = nullptr;
+        int32_t trackIndex = -1;
+        int32_t busIndex = -1;
+        int32_t parentGroupSlot = -1;
+        bool busActive = false;
+        bool mute = false;
+        bool feedMute = false;
+        bool solo = false;
+        bool cue = false;
+        bool eligible = false;
+        bool parallelRan = false;
+        uint32_t keyNeeds = 0;
+        int32_t level = 0;
+    };
     // Per-block render scratch, by position in the live graph's track list: Pass 1 leaf
     // work + render storage and the MIDI/expression pre-pass buffers. The audio thread
     // fills and reads it during a block, so it is never resized in place (growing the
@@ -2908,12 +2927,19 @@ class Engine {
     struct RenderScratch {
         size_t tracks = 0; // capacity in tracks (every vector below is sized for it)
         int32_t frameCapacity = 0; // allocated frame capacity of leafBuf
+        size_t workerPlanarCount = 0;
         std::vector<LeafWork> leafWork;
         // Pass 1 render storage (two halves per track: dry pre-device + post).
         // NOTE: pool worker slots can NOT back per-track renders — tracks outnumber
         // workers, so a shared slot would hold only the last writer's signal (measured
         // cross-talk). Each task owns leafBase(li) exclusively for the block.
         std::vector<float> leafBuf;
+        // Exclusive Pass 1.5 / Pass 2 bus scratch for parallel Group and Return waves.
+        std::vector<float> groupScratch;
+        std::vector<float> returnScratch;
+        // Per-thread planar L/R buffers indexed cleanly by pool worker id (caller = workerCount).
+        std::vector<dsp::PlanarStereoBuffer> workerPlanar;
+        std::array<BusWork, 16> groupWork{};
         // Per-block MIDI output of each instrument track (post its own MIDI FX). Filled
         // once per block by computeBlockMidi; the render pass feeds each instrument its
         // own buffer plus the buffers of any tracks routing MIDI to it, so a source's
@@ -2964,10 +2990,12 @@ class Engine {
     // attacks and scheduler jitter. Near-deadline sizing leaves four large
     // plug-in jobs in two serial waves despite useful cores being available.
     static constexpr double kRtSizeLoad = 0.50;
+    static constexpr double kRtExitHysteresis = 0.72;
     static constexpr double kRtHoldSeconds = 2.0;
     static constexpr double kRtMaxHoldSeconds = 32.0;
     static constexpr double kRtProbeSeconds = 0.5;
     double rtHoldNs_ = kRtHoldSeconds * 1e9;
+    int32_t rtOverBudgetStreak_ = 0;
     SnapshotHistory<RenderScratch> scratchHist_;
     RenderScratch* rs_ = nullptr; // audio thread: this block's scratch (set in processBlock)
     float* leafBase(size_t li, size_t stride) { return rs_->leafBuf.data() + li * stride * 2; }

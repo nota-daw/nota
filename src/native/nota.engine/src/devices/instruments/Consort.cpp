@@ -979,6 +979,9 @@ void Consort::renderSpan(float* out, int n) {
     const int S = slotsOf(structMode());
     c.voiceGain = poly ? 0.5f : 1.0f; // a poly voice stacks four oscillators on one note
     int active = 0;
+    Voice* act[kMaxVoices];
+    int actN = 0;
+    bool anyStealPend = false;
     for (int v = 0; v < (poly ? kMaxVoices : 1); ++v) {
         Voice& V = voices_[v];
         if (!V.active) {
@@ -1001,8 +1004,32 @@ void Consort::renderSpan(float* out, int n) {
                 if (cnt > 1) V.det[k] = (2.0f * idx / static_cast<float>(cnt - 1) - 1.0f) * c.uniSpread;
             }
         }
-        renderVoice(V, n, c);
-        if (V.active) ++active;
+        act[actN++] = &V;
+        if (V.fade > 0 && V.pendNote >= 0) anyStealPend = true;
+    }
+
+    if (poly && !anyStealPend && actN >= 6 && n >= 16 && voiceScratch_.capacityFrames() >= n * os) {
+        std::array<dsp::PolyVoiceBatchRange, dsp::PolyVoiceScheduler::kMaxBatches> batches{};
+        const int32_t batchesN = dsp::PolyVoiceScheduler::planBatches(actN, 8, batches);
+        dsp::RenderExecutor::parallelFor(batchesN, true, [&](int32_t b) {
+            voiceScratch_.clearBatch(b, n * os);
+            float* bL = voiceScratch_.left(b);
+            float* bR = voiceScratch_.right(b);
+            const auto range = batches[static_cast<size_t>(b)];
+            for (int32_t vi = range.start; vi < range.start + range.count; ++vi)
+                renderVoice(*act[vi], n, c, bL, bR);
+        });
+        for (int32_t b = 0; b < batchesN; ++b) {
+            dsp::PolyVoiceScheduler::accumulateMonoAdd(osL_, voiceScratch_.left(b), n * os);
+            dsp::PolyVoiceScheduler::accumulateMonoAdd(osR_, voiceScratch_.right(b), n * os);
+        }
+        for (int vi = 0; vi < actN; ++vi)
+            if (act[vi]->active) ++active;
+    } else {
+        for (int vi = 0; vi < actN; ++vi) {
+            renderVoice(*act[vi], n, c, osL_, osR_);
+            if (act[vi]->active) ++active;
+        }
     }
     if (poly) activeCount_ = active;
     else {
@@ -1075,7 +1102,7 @@ void Consort::fillVoiceSources(float* sv, const Voice& V, const VoiceCtl& c, flo
     sv[SrcSum] = V.uIn[2];
 }
 
-void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
+void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c, float* outL, float* outR) {
     using namespace consort;
     const double sr = c.sr;
     const float fA = coefOf(c.fA, sr), fD = coefOf(c.fD, sr), fR = coefOf(c.fR, sr);
@@ -1090,8 +1117,8 @@ void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
     const bool g1p = c.patched[DstGate1], g2p = c.patched[DstGate2];
     const bool filtInP = c.patched[DstFiltIn], vcaInP = c.patched[DstVcaIn], extInP = c.patched[DstExtIn];
     const bool anyCab = c.nCab > 0;
-    float* L = osL_;
-    float* R = osR_;
+    float* L = outL;
+    float* R = outR;
     const float keyOct = (V.note - 60) * (1.0f / 12.0f);
 
     for (int i = 0; i < n; ++i) {

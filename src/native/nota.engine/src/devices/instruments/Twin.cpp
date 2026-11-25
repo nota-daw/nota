@@ -1429,17 +1429,47 @@ void Twin::renderSegment(float* out, int n) {
         std::fill(osL_, osL_ + n * os, 0.0f);
         std::fill(osR_, osR_ + n * os, 0.0f);
         bool sounding = false;
+        twin::Voice* partVoices[twin::kMaxVoices];
+        int partCount = 0;
+        bool anyPending = false;
         for (auto& V : voices_) {
             if (!V.active || V.part != part) continue;
-            int k = 0;
-            while (k < n) {
-                k = twin::renderVoice(V, V.hasOwn ? V.own : ctl_[V.part], k, n, os, sr_, modWheel_, fadeLen_, lfo1, osL_, osR_);
-                if (k >= n) break;
-                if (V.active && V.fade == 0 && V.pendNote >= 0) startPending(V);
-                else break;
+            partVoices[partCount++] = &V;
+            if (V.pendNote >= 0) anyPending = true;
+        }
+        sounding = partCount > 0;
+        if (!anyPending && partCount >= 6 && n >= 16 && voiceScratch_.capacityFrames() >= n * os) {
+            std::array<dsp::PolyVoiceBatchRange, dsp::PolyVoiceScheduler::kMaxBatches> batches{};
+            const int32_t batchesN = dsp::PolyVoiceScheduler::planBatches(partCount, 4, batches);
+            dsp::RenderExecutor::parallelFor(batchesN, true, [&](int32_t b) {
+                voiceScratch_.clearBatch(b, n * os);
+                float* bL = voiceScratch_.left(b);
+                float* bR = voiceScratch_.right(b);
+                const auto range = batches[static_cast<size_t>(b)];
+                for (int32_t vi = range.start; vi < range.start + range.count; ++vi) {
+                    twin::Voice& V = *partVoices[vi];
+                    twin::renderVoice(
+                        V, V.hasOwn ? V.own : ctl_[V.part], 0, n, os, sr_, modWheel_, fadeLen_, lfo1, bL, bR);
+                }
+            });
+            for (int32_t b = 0; b < batchesN; ++b) {
+                dsp::PolyVoiceScheduler::accumulateMonoAdd(osL_, voiceScratch_.left(b), n * os);
+                dsp::PolyVoiceScheduler::accumulateMonoAdd(osR_, voiceScratch_.right(b), n * os);
             }
-            sounding = true;
-            active += V.active ? 1 : 0;
+            for (int vi = 0; vi < partCount; ++vi) active += partVoices[vi]->active ? 1 : 0;
+        } else {
+            for (int vi = 0; vi < partCount; ++vi) {
+                twin::Voice& V = *partVoices[vi];
+                int k = 0;
+                while (k < n) {
+                    k = twin::renderVoice(
+                        V, V.hasOwn ? V.own : ctl_[V.part], k, n, os, sr_, modWheel_, fadeLen_, lfo1, osL_, osR_);
+                    if (k >= n) break;
+                    if (V.active && V.fade == 0 && V.pendNote >= 0) startPending(V);
+                    else break;
+                }
+                active += V.active ? 1 : 0;
+            }
         }
         if (os == 2) {
             dn_[part][0].process_block(dsL_, osL_, n);

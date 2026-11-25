@@ -23,6 +23,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Engine performance (#1050, specs/118 — Phase 5)**: Extracted DAG wave scheduler and device-chain executor into `RenderGraphExecutor` (shrinking `Engine_Render.cpp`), added cache-aligned `JobSlot` and lock-free ABA-safe cooperative sub-task execution (`AudioThreadPool` + `dsp::RenderExecutor`) powering parallel Group depth/key waves and Return key waves with deterministic index reduction, intra-track multi-chain rack parallelism (`RackInstrument`, `DrumRack`, `RackDevice` via `ChainScratchBank`), deterministic polyphonic synth voice batching (`WavetableSynth`, `Twin`, `Consort` via `PolyVoiceScheduler`), contiguous planar `PluginEffect` chains (`AudioBufferView` / `PlanarStereoBuffer` eliminating intermediate deinterleave/interleave passes), vetted macOS AudioUnit parallel rendering (`hosting::isParallelRenderSafe`), and over-budget RT hysteresis + fast 2-block attack with zero offline `steady_clock` overhead.
 - **Engine performance (#1050, specs/117 — Phase 4)**: Copy-on-Write (`CowSlice`) backing for track clip/automation/slot snapshots with incremental `publishRaw()` / single-pass `recomputePdc()` / unchanged `recomputeRouting()` skipping, session-sized `StereoScratchArena` & `RenderScratch` buffers (`2048` live frames growing safely for offline bounces), `Eq` per-band coefficient caching + `double2` stereo SIMD filter chains (`float64x2_t` NEON / `__m128d` SSE2), runtime AVX2+FMA `SimdDispatch`, `-fno-math-errno`, and Release ThinLTO.
 
 ### Changed

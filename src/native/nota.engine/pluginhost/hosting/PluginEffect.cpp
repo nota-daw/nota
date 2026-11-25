@@ -56,9 +56,9 @@ bool PluginEffect::attach(std::unique_ptr<juce::AudioPluginInstance> p) {
         refreshGateConfig(sr_);
     }
     plugin_->addListener(this); // "Learn" (M9-B3)
-    // Per-instance VST3 buffers/playhead/sidechain data permit an exclusive worker
-    // process call. Initialization, state and editors remain on the message thread.
-    parallelRender_.store(plugin_->getPluginDescription().pluginFormatName == "VST3", std::memory_order_relaxed);
+    // VST3 and vetted macOS AU buffers/playhead/sidechain data permit an exclusive
+    // worker process call. Initialization, state and editors remain on the message thread.
+    parallelRender_.store(isParallelRenderSafe(plugin_.get()), std::memory_order_relaxed);
     live_.store(true, std::memory_order_release); // everything above is visible to the audio thread
     return true;
 }
@@ -135,6 +135,27 @@ int32_t PluginEffect::latencySamples() const {
     return live_.load(std::memory_order_acquire) ? plugin_->getLatencySamples() : 0;
 }
 
+template <typename PieceFn>
+void PluginEffect::runProcessGate(bool mainInSilent, int32_t frames, const float* sc, int32_t scFrames, PieceFn&& runPiece) {
+    const bool scInActive = hasSidechain_ && sc != nullptr && scFrames > 0 &&
+                            !dsp::SilenceGate::isBufferSilent(
+                                sc, std::min(frames, scFrames) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip && mainInSilent && !scInActive) return;
+
+    bool outputSilent = true;
+    const double sr = plugin_->getSampleRate();
+    for (int32_t off = 0; off < frames;) {
+        const int32_t n = juce::jmin(frames - off, maxBlock_);
+        if (!runPiece(off, n, sc != nullptr ? sc + static_cast<size_t>(off) * 2 : nullptr, scFrames - off))
+            outputSilent = false;
+        off += n;
+        if (off < frames) advanceTransport(playHead_.info, n, sr);
+    }
+    gate_.observe(!mainInSilent || scInActive || !outputSilent, frames, gateEpoch);
+}
+
 void PluginEffect::process(float* buf, int32_t frames) {
     const float* sc = scBuf_;
     const int32_t scFrames = scFrames_;
@@ -145,40 +166,33 @@ void PluginEffect::process(float* buf, int32_t frames) {
 
     const bool mainInSilent =
         dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
-    const bool scInActive = hasSidechain_ && sc != nullptr && scFrames > 0
-        && !dsp::SilenceGate::isBufferSilent(
-            sc, std::min(frames, scFrames) * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
-
-    bool skip = false;
-    const uint32_t gateEpoch = gate_.beginBlock(&skip);
-    if (skip && mainInSilent && !scInActive) return;
-
-    bool outputSilent = true;
-    if (frames <= maxBlock_) {
-        outputSilent = processPiece(buf, frames, sc, scFrames);
-    } else {
-        // Longer than the plug-in was prepared for (#447): in pieces, the key and the transport
-        // moving along with them.
-        const double sr = plugin_->getSampleRate();
-        for (int32_t off = 0; off < frames; off += maxBlock_) {
-            const int32_t n = juce::jmin(frames - off, maxBlock_);
-            if (!processPiece(buf + (size_t)off * 2, n, sc != nullptr ? sc + (size_t)off * 2 : nullptr, scFrames - off))
-                outputSilent = false;
-            advanceTransport(playHead_.info, n, sr);
-        }
-    }
-    gate_.observe(!mainInSilent || scInActive || !outputSilent, frames, gateEpoch);
+    runProcessGate(mainInSilent, frames, sc, scFrames,
+        [&](int32_t off, int32_t n, const float* scPtr, int32_t scRem) {
+            return processPiece(buf + static_cast<size_t>(off) * 2, n, scPtr, scRem);
+        });
 }
 
-bool PluginEffect::processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames) {
-    const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
-    storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
-    float* l = storage_.getWritePointer(0);
-    float* r = stereoIn_ ? storage_.getWritePointer(1) : spare_.data(); // mono main: drop R
-    simd_audio::deinterleaveStereo(l, r, buf, frames);
+void PluginEffect::processPlanar(dsp::PlanarAudioSpan io, int32_t frames) {
+    const float* sc = scBuf_;
+    const int32_t scFrames = scFrames_;
+    scBuf_ = nullptr;
+    scFrames_ = 0;
+    if (frames <= 0 || !live_.load(std::memory_order_acquire) || !io.left() || !io.right()) return;
 
+    const bool mainInSilent =
+        dsp::SilenceGate::isBufferSilent(io.left(), frames, dsp::SilenceGate::kDefaultReleaseThreshold) &&
+        dsp::SilenceGate::isBufferSilent(io.right(), frames, dsp::SilenceGate::kDefaultReleaseThreshold);
+    runProcessGate(mainInSilent, frames, sc, scFrames,
+        [&](int32_t off, int32_t n, const float* scPtr, int32_t scRem) {
+            return processPlanarPiece(io.left() + off, io.right() + off, n, scPtr, scRem);
+        });
+}
+
+void PluginEffect::invokePluginBlock(int32_t frames, const float* scBuf, int32_t scFrames,
+    float* (&ptrs)[kMaxChans], const float*& outL, const float*& outR) {
+    const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
     // Feed the sidechain input bus (Phase C) if the engine handed us a source
-    // this block; otherwise it stays silent (cleared above).
+    // this block; otherwise it stays silent (cleared by caller before loading main channels).
     if (hasSidechain_ && scBuf != nullptr && scFrames >= frames && scChanOffset_ >= 0) {
         const float scGain = fast_math::dbToLin(sidechainGainDb()); // Phase D (was std::pow)
         if (scNumChans_ >= 2 && scChanOffset_ + 1 < nc) {
@@ -194,17 +208,47 @@ bool PluginEffect::processPiece(float* buf, int32_t frames, const float* scBuf, 
         }
     }
 
-    float* ptrs[kMaxChans];
     juce::AudioBuffer<float> block(
         ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, chanFloor_, ptrs), frames);
     empty_.clear();
     workgroup_.update();
     plugin_->processBlock(block, empty_);
 
-    const float* ol = block.getReadPointer(0);
-    const float* orr = stereoOut_ ? block.getReadPointer(1) : ol;
+    outL = block.getReadPointer(0);
+    outR = stereoOut_ ? block.getReadPointer(1) : outL;
+}
+
+bool PluginEffect::processPiece(float* buf, int32_t frames, const float* scBuf, int32_t scFrames) {
+    storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
+    float* l = storage_.getWritePointer(0);
+    float* r = stereoIn_ ? storage_.getWritePointer(1) : spare_.data(); // mono main: drop R
+    simd_audio::deinterleaveStereo(l, r, buf, frames);
+
+    float* ptrs[kMaxChans];
+    const float* ol = nullptr;
+    const float* orr = nullptr;
+    invokePluginBlock(frames, scBuf, scFrames, ptrs, ol, orr);
     simd_audio::interleaveStereoWetDryMix(buf, ol, orr, frames, sidechainMix(), 1.0f - sidechainMix());
     return dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold);
+}
+
+bool PluginEffect::processPlanarPiece(
+    float* dstL, float* dstR, int32_t frames, const float* scBuf, int32_t scFrames) {
+    storage_.clear(0, frames);
+    float* l = storage_.getWritePointer(0);
+    std::copy_n(dstL, frames, l);
+    if (stereoIn_) {
+        float* r = storage_.getWritePointer(1);
+        std::copy_n(dstR, frames, r);
+    }
+
+    float* ptrs[kMaxChans];
+    const float* ol = nullptr;
+    const float* orr = nullptr;
+    invokePluginBlock(frames, scBuf, scFrames, ptrs, ol, orr);
+    simd_audio::mixPlanarWetDry(dstL, dstR, ol, orr, frames, sidechainMix(), 1.0f - sidechainMix());
+    return dsp::SilenceGate::isBufferSilent(dstL, frames, dsp::SilenceGate::kDefaultReleaseThreshold) &&
+           dsp::SilenceGate::isBufferSilent(dstR, frames, dsp::SilenceGate::kDefaultReleaseThreshold);
 }
 
 void PluginEffect::openEditor() {

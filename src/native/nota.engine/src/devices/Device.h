@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "devices/EditorPreview.h"
+#include "dsp/core/AudioSpan.h"
 #include "dsp/core/DeviceTelemetry.h"
 #include "dsp/core/SilenceGate.h"
 #include "engine/TransportInfo.h"
@@ -79,6 +80,11 @@ class Device {
 
     // Process `frames` of interleaved stereo in place. Audio thread; no locks.
     virtual void process(float* buf, int32_t frames) = 0;
+
+    // Optional native planar stereo path (PluginEffect etc.) avoiding interleaved
+    // round-trips across contiguous planar inserts. Audio thread; no locks.
+    virtual bool prefersPlanar() const { return false; }
+    virtual void processPlanar(dsp::PlanarAudioSpan /*io*/, int32_t /*frames*/) {}
 
     // Reported processing latency, for future PDC (M3-7).
     virtual int32_t latencySamples() const { return 0; }

@@ -435,6 +435,23 @@ inline void interleaveStereoWetDryMix(
     }
 }
 
+// Wet/dry planar mix: dst = dry*dst + wet*src (Planar PluginEffect path).
+inline void mixPlanarWetDry(
+    float* dstL, float* dstR, const float* srcL, const float* srcR, int32_t frames, float wet, float dry) noexcept {
+    if (!dstL || !dstR || !srcL || !srcR || frames <= 0) return;
+    if (dry == 0.0f && wet == 1.0f) {
+        for (int32_t i = 0; i < frames; ++i) {
+            dstL[i] = srcL[i];
+            dstR[i] = srcR[i];
+        }
+        return;
+    }
+    for (int32_t i = 0; i < frames; ++i) {
+        dstL[i] = dstL[i] * dry + srcL[i] * wet;
+        dstR[i] = dstR[i] * dry + srcR[i] * wet;
+    }
+}
+
 // Linear gain ramp over interleaved stereo (fade-out, loop declick).
 inline void applyLinearGainRampStereo(float* buf, int32_t frames, float startGain, float endGain) noexcept {
     if (buf == nullptr || frames <= 0) return;
@@ -462,6 +479,7 @@ using simd_audio::deinterleaveStereo;
 using simd_audio::interleaveStereo;
 using simd_audio::interleaveStereoAdd;
 using simd_audio::interleaveStereoWetDryMix;
+using simd_audio::mixPlanarWetDry;
 using simd_audio::isSilent;
 using simd_audio::peakAndSumSquares;
 using simd_audio::scaleStereo;

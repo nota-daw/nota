@@ -885,13 +885,20 @@ void Engine::ensureRenderScratch(size_t tracks, int32_t minFrames) {
     const int32_t frameCap = std::clamp(
         std::max({curFrames, minFrames, dsp::StereoScratchArena<1>::kDefaultLiveFrames}),
         dsp::StereoScratchArena<1>::kDefaultLiveFrames, kMaxBlock);
-    if (cur && cur->tracks >= tracks && cur->frameCapacity >= frameCap) return;
+    const size_t workerSlots = static_cast<size_t>(std::clamp(pool_ ? pool_->workerCount() + 1 : 1, 1, 65));
+    if (cur && cur->tracks >= tracks && cur->frameCapacity >= frameCap && cur->workerPlanarCount >= workerSlots)
+        return;
     const size_t cap = std::max<size_t>(8, (tracks + 7) / 8 * 8); // grow in steps of 8 tracks
     auto s = std::make_shared<RenderScratch>();
     s->tracks = cap;
     s->frameCapacity = frameCap;
+    s->workerPlanarCount = workerSlots;
     s->leafWork.resize(cap);
     s->leafBuf.assign(cap * static_cast<size_t>(frameCap) * 4, 0.0f); // two halves (dry + post) per track
+    s->groupScratch.assign(static_cast<size_t>(kMaxGroups) * static_cast<size_t>(frameCap) * 2, 0.0f);
+    s->returnScratch.assign(static_cast<size_t>(kMaxReturns) * static_cast<size_t>(frameCap) * 2, 0.0f);
+    s->workerPlanar.resize(workerSlots);
+    for (auto& buf : s->workerPlanar) buf.ensureFrames(frameCap);
     s->blockMidi.assign(cap, std::vector<MidiEv>(1024));
     s->blockMidiN.assign(cap, 0);
     s->blockMidiStart.resize(cap);
@@ -923,6 +930,7 @@ void Engine::ensureBlockCapacity(int32_t frames) {
 bool Engine::setRenderThreads(int n) {
     if (isRunning()) return false; // the audio thread may be inside dispatch()
     pool_ = std::make_unique<AudioThreadPool>(n < 0 ? -1 : n);
+    if (authoring_) ensureRenderScratch(authoring_->tracks.size(), preparedBlockCap_);
     return true;
 }
 

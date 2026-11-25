@@ -62,11 +62,25 @@ void RackCore::forwardTempo(double beatStart, double spb, bool playing) {
     }
 }
 
+void RackCore::prepareParallelScratch(const RackState* st, int32_t minFrames) {
+    if (!st) return;
+    const int32_t n = static_cast<int32_t>(st->chains.size());
+    if (n >= 2) parallelArena_.prepare(n, std::max(minFrames, maxBlock_));
+}
+
+bool RackCore::chainSupportsParallel(const RackChain& c) {
+    if (c.instrument && !c.instrument->supportsParallelRender()) return false;
+    for (const auto& d : c.devices)
+        if (d && !d->bypassed() && !d->supportsParallelRender()) return false;
+    return true;
+}
+
 void RackCore::setRates(double sr, int32_t maxBlock) {
     sampleRate_ = sr > 0 ? sr : 44100.0;
     maxBlock_ = maxBlock > 0 ? maxBlock : kMaxBlock;
     auto st = authoring_;
     if (!st) return;
+    prepareParallelScratch(st.get(), maxBlock_);
     for (auto& c : st->chains) {
         if (c.instrument) c.instrument->setSampleRate(sampleRate_);
         for (auto& d : c.devices)
@@ -80,6 +94,7 @@ void RackCore::ensureChainBlockCapacity(int32_t frames) {
     if (frames <= 0) return;
     auto st = authoring_;
     if (!st) return;
+    prepareParallelScratch(st.get(), frames);
     for (auto& c : st->chains) {
         if (c.instrument) c.instrument->ensureBlockCapacity(frames);
         for (auto& d : c.devices)

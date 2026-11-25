@@ -71,5 +71,78 @@ class StereoScratchArena {
     int32_t frameCap_ = 0;
 };
 
+// Dynamically sized bank of aligned interleaved stereo buffers for multi-chain racks.
+// Allocated on non-RT chain preparation/capacity checks so RT chain fan-out never allocates.
+class ChainScratchBank {
+  public:
+    static constexpr int32_t kDefaultLiveFrames = 2048;
+    static constexpr int32_t kMaxFrames = 16384;
+    static constexpr int32_t kMaxSlots = 64;
+
+    ChainScratchBank() = default;
+    ChainScratchBank(const ChainScratchBank& other) {
+        if (other.slotCap_ > 0 && other.frameCap_ > 0) prepare(other.slotCap_, other.frameCap_);
+    }
+    ChainScratchBank& operator=(const ChainScratchBank& other) {
+        if (this != &other && other.slotCap_ > 0 && other.frameCap_ > 0) prepare(other.slotCap_, other.frameCap_);
+        return *this;
+    }
+    ChainScratchBank(ChainScratchBank&& other) noexcept
+        : storage_(std::move(other.storage_)),
+          slots_(std::move(other.slots_)),
+          strideFloats_(other.strideFloats_),
+          slotCap_(other.slotCap_),
+          frameCap_(other.frameCap_) {
+        other.strideFloats_ = 0;
+        other.slotCap_ = 0;
+        other.frameCap_ = 0;
+    }
+    ChainScratchBank& operator=(ChainScratchBank&& other) noexcept {
+        if (this != &other) {
+            storage_ = std::move(other.storage_);
+            slots_ = std::move(other.slots_);
+            strideFloats_ = other.strideFloats_;
+            slotCap_ = other.slotCap_;
+            frameCap_ = other.frameCap_;
+            other.strideFloats_ = 0;
+            other.slotCap_ = 0;
+            other.frameCap_ = 0;
+        }
+        return *this;
+    }
+
+    void prepare(int32_t minSlots, int32_t minFrames) {
+        const int32_t wantSlots = std::clamp(minSlots, 0, kMaxSlots);
+        const int32_t wantFrames = std::clamp(minFrames, kDefaultLiveFrames, kMaxFrames);
+        if (wantSlots <= 0) return;
+        if (wantSlots <= slotCap_ && wantFrames <= frameCap_ && !slots_.empty()) return;
+        const int32_t finalSlots = std::max(wantSlots, slotCap_);
+        const int32_t finalFrames = std::max(wantFrames, frameCap_);
+        const size_t stride = ((static_cast<size_t>(finalFrames) * 2 + 15) / 16) * 16;
+        storage_.assign(static_cast<size_t>(finalSlots) * stride + 16, 0.0f);
+        const uintptr_t raw = reinterpret_cast<uintptr_t>(storage_.data());
+        const uintptr_t aligned = (raw + 63u) & ~uintptr_t{63u};
+        float* base = reinterpret_cast<float*>(aligned);
+        slots_.resize(static_cast<size_t>(finalSlots));
+        for (int32_t i = 0; i < finalSlots; ++i) slots_[static_cast<size_t>(i)] = base + static_cast<size_t>(i) * stride;
+        strideFloats_ = stride;
+        slotCap_ = finalSlots;
+        frameCap_ = finalFrames;
+    }
+
+    int32_t slotCount() const noexcept { return slotCap_; }
+    int32_t capacityFrames() const noexcept { return frameCap_; }
+    float* buffer(int32_t slot) noexcept {
+        return slot >= 0 && slot < slotCap_ ? slots_[static_cast<size_t>(slot)] : nullptr;
+    }
+
+  private:
+    std::vector<float> storage_;
+    std::vector<float*> slots_;
+    size_t strideFloats_ = 0;
+    int32_t slotCap_ = 0;
+    int32_t frameCap_ = 0;
+};
+
 } // namespace dsp
 } // namespace nota

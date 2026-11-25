@@ -103,6 +103,7 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Engine_Takes.cpp
     src/engine/Engine_TakeRetry.cpp
     src/engine/Engine_Render.cpp
+    src/engine/RenderGraphExecutor.cpp
     src/engine/Audition.cpp
     src/engine/AudioThreadPool.cpp  # fork-join pool
     src/media/WarpStream.cpp
@@ -490,16 +491,20 @@ if(APPLE)
     target_link_libraries(nota-scanworker PRIVATE "-framework CoreAudioKit")
 endif()
 
-# A real, deterministic VST3 for hosted render-pool regression tests. It stays in
-# the build tree: never copied into a user's plugin directory or app package.
-option(NOTA_BUILD_RENDER_PROBE "Build the hosted render-pool test VST3" ON)
+# A real, deterministic VST3 (and AU on macOS) for hosted render-pool regression tests.
+# Stays in the build tree: never copied into a user's plugin directory or app package.
+option(NOTA_BUILD_RENDER_PROBE "Build the hosted render-pool test plugin" ON)
 if(NOTA_BUILD_RENDER_PROBE)
+    set(NOTA_RENDER_PROBE_FORMATS VST3)
+    if(APPLE)
+        list(APPEND NOTA_RENDER_PROBE_FORMATS AU)
+    endif()
     juce_add_plugin(nota-render-probe
         COMPANY_NAME Nota
         PLUGIN_MANUFACTURER_CODE Nota
         PLUGIN_CODE Nrpr
         PRODUCT_NAME "Nota Render Probe"
-        FORMATS VST3
+        FORMATS ${NOTA_RENDER_PROBE_FORMATS}
         IS_SYNTH TRUE
         NEEDS_MIDI_INPUT TRUE
         COPY_PLUGIN_AFTER_BUILD FALSE

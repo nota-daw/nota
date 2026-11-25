@@ -18,6 +18,7 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "dsp/core/ScratchArena.h"
 #include "engine/SnapshotHistory.h"
 #include "devices/Device.h"
 #include "devices/MidiDevice.h"
@@ -588,6 +589,11 @@ class RackCore {
     int32_t maxBlock_ = kMaxBlock;
     dsp::TelemetryMode telemetryMode_ = dsp::TelemetryMode::OnDemand;
 
+  protected:
+    static bool chainSupportsParallel(const RackChain& c);
+    void prepareParallelScratch(const RackState* st, int32_t minFrames);
+    dsp::ChainScratchBank parallelArena_;
+
   private:
     void propagateTelemetry(RackState& st) const;
     // duplicateChain: the keys and Arp targets the blob doesn't carry, from src to its copy.
@@ -599,6 +605,7 @@ class RackCore {
         if (ns) {
             ns->generation = ++nextStateGen_;
             propagateTelemetry(*ns);
+            prepareParallelScratch(ns.get(), maxBlock_);
         }
         authoring_ = ns;
         states_.publish(std::move(ns));

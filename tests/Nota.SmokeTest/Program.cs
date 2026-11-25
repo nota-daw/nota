@@ -82,6 +82,11 @@ if (args.Contains("--hosted-render-pool"))
     foreach (var (ok, label) in HostedRenderPoolTests.Run()) Check(ok, label);
     return failures == 0 ? 0 : 1;
 }
+if (args.Contains("--hosted-au-pool"))
+{
+    foreach (var (ok, label) in HostedRenderPoolTests.RunAuMacOs()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 
 // --- architecture boundary checks (Phase 0.7) --------------------------------
 // Enforce the DDD dependency direction at test time: the compiler drops unused
@@ -459,7 +464,16 @@ if (args.Length >= 1 && args[0] == "--perf")
 {
     Console.WriteLine("-- render pool --");
     foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
+    Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
+    foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PERF PASSED" : $"PERF FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+if (args.Length >= 1 && args[0] == "--phase5")
+{
+    Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
+    foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PHASE 5 PASSED" : $"PHASE 5 FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Process CPU readout alone: `--cpu`. Also part of the full run.
@@ -16419,6 +16433,8 @@ Console.WriteLine("-- phase 3 timeline index & routing plan --");
 foreach (var (ok, label) in Phase3TimelineRoutingTests.Run()) Check(ok, label);
 Console.WriteLine("-- phase 4 CoW, ScratchArena & SIMD --");
 foreach (var (ok, label) in Phase4CowArenaSimdTests.Run()) Check(ok, label);
+Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
+foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
 Console.WriteLine("-- render pool --");
 foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 

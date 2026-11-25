@@ -29,6 +29,25 @@ int minProcessChannels(const juce::AudioPluginInstance& p) {
     return p.getPluginDescription().pluginFormatName == "VST3" ? kNoAllocChans : 0;
 }
 
+bool isParallelRenderSafe(const juce::AudioPluginInstance* p) {
+    if (p == nullptr) return false;
+    const auto desc = p->getPluginDescription();
+    if (desc.pluginFormatName == "VST3") return true;
+    if (desc.pluginFormatName != "AudioUnit") return false;
+    static const bool serialAu = [] {
+        const char* v = std::getenv("NOTA_SERIAL_AUDIOUNIT");
+        return v != nullptr && v[0] == '1';
+    }();
+    if (serialAu) return false;
+    const juce::String& id = desc.fileOrIdentifier;
+    const juce::String& name = desc.name;
+    if (id.containsIgnoreCase("AUNetSend") || id.containsIgnoreCase("AUNetReceive") ||
+        id.containsIgnoreCase("AURoundTripAAC") || name.containsIgnoreCase("AUNetSend") ||
+        name.containsIgnoreCase("AUNetReceive") || name.containsIgnoreCase("AURoundTripAAC"))
+        return false;
+    return true;
+}
+
 void enableEveryBus(juce::AudioPluginInstance& p) {
     if (p.enableAllBuses()) return;
     for (const bool isInput : {true, false}) // all-or-nothing failed: take what it accepts
