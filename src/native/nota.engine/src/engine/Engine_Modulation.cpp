@@ -11,6 +11,7 @@
 // layer copies trivially across graph snapshots and needs no per-block phase state.
 
 #include "Engine.h"
+#include "RenderRoutingPlan.h"
 #include "ParamResolve.h"
 
 #include <algorithm>
@@ -514,7 +515,94 @@ void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, 
 
 // ---- block-rate apply / restore (audio thread, called from mixGraph) -------
 
+namespace {
+
+bool readCompiledSourceParam(const RenderRoutingPlan::CompiledCvLinkEntry& e, float& outMv) {
+    const auto& src = e.sourceParam;
+    Device* sdev = src.device;
+    float mn = src.minVal;
+    float span = src.spanVal;
+    if (src.nested) {
+        if (!src.rack || src.rack->liveGeneration() != src.expectedRackGen) {
+            if (!e.ownerTrack || src.paramIndex < 0) return false;
+            sdev = resolveNested(*e.ownerTrack, src.host, src.chainUid, src.slot).device;
+            if (!sdev || src.paramIndex >= sdev->paramCount()) return false;
+            mn = sdev->paramMin(src.paramIndex);
+            span = sdev->paramMax(src.paramIndex) - mn;
+        }
+    }
+    if (!sdev || src.paramIndex < 0 || src.paramIndex >= sdev->paramCount()) return false;
+    outMv = span > 1e-9f ? (sdev->getParam(src.paramIndex) - mn) / span : 0.0f;
+    return true;
+}
+
+float combineCvValue(const CvLink& link, float base, float mv, float mn, float span) {
+    const float ld = link.depth.load(std::memory_order_relaxed);
+    float v;
+    switch (link.mode.load(std::memory_order_relaxed)) {
+    case 1: v = base * (1.0f + ld * mv); break;
+    case 2: {
+        const float target = mn + (mv * 0.5f + 0.5f) * span;
+        v = base + ld * (target - base);
+        break;
+    }
+    default: v = base + ld * mv * span; break;
+    }
+    return std::clamp(v, mn, mn + span);
+}
+
+} // namespace
+
 void Engine::applyModulation(Graph* g, double beat, double timeSec) {
+    if (const RenderRoutingPlan* plan = g ? g->routingPlan.get() : nullptr) {
+        for (const auto& e : plan->cvLinks()) {
+            if (!e.ownerTrack || !e.targetTrack ||
+                e.linkIndex < 0 || static_cast<size_t>(e.linkIndex) >= e.ownerTrack->cvLinks.size())
+                continue;
+            const CvLink& link = e.ownerTrack->cvLinks[static_cast<size_t>(e.linkIndex)];
+            float mv = 0.0f;
+            if (e.sourceIsParam) {
+                if (!readCompiledSourceParam(e, mv)) continue;
+            } else {
+                if (!e.sourceMod) continue;
+                mv = e.sourceMod->eval(beat, timeSec);
+            }
+
+            const float base = link.base.load(std::memory_order_relaxed);
+            const auto& dst = e.destParam;
+            using Kind = RenderRoutingPlan::CompiledParamEndpoint::Kind;
+            const bool nestedFresh = !dst.nested || (dst.rack && dst.rack->liveGeneration() == dst.expectedRackGen);
+            if (nestedFresh) {
+                if (dst.kind == Kind::Invalid) continue;
+                const float clamped = combineCvValue(link, base, mv, dst.minVal, dst.spanVal);
+                switch (dst.kind) {
+                case Kind::InstrumentPlugin:
+                case Kind::NestedRackInstrumentPlugin:
+                    if (dst.instrument) dst.instrument->pluginParamSet(dst.paramIndex, clamped);
+                    break;
+                case Kind::MidiDeviceGeneric:
+                case Kind::NestedRackMidiGeneric:
+                    if (dst.midi) dst.midi->setParam(dst.paramIndex, clamped);
+                    break;
+                case Kind::DeviceGeneric:
+                case Kind::NestedRackDeviceGeneric:
+                    if (dst.device) dst.device->setLiveParam(dst.paramIndex, clamped);
+                    break;
+                default: break;
+                }
+                continue;
+            }
+
+            if (!targetValid(*e.targetTrack, e.targetKind, e.targetDevice, e.targetParam, e.targetChainUid, e.targetSlot))
+                continue;
+            float mn, mx;
+            targetGet(*e.targetTrack, e.targetKind, e.targetDevice, e.targetParam, mn, mx, e.targetChainUid, e.targetSlot);
+            const float clamped = combineCvValue(link, base, mv, mn, mx - mn);
+            targetSet(*e.targetTrack, e.targetKind, e.targetDevice, e.targetParam, clamped, e.targetChainUid, e.targetSlot);
+        }
+        return;
+    }
+
     for (auto& tptr : g->tracks) {
         Track& t = *tptr;
         if (t.cvLinks.empty()) continue;
@@ -578,8 +666,7 @@ void Engine::applyModulation(Graph* g, double beat, double timeSec) {
 }
 
 void Engine::updateModulators(Graph* g, double beat, double timeSec, double dt) {
-    for (auto& tptr : g->tracks) {
-        Track& t = *tptr;
+    auto updateTrack = [&](Track& t) {
         // Stateful sources first (env / MIDI / ADSR smooth into envValue).
         for (auto& m : t.modulators) {
             if (m.kind == ModulatorKind::EnvFollower) {
@@ -606,7 +693,14 @@ void Engine::updateModulators(Graph* g, double beat, double timeSec, double dt) 
                 m.pushScope(v, static_cast<float>(dt));
             }
         }
+    };
+    if (const RenderRoutingPlan* plan = g ? g->routingPlan.get() : nullptr) {
+        for (int32_t idx : plan->modulatorTrackIndices())
+            if (idx >= 0 && static_cast<size_t>(idx) < g->tracks.size() && g->tracks[static_cast<size_t>(idx)])
+                updateTrack(*g->tracks[static_cast<size_t>(idx)]);
+        return;
     }
+    for (auto& tptr : g->tracks) updateTrack(*tptr);
 }
 
 int32_t Engine::modulatorScope(int32_t trackId, int32_t modId, float* values, float* dts, int32_t cap) const {

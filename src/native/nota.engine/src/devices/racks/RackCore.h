@@ -131,6 +131,7 @@ class RackCore {
     static float padParamMax(int32_t p) { return p == PadVolume ? 2.0f : p == PadTune ? 48.0f : 1.0f; }
 
     struct RackState {
+        uint64_t generation = 0;
         std::vector<RackChain> chains;
         std::vector<MacroMapping> mappings;
     };
@@ -157,6 +158,10 @@ class RackCore {
     // Audio-thread view of the current snapshot (raw pointer, retained by states_
     // until the renders that could still hold it have finished).
     RackState* live() const { return states_.live(); }
+    uint64_t liveGeneration() const {
+        const RackState* st = live();
+        return st ? st->generation : 0;
+    }
 
     // Fan the transport snapshot out to every chain child so hosted plugins nested
     // in a rack sync to the DAW clock too (the Instrument/Device overrides call this).
@@ -588,10 +593,14 @@ class RackCore {
         return authoring_ ? std::make_shared<RackState>(*authoring_) : std::make_shared<RackState>();
     }
     void commit(std::shared_ptr<RackState> ns) {
-        if (ns) propagateTelemetry(*ns);
+        if (ns) {
+            ns->generation = ++nextStateGen_;
+            propagateTelemetry(*ns);
+        }
         authoring_ = ns;
         states_.publish(std::move(ns));
     }
+    uint64_t nextStateGen_ = 0;
     static void pruneMappings(std::shared_ptr<RackState>& ns, int32_t removedChain);
     static std::shared_ptr<MidiDevice> makeChainMidiDevice(int32_t kind);
 

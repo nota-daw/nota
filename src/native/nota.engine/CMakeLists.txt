@@ -137,6 +137,8 @@ set(NOTA_ENGINE_SOURCES
     src/engine/ArticulationSchedule.cpp
     src/engine/ArticulationTable.cpp
     src/engine/Graph.cpp
+    src/engine/RenderRoutingPlan.cpp
+    src/engine/TimelineIndex.cpp
     src/engine/Track.cpp
     src/engine/Transport.cpp
     src/engine/SessionPlayer.cpp

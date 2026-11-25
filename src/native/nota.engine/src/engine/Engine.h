@@ -1643,7 +1643,8 @@ class Engine {
     static bool isUnderGroup(const Graph& g, const Track& t, int32_t groupId);
     void drainLiveMidi(double blockStartBeat, bool playing);
     void renderInstrumentRaw(
-        Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing);
+        Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing,
+        size_t trackIdx = SIZE_MAX);
     // Append a track's own note events (its MIDI clips while playing + live input when armed/
     // auditioned) to evs; returns the new count. Shared by a track's own render and by MIDI
     // routing (a destination gathers its sources' notes the same way).
@@ -1651,7 +1652,8 @@ class Engine {
         ExprEv* xev = nullptr, int* xn = nullptr);
     // A track's own post-MIDI-FX events (gather + drum swing + its MIDI FX chain), run once.
     int computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double blockStart, double spb, bool playing,
-        bool arrangementActive, ExprEv* xev = nullptr, int* xn = nullptr);
+        bool arrangementActive, ExprEv* xev = nullptr, int* xn = nullptr, const Graph* g = nullptr,
+        size_t trackIdx = SIZE_MAX);
     // Pre-pass: fill rs_->blockMidi/blockMidiN for every non-session instrument track.
     void computeBlockMidi(
         Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive);
@@ -1670,10 +1672,11 @@ class Engine {
     uint32_t followRng_ = 0x9E3779B9u; // audio-thread RNG for follow-action chance / Any / Other
     int applyMidiEffects(
         Track& t, MidiEv* evs, int n, MidiEv* scratch, int32_t frames, double beatStart, double spb, bool playing);
-    void applyMidiCcRouting(Track& t);
+    void applyMidiCcRouting(Track& t, const Graph* g = nullptr, size_t trackIdx = SIZE_MAX);
     void renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, double spb); // M5-4
     void renderAudioClipsRaw(
         const std::vector<AudioClip>& clips, float* dst, int32_t frames, double blockStart, double spb);
+    void renderTrackAudioClipsRaw(const Track& t, float* dst, int32_t frames, double blockStart, double spb);
     void renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
         const Transport& clock);
     // Consolidate (audio): bounce the clips covering [start,end) into one new clip.
@@ -2924,6 +2927,10 @@ class Engine {
         // Pass 1: indices of the leaves rendered on the pool this block (dispatched alone,
         // so the job's ticket count is its real work).
         std::vector<int> parIdx;
+        // Pre-resolved route slot per track index, rebuilt only when routingEpoch_ or Graph changes.
+        const Graph* cachedRouteGraph = nullptr;
+        uint64_t cachedRoutingEpoch = 0;
+        std::vector<int32_t> trackRouteSlot;
     };
     // Pass 1 with a device (audio thread state). Measured: spreading a block that fits the
     // buffer over parked render threads costs 2-3x the CPU (cores wake from idle at low
@@ -2972,7 +2979,7 @@ class Engine {
     // taps, then runs devices in place. Both orders yield identical values
     // (dry/devices are pure per-track functions of the same inputs).
     void renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart, double spb,
-        bool playing, const TransportInfo& ti, bool arrangementActive);
+        bool playing, const TransportInfo& ti, bool arrangementActive, size_t trackIdx = SIZE_MAX);
     void processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
         double spb, bool playing, const TransportInfo& ti);
     // Fork-join pool for parallel Pass 1 leaf renders (constructed on the
@@ -3078,6 +3085,7 @@ class Engine {
     // track per block. A reroute racing a block can mis-key that one block (as it always could:
     // the table is cleared and refilled in place), never touch a buffer out of range.
     std::atomic<int32_t> routeSlotCount_{0};
+    std::atomic<uint64_t> routingEpoch_{1};
     std::vector<float> silentKey_; // kMaxBlock stereo zeros: the key of a part that is gone
     // Monitoring a track (#563): a detector can live with routeBus_'s "previous segment" view,
     // an ear can't — segments vary in length (a device that converts the rate, a loop seam), and

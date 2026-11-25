@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Changed
+- **Timeline indexing and precompiled render routing plans** (#1050, specs/116) replace linear
+  per-block arrangement scans and track-graph lookups with immutable snapshot indices.
+  Per-track `TimelineIndex` structures resolve active MIDI/audio clips, overlapping notes, and
+  envelope/automation/CC curve segments in O(log N + k) time via binary search and chunk
+  max-end segment trees, while `RenderRoutingPlan` precompiles sorted track-ID lookups,
+  group ancestry, sidechain-consumer tracks, live MIDI-In caches, and generation-guarded
+  automation, CV-modulation, and Arp-CC endpoints on publish.
 - **Idle instrument, plugin, and submix-bus sleep gating** (#1050, specs/115) removes silent-track
   DSP overhead via a shared lock-free `SilenceGate` and per-block `ActiveBusMask`. All 10 remaining
   built-in synths, nested racks (`RackInstrument`, `DrumRack`, `RackDevice`), and hosted plugins now

@@ -30,6 +30,8 @@
 
 namespace nota {
 
+class TimelineIndex;
+
 // Per-clip ADSR amplitude shape for audio clips, in PLAYED time (clip-local beats, so it
 // follows trims/reverse the way the ear hears the clip). Attack ramps 0→1 from the clip
 // start when a decay follows, and straight to the sustain level when decay is 0, so a
@@ -427,6 +429,7 @@ class Track {
     std::vector<AudioClip> clips;           // audio tracks
     std::vector<AudioTake> takes;           // audio loop-recording passes (specs/067), recording order
     std::vector<MidiClip> midiClips;        // instrument tracks
+    std::shared_ptr<const TimelineIndex> timelineIndex; // O(log N) interval index built in publishRaw()
     // Articulation map (specs/085), instrument tracks: the compiled table the scheduler reads and
     // the map itself as the UI's JSON (saved with the project, restored by undo). Both immutable
     // and shared between snapshots; an edit swaps them as a pair. Null = no map.

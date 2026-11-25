@@ -5,6 +5,9 @@
 
 #include "Engine.h"
 #include "ArticulationSchedule.h"
+#include "RenderRoutingPlan.h"
+#include "TempoMap.h"
+#include "TimelineIndex.h"
 #include "dsp/core/ScopedNoDenormals.h"
 #include "dsp/math/SimdAudio.h"
 #include "devices/racks/DrumRack.h"
@@ -366,7 +369,8 @@ bool midiEffectsIdle(const Track& t) {
 }
 
 bool instrumentHasBlockInput(const Graph& g, const Track& t, size_t trackPos, const std::vector<int>& blockMidiN,
-    const std::vector<int>& blockExprN, int32_t liveExprCount, bool playing, bool arrangementActive) {
+    const std::vector<int>& blockExprN, int32_t liveExprCount, bool playing, bool arrangementActive,
+    const RenderRoutingPlan* plan) {
     if (liveExprCount > 0) return true;
     if (trackPos < blockMidiN.size() && blockMidiN[trackPos] > 0) return true;
     if (trackPos < blockExprN.size() && blockExprN[trackPos] > 0) return true;
@@ -376,11 +380,22 @@ bool instrumentHasBlockInput(const Graph& g, const Track& t, size_t trackPos, co
     const int32_t srcId = t.midiFromTrackId();
     if (srcId >= 0) {
         if (held && held->routedFrom != srcId) return true;
-        for (size_t j = 0; j < g.tracks.size(); ++j) {
-            const Track* s = g.tracks[j].get();
-            if (!s || s->id() != srcId || s->type() != TrackType::Instrument) continue;
-            if ((j < blockMidiN.size() && blockMidiN[j] > 0) || (j < blockExprN.size() && blockExprN[j] > 0))
-                return true;
+        if (plan) {
+            const int32_t j = plan->resolveMidiSourceIndex(trackPos, srcId);
+            if (j >= 0 && static_cast<size_t>(j) < g.tracks.size()) {
+                const Track* s = g.tracks[static_cast<size_t>(j)].get();
+                if (s && s->id() == srcId && s->type() == TrackType::Instrument &&
+                    ((static_cast<size_t>(j) < blockMidiN.size() && blockMidiN[static_cast<size_t>(j)] > 0) ||
+                     (static_cast<size_t>(j) < blockExprN.size() && blockExprN[static_cast<size_t>(j)] > 0)))
+                    return true;
+            }
+        } else {
+            for (size_t j = 0; j < g.tracks.size(); ++j) {
+                const Track* s = g.tracks[j].get();
+                if (!s || s->id() != srcId || s->type() != TrackType::Instrument) continue;
+                if ((j < blockMidiN.size() && blockMidiN[j] > 0) || (j < blockExprN.size() && blockExprN[j] > 0))
+                    return true;
+            }
         }
     } else if (held && (held->routedFrom >= 0 || (held->routedBits[0] | held->routedBits[1]) != 0)) {
         return true; // pending release of previously routed notes
@@ -404,7 +419,7 @@ bool instrumentLeafCanSkip(const Graph& g, const Track& t, size_t trackPos, bool
     }
     if (chainRest(t) != ChainRest::Settled) return false;
     return !instrumentHasBlockInput(
-        g, t, trackPos, blockMidiN, blockExprN, liveExprCount, playing, arrangementActive);
+        g, t, trackPos, blockMidiN, blockExprN, liveExprCount, playing, arrangementActive, g.routingPlan.get());
 }
 
 bool canSkipInactiveBus(Track& t) {
@@ -474,12 +489,15 @@ void Engine::clipCtlEvents(const MidiClip& clip, double clipStartS, double clipE
             out[n++] = ExprEv{first, -1, dim, c.valueAt(beatAt(first))};
         // Recorded points sit on block starts (the capture is block-timed): place each on a whole
         // sample, with a hair of slack, so rounding never lets one fall between two blocks.
-        for (const auto& p : c.points) {
-            if (n >= cap) break;
+        const double minPtBeat = beatAt(first) - 1e-3;
+        auto ptIt = std::lower_bound(c.points.begin(), c.points.end(), minPtBeat,
+            [](const AutomationPoint& pt, double b) { return pt.beat < b; });
+        for (; ptIt != c.points.end() && n < cap; ++ptIt) {
+            const auto& p = *ptIt;
             const double rel = map ? map->secondsAt(clip.startBeat + p.beat) * sr - sampleStart : clipStartS + p.beat * spb - blockStart;
             const int64_t off = static_cast<int64_t>(std::floor(rel + 1e-6));
-            if (off < first || off >= end || off >= frames) continue;
-            out[n++] = ExprEv{static_cast<int32_t>(off), -1, dim, p.value};
+            if (off >= end || off >= frames) break;
+            if (off >= first) out[n++] = ExprEv{static_cast<int32_t>(off), -1, dim, p.value};
         }
         if (!ctlIsSwitch(c.ctl) && c.movesIn(beatAt(first), beatAt(end)))
             for (int32_t off = (first / kStep + 1) * kStep; off < end && n < cap; off += kStep)
@@ -528,31 +546,52 @@ int Engine::applyMidiEffects(
 // (specs/044); both walks read published snapshots only.
 // The route comes from the published snapshot (Track::ccRoutes), never from the Arp's own fields:
 // a group or rack edit retargets those before the new device order is published.
-static void applyCcRoute(Track& t, const MidiDevice& md) {
-    const Track::CcRoute* rt = nullptr;
-    for (auto& r : *t.ccRoutes)
-        if (r.arp == &md) { rt = &r; break; }
-    if (!rt) return;
-    const int di = rt->dev, pi = rt->param;
-    if (pi < 0) return;
+static void applyCcRoute(
+    Track& t, const MidiDevice& md, const std::vector<RenderRoutingPlan::CompiledCcRouteEntry>* compiled) {
     Device* d = nullptr;
-    if (rt->uid) d = resolveNested(t, di, rt->uid, rt->slot).device;
-    else if (di >= 0 && di < static_cast<int>(t.devices.size())) d = t.devices[di].get();
+    int32_t pi = -1;
+    if (compiled) {
+        for (const auto& entry : *compiled) {
+            if (entry.arp != &md) continue;
+            const auto& ep = entry.target;
+            pi = ep.paramIndex;
+            if (pi < 0) return;
+            if (ep.nested) {
+                if (ep.rack && ep.rack->liveGeneration() == ep.expectedRackGen) d = ep.device;
+                else d = resolveNested(t, ep.host, ep.chainUid, ep.slot).device;
+            } else {
+                d = ep.device;
+            }
+            break;
+        }
+    } else {
+        const Track::CcRoute* rt = nullptr;
+        for (auto& r : *t.ccRoutes)
+            if (r.arp == &md) { rt = &r; break; }
+        if (!rt) return;
+        const int di = rt->dev;
+        pi = rt->param;
+        if (pi < 0) return;
+        if (rt->uid) d = resolveNested(t, di, rt->uid, rt->slot).device;
+        else if (di >= 0 && di < static_cast<int>(t.devices.size())) d = t.devices[di].get();
+    }
     if (!d || pi >= d->paramCount()) return;
     const float mn = d->paramMin(pi), mx = d->paramMax(pi);
     const float mod = std::clamp(md.ccValue() * md.ccDepth(), 0.0f, 1.0f);
     d->setLiveParam(pi, mn + (mx - mn) * mod);
 }
 
-void Engine::applyMidiCcRouting(Track& t) {
+void Engine::applyMidiCcRouting(Track& t, const Graph* g, size_t trackIdx) {
     if (!t.ccRoutes) return;
+    const auto* compiled =
+        (g && g->routingPlan && trackIdx != SIZE_MAX) ? g->routingPlan->ccRoutesForTrack(trackIdx) : nullptr;
     for (auto& md : t.midiEffects) {
         if (!md) continue;
-        applyCcRoute(t, *md);
-        if (auto* r = md->asRack()) r->forEachChildMidi([&](MidiDevice& c) { applyCcRoute(t, c); });
+        applyCcRoute(t, *md, compiled);
+        if (auto* r = md->asRack()) r->forEachChildMidi([&](MidiDevice& c) { applyCcRoute(t, c, compiled); });
     }
     if (auto* r = t.instrument ? t.instrument->asRack() : nullptr)
-        r->forEachChildMidi([&](MidiDevice& c) { applyCcRoute(t, c); });
+        r->forEachChildMidi([&](MidiDevice& c) { applyCcRoute(t, c, compiled); });
 }
 
 void Engine::poll() {
@@ -1662,87 +1701,106 @@ void Engine::captureRoutedNotes(
 int Engine::gatherInstrumentNotes(
     Track& t, MidiEv* evs, int n, int32_t frames, double blockStart, double spb, bool playing, ExprEv* xev, int* xn) {
     if (playing) {
-        // Controllers first: a clip ending here releases its pedal ahead of the next clip's
-        // values at the same offset (the render keeps their order).
-        if (xev)
-            for (const MidiClip& clip : t.midiClips)
-                if (clip.active)
-                    clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb), renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart,
-                        frames, xev, *xn, kMaxBlockExpr);
-        for (const MidiClip& clip : t.midiClips) {
-            // Deactivated clip (key 0): emit NO new note-ons, but still emit note-offs — so a
-            // note already sounding when the clip was switched off releases instead of hanging.
+        const double tsr = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 44100.0;
+        const double msToS = tsr / 1000.0;
+        const double trackShiftS = t.midiOffsetMs() * msToS;
+        const ArticulationTable* artTable = t.articulationTable.get();
+        const bool mapped = transport_.hasTempoMap();
+        const double seamEnd = mapped ? blockStart + seamEndSamples_ - transport_.playheadSamples() : seamEndSamples_;
+        const TempoMap* tmap = transport_.tempoMap();
+        const double tplay = transport_.playheadSamples();
+        const bool unshifted = !artTable && trackShiftS == 0.0;
+        const TimelineIndex* idx = (spb > 0.0) ? t.timelineIndex.get() : nullptr;
+
+        auto processClip = [&](const MidiClip& clip, int32_t clipIdx, bool indexedNotes, double clipLocalStartB,
+                               double clipLocalEndB) {
             const bool clipActive = clip.active;
             const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
             const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
             const bool hasVel = !clip.velocityEnvelope.points.empty();
-            // Track MIDI offset (ms → samples at the device rate). Playback-only: the shift
-            // is applied to the scheduled times below, never to the stored notes.
-            // A track without a map and without an offset (most tracks) pays nothing per note here:
-            // the per-note articulation lookup is skipped and the shift stays a constant zero.
-            const double msToS = transport_.sampleRate() / 1000.0;
-            const double trackShiftS = t.midiOffsetMs() * msToS;
-            const ArticulationTable* artTable = t.articulationTable.get();
-            const bool mapped = transport_.hasTempoMap();
-            // Unmapped keeps the original arithmetic (clipStart + beat * spb) with no per-note branch;
-            // mapped asks the transport for the beat position on the block clock.
-            const double seamEnd = mapped ? blockStart + seamEndSamples_ - transport_.playheadSamples() : seamEndSamples_;
-            const TempoMap* tmap = transport_.tempoMap();
-            const double tsr = transport_.sampleRate(), tplay = transport_.playheadSamples();
             const auto gatherClip = [&]<bool shifted, bool isMapped>() {
                 const auto at = [&](double clipBeat) {
                     if constexpr (isMapped) return renderSampleAtBeat(clip.startBeat + clipBeat, blockStart, spb);
                     else return clipStart + clipBeat * spb;
                 };
-                for (const Note& note : clip.notes) {
-                    // FR-018: track offset + the note's articulation offset, applied once (specs/085).
+                auto handleNote = [&](const Note& note) {
                     double shiftS = 0.0;
                     if constexpr (shifted)
                         shiftS = artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS : trackShiftS;
-                    // Clip length gates note starts (M4-2): notes outside don't play. A note that
-                    // starts before the clip (a count-in pickup recorded into a take at 1.1, #56)
-                    // sounds from the clip start for the part that reaches into it.
-                    if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
+                    if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
                     const double nominalOn = at(std::max(0.0, note.startBeat));
-                    // A trimmed clip cuts the tail: a note that runs past the clip's (possibly
-                    // shortened) end stops at the boundary instead of sounding its full length.
                     double nominalOff = at(note.startBeat + note.lengthBeats);
                     if (nominalOff > clipEnd) nominalOff = clipEnd;
                     const double onS = shifted ? nominalOn + shiftS : nominalOn;
                     const double offS = shifted ? nominalOff + shiftS : nominalOff;
-                    // Velocity envelope (M9 follow-up): scale by the curve at the note's
-                    // clip-local start beat.
                     float vel = note.velocity;
                     if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
                     if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
                         evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
                             static_cast<float>((offS - onS) / spb)};
-                    // Loop seam: a note still sounding at the loop end releases here, ahead of any
-                    // chase re-trigger at the same offset (offs sort first).
                     if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
                         evs[n++] = {0, false, note.pitch, 0.0f};
-                    // Chase: a note already held at the jump point starts sounding right here.
                     if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
                         evs[n++] = {0, true, note.pitch, vel};
                     if (offS >= blockStart && offS < blockStart + frames && n < 1024)
                         evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
-                    // Recorded MPE: the note's curve while it sounds in this block.
                     if (xev && note.expr && clipActive)
                         noteExprEvents(note, at(note.startBeat) + shiftS - blockStart,
                             offS - blockStart, frames, spb,
-                            xev, *xn, kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS); // curve timed from the true start
+                            xev, *xn, kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS);
+                };
+                if (indexedNotes && idx) {
+                    idx->forEachNoteInClip(clipIdx, clipLocalStartB, clipLocalEndB, -1.0,
+                        [&](int32_t noteIdx) { handleNote(clip.notes[static_cast<size_t>(noteIdx)]); });
+                } else {
+                    for (const Note& note : clip.notes) handleNote(note);
                 }
             };
-            const bool unshifted = !artTable && trackShiftS == 0.0;
             if (mapped) {
                 if (unshifted) gatherClip.template operator()<false, true>();
                 else gatherClip.template operator()<true, true>();
             } else if (unshifted) gatherClip.template operator()<false, false>();
             else gatherClip.template operator()<true, false>();
-            // The clip's controllers (specs/020).
             if (xev && clipActive)
                 clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr,
                     transport_.tempoMap(), transport_.sampleRate(), transport_.playheadSamples());
+        };
+
+        if (idx && !seamOffs_) {
+            const double minShiftMs = t.midiOffsetMs() + idx->minArtOffsetMs();
+            const double maxShiftMs = t.midiOffsetMs() + idx->maxArtOffsetMs();
+            const double maxBps = mapped ? (TimelineIndex::kMaxConservTempoBpm / 60.0) : (tsr / spb);
+            const double maxBeatsPerMs = std::max(maxBps, tsr / spb) / 1000.0;
+            const double padBefore = std::max(0.0, maxShiftMs) * maxBeatsPerMs + 0.05;
+            const double padAfter = std::max(0.0, -minShiftMs) * maxBeatsPerMs + 0.05;
+            const double b0 = (mapped && tmap) ? tmap->beatAt(tplay / tsr) : blockStart / spb;
+            const double b1 = (mapped && tmap) ? tmap->beatAt((tplay + frames) / tsr) : (blockStart + frames) / spb;
+            const double rawStart = std::min(b0, b1);
+            const double rawEnd = std::max(b0, b1);
+            const double qStart = rawStart - padBefore;
+            const double qEnd = rawEnd + padAfter;
+
+            if (xev) {
+                idx->forEachMidiClipInWindow(rawStart - 0.05, rawEnd + 0.05, -1.0, [&](int32_t ci) {
+                    const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
+                    if (clip.active)
+                        clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb),
+                            renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart, frames, xev, *xn, kMaxBlockExpr);
+                });
+            }
+            idx->forEachMidiClipInWindow(qStart, qEnd, -1.0, [&](int32_t ci) {
+                const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
+                processClip(clip, ci, true, qStart - clip.startBeat, qEnd - clip.startBeat);
+            });
+        } else {
+            // Fallback (loop seam boundary / unindexed / zero-tempo edge): linear verbatim traversal.
+            if (xev)
+                for (const MidiClip& clip : t.midiClips)
+                    if (clip.active)
+                        clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb), renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart,
+                            frames, xev, *xn, kMaxBlockExpr);
+            for (size_t ci = 0; ci < t.midiClips.size(); ++ci)
+                processClip(t.midiClips[ci], static_cast<int32_t>(ci), false, 0.0, 0.0);
         }
     }
     // Notes a loop record replace removed from this track's take: release them (once), unless
@@ -1832,12 +1890,22 @@ int Engine::releaseRouted(Track::LiveHeld& held, MidiEv* evs, int n) {
 // it takes its MIDI from.
 void Engine::applyLiveExpression(Graph* g, const Track& t, Instrument& inst) const {
     const Track* src = nullptr;
-    if (g && t.midiFromTrackId() >= 0)
-        for (const auto& p : g->tracks)
-            if (p && p.get() != &t && p->type() == TrackType::Instrument && p->id() == t.midiFromTrackId()) {
-                src = p.get();
-                break;
+    const int32_t srcId = g ? t.midiFromTrackId() : -1;
+    if (g && srcId >= 0) {
+        if (const RenderRoutingPlan* plan = g->routingPlan.get()) {
+            const int32_t j = plan->findTrackIndex(srcId);
+            if (j >= 0 && static_cast<size_t>(j) < g->tracks.size()) {
+                const Track* p = g->tracks[static_cast<size_t>(j)].get();
+                if (p && p != &t && p->type() == TrackType::Instrument && p->id() == srcId) src = p;
             }
+        } else {
+            for (const auto& p : g->tracks)
+                if (p && p.get() != &t && p->type() == TrackType::Instrument && p->id() == srcId) {
+                    src = p.get();
+                    break;
+                }
+        }
+    }
     for (int i = 0; i < liveExprCount_; ++i) {
         const MidiEvent& e = liveExpr_[i];
         if (takesLiveEvent(t, e) || (src && takesLiveEvent(*src, e))) deliverExpr(inst, e.pitch, e.expr, e.velocity);
@@ -1848,7 +1916,7 @@ void Engine::applyLiveExpression(Graph* g, const Track& t, Instrument& inst) con
 // its own MIDI FX chain. This is what feeds the track's instrument and, via routing, any
 // destination it forwards to — so the FX (arp etc.) run exactly once per block.
 int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double blockStart, double spb, bool playing,
-    bool arrangementActive, ExprEv* xev, int* xn) {
+    bool arrangementActive, ExprEv* xev, int* xn, const Graph* g, size_t trackIdx) {
     // Arrangement clips gather only when the Arrangement is active; live input (armed/audition)
     // is independent, so a session-only jam still lets you play instruments live.
     if (xn) *xn = 0;
@@ -1897,10 +1965,10 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
     if (!t.midiEffects.empty()) {
         MidiEv scratch[1024];
         n = applyMidiEffects(t, evs, n, scratch, frames, spb > 0.0 ? blockStart / spb : 0.0, spb, playing);
-        applyMidiCcRouting(t);
+        applyMidiCcRouting(t, g, trackIdx);
         std::sort(evs, evs + n, midiEvLess);
     } else if (t.instrument && t.instrument->asRack())
-        applyMidiCcRouting(t); // Arps grouped into the Instrument Rack's chains (specs/044)
+        applyMidiCcRouting(t, g, trackIdx); // Arps grouped into the Instrument Rack's chains (specs/044)
     t.updateMidiCv(evs, n); // MIDI→CV modulators read the post-FX note stream
     return n;
 }
@@ -1952,7 +2020,7 @@ void Engine::computeBlockMidi(
             continue;
         }
         rs_->blockMidiN[i] = computeInstrumentMidi(
-            t, buf.data(), frames, blockStart, spb, playing, arrangementActive, xbuf.data(), &rs_->blockExprN[i]);
+            t, buf.data(), frames, blockStart, spb, playing, arrangementActive, xbuf.data(), &rs_->blockExprN[i], g, i);
         // Frozen source audio is a recording and does not expose its former MIDI. With no device
         // reading held notes (keepHeld) no books are kept. A zero mask means every count is zero,
         // so the 260-byte clears run only when something was held.
@@ -1971,23 +2039,32 @@ void Engine::computeBlockMidi(
 void Engine::feedMidiKey(Graph* g, Device& d, int32_t srcTrackId) {
     if (!g) return;
     const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
+    auto feedAt = [&](size_t j) {
+        const auto& source = *g->tracks[j];
+        const bool playable = source.type() == TrackType::Instrument && !(source.frozen() && source.frozenBuf);
+        d.setMidiKeyBlock({srcTrackId, rs_->blockMidi[j].data(), rs_->blockMidiN[j],
+            playable ? &rs_->blockMidiStart[j] : nullptr, playable ? source.liveHeld->midiKey.mask : 0});
+    };
+    if (const RenderRoutingPlan* plan = g->routingPlan.get()) {
+        const int32_t j = plan->findTrackIndex(srcTrackId);
+        if (j >= 0 && static_cast<size_t>(j) < nt && g->tracks[static_cast<size_t>(j)] &&
+            g->tracks[static_cast<size_t>(j)]->id() == srcTrackId) {
+            feedAt(static_cast<size_t>(j));
+            return;
+        }
+        d.setMidiKeyBlock({srcTrackId});
+        return;
+    }
     for (size_t j = 0; j < nt; ++j)
         if (g->tracks[j] && g->tracks[j]->id() == srcTrackId) {
-            const auto& source = *g->tracks[j];
-            const bool playable = source.type() == TrackType::Instrument && !(source.frozen() && source.frozenBuf);
-            d.setMidiKeyBlock({srcTrackId, rs_->blockMidi[j].data(), rs_->blockMidiN[j],
-                playable ? &rs_->blockMidiStart[j] : nullptr, playable ? source.liveHeld->midiKey.mask : 0});
+            feedAt(j);
             return;
         }
     d.setMidiKeyBlock({srcTrackId});
 }
 
-// Renders the instrument's dry stereo (pre-fader) into `dst` (zeroed here) from this block's
-// precomputed MIDI: the track's own post-FX output plus the post-FX output of any track routing
-// its MIDI here (so a source's arp/MIDI-FX drive this instrument too). Fader/pan and the device
-// chain are applied by the caller (processBlock).
 void Engine::renderInstrumentRaw(
-    Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing) {
+    Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing, size_t trackIdx) {
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
     Instrument* inst = t.instrument.get();
     if (!inst) return;
@@ -2026,23 +2103,15 @@ void Engine::renderInstrumentRaw(
         int32_t decidedAt[128];
         bool decidedSet[128];
         const size_t nt = std::min(g->tracks.size(), rs_->blockMidiN.size());
-        for (size_t j = 0; j < nt; ++j) {
+        auto visitSource = [&](size_t j) {
             Track* p = g->tracks[j].get();
-            if (!p) continue;
+            if (!p) return;
             const bool self = (p == &t);
-            // Destination reads its source's post-FX output. A muted source still forwards MIDI:
-            // its own render is skipped, but its buffer was computed in the pre-pass.
             const bool routed = !self && srcId >= 0 && p->type() == TrackType::Instrument && p->id() == srcId;
-            if (!self && !routed) continue;
+            if (!self && !routed) return;
             const int m = rs_->blockMidiN[j];
             const MidiEv* srcEvs = rs_->blockMidi[j].data();
             if (routed) srcFound = true;
-            // The route's notes are tracked as delivered: an event the full buffer drops never
-            // reached the instrument, so it must not change what the route is holding (#504).
-            // A note-on of the track's own (a clip, a key played on it) takes its pitch over:
-            // its own note-off ends that pitch, and a later switch must not cut it, whatever
-            // happened to the instrument meanwhile (replaced, a rack chain swapped). The latest
-            // event per pitch decides, by time and not by track order (applied after the loop).
             for (int k = 0; k < m && n < 1024; ++k) {
                 evs[n++] = srcEvs[k];
                 const int pitch = srcEvs[k].pitch;
@@ -2059,17 +2128,35 @@ void Engine::renderInstrumentRaw(
             if (routed && t.armed()) trackRoutedDown(t.id(), srcEvs, m, blockStart, spb, playing || countInActive_);
             if (routed && captureRouted) {
                 captureRoutedNotes(recLane, srcEvs, m, blockStart, spb, countInClockOffset());
-                // The source's controllers (its clips' curves) print into the take too.
                 if (j < rs_->blockExprN.size())
                     for (int k = 0; k < rs_->blockExprN[j]; ++k) {
                         const ExprEv& x = rs_->blockExpr[j][k];
                         if (x.dim < kCtlDimBase) continue;
                         RecordedCtl rc{x.dim - kCtlDimBase, (blockStart + x.off) / spb + countInClockOffset(),
                             x.value, recordPass_};
-                        rc.lane = recLane; // this destination's clip, as its notes (specs/086)
+                        rc.lane = recLane;
                         pushRecordedCtl(rc);
                     }
             }
+        };
+        if (const RenderRoutingPlan* plan = g->routingPlan.get()) {
+            const int32_t selfIdx =
+                (trackIdx < nt) ? static_cast<int32_t>(trackIdx) : plan->findTrackIndex(t.id());
+            const int32_t routedIdx = (srcId >= 0) ? ((selfIdx >= 0)
+                    ? plan->resolveMidiSourceIndex(static_cast<size_t>(selfIdx), srcId)
+                    : plan->findTrackIndex(srcId))
+                    : -1;
+            if (selfIdx >= 0 && static_cast<size_t>(selfIdx) < nt &&
+                routedIdx >= 0 && static_cast<size_t>(routedIdx) < nt && routedIdx != selfIdx) {
+                visitSource(static_cast<size_t>(std::min(selfIdx, routedIdx)));
+                visitSource(static_cast<size_t>(std::max(selfIdx, routedIdx)));
+            } else {
+                if (selfIdx >= 0 && static_cast<size_t>(selfIdx) < nt) visitSource(static_cast<size_t>(selfIdx));
+                if (routedIdx >= 0 && static_cast<size_t>(routedIdx) < nt && routedIdx != selfIdx)
+                    visitSource(static_cast<size_t>(routedIdx));
+            }
+        } else {
+            for (size_t j = 0; j < nt; ++j) visitSource(j);
         }
         for (int h = 0; h < 2; ++h)
             for (uint64_t bits = decided[h]; bits; bits &= bits - 1) {
@@ -2118,8 +2205,8 @@ void Engine::renderInstrumentRaw(
     // MIDI clip volume envelope (M9 follow-up): scale the instrument output per
     // sample within each clip's time window (0..1 curve in clip-local beats).
     if (playing) {
-        for (const MidiClip& clip : t.midiClips) {
-            if (!clip.active || clip.volumeEnvelope.points.empty()) continue;
+        auto applyMidiClipEnv = [&](const MidiClip& clip) {
+            if (!clip.active || clip.volumeEnvelope.points.empty()) return;
             const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
             const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
             const bool mappedEnv = transport_.hasTempoMap();
@@ -2128,10 +2215,24 @@ void Engine::renderInstrumentRaw(
                 const double p = blockStart + i;
                 if (p < clipStart || p >= clipEnd) continue;
                 const double beat = mappedEnv ? transport_.beatAtSamples(elapsed + i) - clip.startBeat : (p - clipStart) / spb;
-                const float g = std::clamp(clip.volumeEnvelope.valueAt(beat), 0.0f, 1.0f);
-                dst[i * 2] *= g;
-                dst[i * 2 + 1] *= g;
+                const float envGain = std::clamp(clip.volumeEnvelope.valueAt(beat), 0.0f, 1.0f);
+                dst[i * 2] *= envGain;
+                dst[i * 2 + 1] *= envGain;
             }
+        };
+        if (t.timelineIndex && spb > 0.0) {
+            if (t.timelineIndex->hasAnyMidiVolumeEnvelope()) {
+                const bool mappedEnv = transport_.hasTempoMap();
+                const TempoMap* tmapEnv = transport_.tempoMap();
+                const double srEnv = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 44100.0;
+                const double elapsed = transport_.playheadSamples();
+                const double b0 = (mappedEnv && tmapEnv) ? tmapEnv->beatAt(elapsed / srEnv) : blockStart / spb;
+                const double b1 = (mappedEnv && tmapEnv) ? tmapEnv->beatAt((elapsed + frames) / srEnv) : (blockStart + frames) / spb;
+                t.timelineIndex->forEachMidiEnvelopeClipInWindow(std::min(b0, b1) - 0.05, std::max(b0, b1) + 0.05,
+                    [&](int32_t ci) { applyMidiClipEnv(t.midiClips[static_cast<size_t>(ci)]); });
+            }
+        } else {
+            for (const MidiClip& clip : t.midiClips) applyMidiClipEnv(clip);
         }
     }
 }
@@ -2298,6 +2399,29 @@ void Engine::renderAudioClipsRaw(
         for (const AudioClip& clip : clips) mixAudioClip<true>(clip, dst, frames, elapsed, spb, 1.0f, transport_);
     } else
         for (const AudioClip& clip : clips) mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f, transport_);
+}
+
+void Engine::renderTrackAudioClipsRaw(
+    const Track& t, float* dst, int32_t frames, double blockStart, double spb) {
+    if (!t.timelineIndex || spb <= 0.0) {
+        renderAudioClipsRaw(t.clips, dst, frames, blockStart, spb);
+        return;
+    }
+    std::fill_n(dst, static_cast<size_t>(frames) * 2, 0.0f);
+    const bool mapped = transport_.hasTempoMap();
+    const TempoMap* tmap = transport_.tempoMap();
+    const double sr = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 44100.0;
+    const double elapsed = transport_.playheadSamples();
+    const double b0 = (mapped && tmap) ? tmap->beatAt(elapsed / sr) : blockStart / spb;
+    const double b1 = (mapped && tmap) ? tmap->beatAt((elapsed + frames) / sr) : (blockStart + frames) / spb;
+    const double winStart = std::min(b0, b1);
+    const double winEnd = std::max(b0, b1);
+    const double maxBps = mapped ? (TimelineIndex::kMaxConservTempoBpm / 60.0) : (sr / spb);
+    t.timelineIndex->forEachAudioClipInWindow(winStart, winEnd, maxBps, [&](int32_t ci) {
+        const AudioClip& clip = t.clips[static_cast<size_t>(ci)];
+        if (mapped) mixAudioClip<true>(clip, dst, frames, elapsed, spb, 1.0f, transport_);
+        else mixAudioClip(clip, dst, frames, blockStart, spb, 1.0f, transport_);
+    });
 }
 
 // Consolidation owns this clock; rendering must neither attach to nor advance the live one.
@@ -2615,7 +2739,7 @@ void Engine::processMasterChain(Graph& g, float* out, int32_t numFrames, double 
                 applyMasterLanes(master, beat);
                 // The pan stage ramps to the lane's value at the chunk's end, so a drawn
                 // pan sweep is followed exactly, not one chunk late.
-                if (const TrackLane* pl = masterPanLane(master)) {
+                if (const TrackLane* pl = g.routingPlan ? g.routingPlan->masterPanLane() : masterPanLane(master)) {
                     startPan = std::clamp(pl->valueAt(beat), -1.0f, 1.0f);
                     pan = std::clamp(pl->valueAt(endBeat), -1.0f, 1.0f);
                 }
@@ -3020,7 +3144,7 @@ void Engine::publishTrackTapRings(int32_t frames) {
 // bit-identical in pool tasks and inline. Session clocks (shared followRng_)
 // advance in the serial pre-pass, never here.
 void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
-    double spb, bool playing, const TransportInfo& ti, bool arrangementActive) {
+    double spb, bool playing, const TransportInfo& ti, bool arrangementActive, size_t trackIdx) {
     // 1) Render the track's dry stereo (pre-fader).
     switch (w.path) {
     case LeafPath::Frozen: fillFrozen(t, dst, frames, blockStart, spb); break;
@@ -3042,10 +3166,10 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
             feedInstrumentKeys(g, t, frames);
         }
         feedPartTaps(t);
-        renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing);
+        renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing, trackIdx);
         if (t.instrument) t.instrument->setPartTaps(nullptr, 0);
         break;
-    case LeafPath::AudioClips: renderAudioClipsRaw(t.clips, dst, frames, blockStart, spb); break;
+    case LeafPath::AudioClips: renderTrackAudioClipsRaw(t, dst, frames, blockStart, spb); break;
     case LeafPath::Tail: std::fill_n(dst, frames * 2, 0.0f); break; // the chain alone rings on
     case LeafPath::Skip: break; // unreachable (pre-pass filters Skip out)
     }
@@ -3194,15 +3318,37 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         // Live input monitoring: this segment's hardware input (shared by every track
         // monitoring it), and the set of tracks whose output some monitoring track hears —
         // those keep rendering while solo-gated, feeding only their route tap / record tap.
+        const RenderRoutingPlan* plan = g->routingPlan.get();
+        const size_t ntracks = g->tracks.size();
+        const uint64_t liveRouteEpoch = routingEpoch_.load(std::memory_order_acquire);
+        if (rs_->cachedRouteGraph != g || rs_->cachedRoutingEpoch != liveRouteEpoch) {
+            rs_->cachedRouteGraph = g;
+            rs_->cachedRoutingEpoch = liveRouteEpoch;
+            const size_t cap = std::min(ntracks, rs_->trackRouteSlot.size());
+            for (size_t i = 0; i < cap; ++i)
+                rs_->trackRouteSlot[i] = g->tracks[i] ? routeSlotForTrack(g->tracks[i]->id()) : -1;
+        }
+        auto cachedRouteSlot = [&](size_t li, int32_t tid) -> int32_t {
+            return li < rs_->trackRouteSlot.size() ? rs_->trackRouteSlot[li] : routeSlotForTrack(tid);
+        };
+
         pullMonitorInput(frames);
         advanceMonitorLag(frames); // a monitored track's lag, before any track reads it (#563)
         constexpr int kMaxFeeds = 16;
         int32_t feedIds[kMaxFeeds];
         int numFeeds = 0;
         if (recSrc > 0) feedIds[numFeeds++] = recSrc;
-        for (auto& t : g->tracks)
-            if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0 && numFeeds < kMaxFeeds)
-                feedIds[numFeeds++] = t->recordInputSource();
+        if (plan) {
+            for (int32_t ai : plan->audioTrackIndices()) {
+                Track* t = g->tracks[static_cast<size_t>(ai)].get();
+                if (t && t->monitor() && t->recordInputSource() > 0 && numFeeds < kMaxFeeds)
+                    feedIds[numFeeds++] = t->recordInputSource();
+            }
+        } else {
+            for (auto& t : g->tracks)
+                if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0 && numFeeds < kMaxFeeds)
+                    feedIds[numFeeds++] = t->recordInputSource();
+        }
         auto feedsMonitor = [&](int32_t id) {
             for (int i = 0; i < numFeeds; ++i)
                 if (feedIds[i] == id) return true;
@@ -3210,9 +3356,18 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         };
         bool anySolo = false;
         int32_t numReturns = 0;
-        for (auto& t : g->tracks) {
-            if (t->solo()) anySolo = true;
-            if (t->type() == TrackType::Return) ++numReturns;
+        if (plan) {
+            numReturns = plan->returnCount();
+            for (auto& t : g->tracks)
+                if (t->solo()) {
+                    anySolo = true;
+                    break;
+                }
+        } else {
+            for (auto& t : g->tracks) {
+                if (t->solo()) anySolo = true;
+                if (t->type() == TrackType::Return) ++numReturns;
+            }
         }
         if (numReturns > kMaxReturns) numReturns = kMaxReturns;
         busState_.returns.beginBlock(static_cast<size_t>(numReturns), frames,
@@ -3238,49 +3393,73 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         // stays out of its parent). Without cued groups it equals grpMuteE.
         bool grpFeedMute[kMaxGroups];
         int numGroups = 0, maxDepth = 0;
-        for (auto& tptr : g->tracks) {
-            if (tptr->type() != TrackType::Group || numGroups >= kMaxGroups) continue;
-            grpT[numGroups] = tptr.get();
-            grpId[numGroups] = tptr->id();
-            grpParent[numGroups] = tptr->groupId();
-            ++numGroups;
-        }
+        const bool cueOn = cueSeg_ != nullptr;
         auto slotOf = [&](int32_t id) -> int {
             if (id < 0) return -1;
+            if (plan) return plan->groupSlotOfId(id);
             for (int i = 0; i < numGroups; ++i)
                 if (grpId[i] == id) return i;
             return -1;
         };
-        const bool cueOn = cueSeg_ != nullptr;
-        for (int i = 0; i < numGroups; ++i) {
-            bool m = false, s = false, fm = false;
-            int depth = 0;
-            for (int32_t a = grpId[i]; a >= 0;) { // walk self + ancestor groups
-                int si = slotOf(a);
-                if (si < 0) break;
-                m |= grpT[si]->mute();
-                fm |= grpT[si]->mute() && !(cueOn && grpT[si]->cue());
-                s |= grpT[si]->solo();
-                ++depth;
-                a = grpParent[si];
+        if (plan) {
+            numGroups = std::min<int32_t>(kMaxGroups, plan->groupCount());
+            maxDepth = plan->maxGroupDepth();
+            for (int i = 0; i < numGroups; ++i) {
+                const auto& gs = plan->groupSlot(i);
+                grpT[i] = gs.track;
+                grpId[i] = gs.trackId;
+                grpParent[i] = gs.track->groupId();
+                grpDepth[i] = gs.depth;
+                bool m = false, s = false, fm = false;
+                for (int8_t k = 0; k < gs.ancestorCount; ++k) {
+                    const int si = gs.ancestors[static_cast<size_t>(k)];
+                    const Track* gt = plan->groupSlot(si).track;
+                    m |= gt->mute();
+                    fm |= gt->mute() && !(cueOn && gt->cue());
+                    s |= gt->solo();
+                }
+                grpMuteE[i] = m;
+                grpFeedMute[i] = fm;
+                grpSoloE[i] = s;
             }
-            grpMuteE[i] = m;
-            grpFeedMute[i] = fm;
-            grpSoloE[i] = s;
-            grpDepth[i] = depth;
-            if (depth > maxDepth) maxDepth = depth;
+        } else {
+            for (auto& tptr : g->tracks) {
+                if (tptr->type() != TrackType::Group || numGroups >= kMaxGroups) continue;
+                grpT[numGroups] = tptr.get();
+                grpId[numGroups] = tptr->id();
+                grpParent[numGroups] = tptr->groupId();
+                ++numGroups;
+            }
+            for (int i = 0; i < numGroups; ++i) {
+                bool m = false, s = false, fm = false;
+                int depth = 0;
+                for (int32_t a = grpId[i]; a >= 0;) { // walk self + ancestor groups
+                    int si = slotOf(a);
+                    if (si < 0) break;
+                    m |= grpT[si]->mute();
+                    fm |= grpT[si]->mute() && !(cueOn && grpT[si]->cue());
+                    s |= grpT[si]->solo();
+                    ++depth;
+                    a = grpParent[si];
+                }
+                grpMuteE[i] = m;
+                grpFeedMute[i] = fm;
+                grpSoloE[i] = s;
+                grpDepth[i] = depth;
+                if (depth > maxDepth) maxDepth = depth;
+            }
         }
         busState_.groups.beginBlock(static_cast<size_t>(numGroups), frames,
             [&](size_t i) { std::fill_n(groupBus_[i].data(), frames * 2, 0.0f); });
         // A leaf's effective mute/solo folds in any ancestor group's flag.
-        auto leafMute = [&](Track& t) {
+        auto leafMute = [&](size_t li, Track& t) {
             if (t.mute()) return true;
-            int s = slotOf(t.groupId());
+            const int s = plan ? plan->leafParentGroupSlot(li) : slotOf(t.groupId());
             return s >= 0 && grpFeedMute[s];
         };
-        auto leafSolo = [&](Track& t) {
+        auto leafSolo = [&](size_t li, Track& t) {
             if (t.solo()) return true;
-            int s = slotOf(t.groupId());
+            const int s = plan ? plan->leafParentGroupSlot(li) : slotOf(t.groupId());
             return s >= 0 && grpSoloE[s];
         };
 
@@ -3314,7 +3493,6 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         // the mix bit-identical (same elementwise ops, same order). Shared
         // writers (record queues are SPSC), hardware monitoring and hosted
         // plugins stay on the verbatim serial path.
-        const size_t ntracks = g->tracks.size();
         // Per-track render storage (two halves: dry + post). Falls back to
         // all-serial when undersized (unreachable: sized per graph swap).
         const size_t stride = (size_t)frames * 2;
@@ -3336,15 +3514,15 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             // mixer mute/solo gate (freeze captures the sound the track makes, not the mix)
             // — otherwise a soloed sibling would punch silent gaps into the buffer.
             const bool capturing = (t.id() == capTrackId);
-            const bool audible = !leafMute(t) && (!anySolo || leafSolo(t));
+            const bool audible = !leafMute(li, t) && (!anySolo || leafSolo(li, t));
             // Soloing a monitoring (or recording) track must not silence what it listens to.
-            const bool feeding = !audible && !leafMute(t) && feedsMonitor(t.id());
+            const bool feeding = !audible && !leafMute(li, t) && feedsMonitor(t.id());
             // A sidechain source keeps rendering for its taps when muted or solo-gated, the way a
             // console's pre-fader send outlives the channel mute: a vocoder's voice track can be
             // muted (or the pad soloed) and still drive the bands. Its post-fader tap is silent
             // while it is muted.
             const bool keying = !audible && trackFeedsRoute(t.id()); // whole track or a part (specs/050)
-            const bool postTapMuted = keying && leafMute(t);
+            const bool postTapMuted = keying && leafMute(li, t);
             // Input monitoring (Monitor "In"): the track plays its record-input source live
             // in place of its clips — hardware input this segment, or the source track's
             // post-fader tap from the previous one. Master (-1) would feed back: silent.
@@ -3447,10 +3625,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             } // stopped / session-only audio track, its tail played out: nothing to do
 
             // Destination: this leaf's parent group's submix bus, else the master mix.
-            const int destSlot = slotOf(t.groupId());
+            const int destSlot = plan ? plan->leafParentGroupSlot(li) : slotOf(t.groupId());
             w.destSlot = static_cast<int8_t>(destSlot);
             w.dest = destSlot >= 0 ? groupBus_[destSlot].data() : out;
-            const int32_t routeSlot = routeSlotForTrack(t.id()); // Phase B: this track is a sidechain source?
+            const int32_t routeSlot = cachedRouteSlot(li, t.id()); // Phase B: this track is a sidechain source?
             w.route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
             w.anySend = false; // post-fader send taps (M6-1)
             for (int b = 0; b < numReturns; ++b) {
@@ -3529,9 +3707,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                     if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == w.t->id()) slotLeaf[s] = (int)li;
             }
             if (parallelOk) { // the staged render needs every leaf's own leafBuf region
-                for (size_t li = 0; li < ntracks; ++li) {
-                    LeafWork& w = rs_->leafWork[li];
-                    if (w.t && w.path != LeafPath::Skip) w.keyNeeds = leafKeyNeeds(*w.t, w);
+                if (plan) {
+                    for (int32_t si : plan->sidechainConsumerLeaves()) {
+                        LeafWork& w = rs_->leafWork[static_cast<size_t>(si)];
+                        if (w.t && w.path != LeafPath::Skip) w.keyNeeds = leafKeyNeeds(*w.t, w);
+                    }
+                } else {
+                    for (size_t li = 0; li < ntracks; ++li) {
+                        LeafWork& w = rs_->leafWork[li];
+                        if (w.t && w.path != LeafPath::Skip) w.keyNeeds = leafKeyNeeds(*w.t, w);
+                    }
                 }
                 // Longest path over the key edges, at most kMaxKeyLevels passes.
                 for (int pass = 0; pass < kMaxKeyLevels; ++pass) {
@@ -3587,7 +3772,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 if (!w.t || w.path == LeafPath::Skip || w.level != L) continue;
                 float* base = leafBase(li, stride);
                 if (!w.eligible) {
-                    renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                    renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive, li);
                     std::copy_n(base, stride, base + stride);
                     processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
                 }
@@ -3686,7 +3871,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 const auto t0 = std::chrono::steady_clock::now();
                 w.wid = wid;
                 float* base = leafBase(i, stride);
-                renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                renderLeafDry(*w.t, base, w, g, frames, blockStart, spb, playing, ti, arrangementActive, i);
                 std::copy_n(base, stride, base + stride);
                 processLeafDevices(*w.t, base + stride, w, g, frames, blockStart, spb, playing, ti);
                 w.workNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -3761,14 +3946,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 post = base + stride;
                 parallelDsp = true;
             } else {
-                renderLeafDry(t, scratch_.data(), w, g, frames, blockStart, spb, playing, ti, arrangementActive);
+                renderLeafDry(t, scratch_.data(), w, g, frames, blockStart, spb, playing, ti, arrangementActive, li);
                 pre = post = scratch_.data();
             }
 
             // 1b) Pre-FX tap (Phase D): if this track feeds a sidechain, capture its
             //     dry pre-fader signal now, before its own devices colour it.
             if (!w.tapsDone) { // a staged leaf wrote its taps already (#676)
-                const int32_t preSlot = routeSlotForTrack(t.id());
+                const int32_t preSlot = cachedRouteSlot(li, t.id());
                 if (preSlot >= 0)
                     simd_audio::addStereoScaled(routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, frames);
             }
@@ -3902,19 +4087,20 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         // meter; a monitoring track already meters what it hears. Nothing here is heard, so
         // the sources monitoring refuses (they would feed back) meter too: the master (its
         // previous block's level) and a group the track sits in (its post-fader tap).
-        for (auto& tptr : g->tracks) {
-            Track& t = *tptr;
-            if (t.type() != TrackType::Audio || !t.armed() || (t.frozen() && t.frozenBuf)) continue;
-            if (t.monitor() && t.id() != capTrackId) continue;
+        auto meterArmedInput = [&](Track& t) {
+            if (t.type() != TrackType::Audio || !t.armed() || (t.frozen() && t.frozenBuf)) return;
+            if (t.monitor() && t.id() != capTrackId) return;
             const int32_t src = t.recordInputSource();
             if (src == -1) {
                 t.setMeter(masterPeakL_.load(std::memory_order_relaxed), masterPeakR_.load(std::memory_order_relaxed),
                     masterRmsL_.load(std::memory_order_relaxed), masterRmsR_.load(std::memory_order_relaxed));
-                continue;
+                return;
             }
             const float* in = scratch_.data();
             if (src > 0 && src != t.id()) {
-                const int32_t slot = routeSlotForTrack(src);
+                const int32_t slot = plan
+                    ? cachedRouteSlot(static_cast<size_t>(plan->findTrackIndex(src)), src)
+                    : routeSlotForTrack(src);
                 if (slot >= 0) in = routeBus_[slot].data();
                 else std::fill_n(scratch_.data(), frames * 2, 0.0f);
             } else renderMonitorInput(g, t, scratch_.data(), frames);
@@ -3929,6 +4115,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
             }
             t.setMeter(
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
+        };
+        if (plan) {
+            for (int32_t ai : plan->audioTrackIndices())
+                if (Track* t = g->tracks[static_cast<size_t>(ai)].get()) meterArmedInput(*t);
+        } else {
+            for (auto& tptr : g->tracks) meterArmedInput(*tptr);
         }
 
         // Pass 1.5: group submixes. Process deepest-first so a nested group folds into its
@@ -3993,9 +4185,11 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
                 // them through at unity when centred.
                 const float gl = (pan <= 0.0f ? 1.0f : 1.0f - pan) * vol;
                 const float gr = (pan >= 0.0f ? 1.0f : 1.0f + pan) * vol;
-                const int pslot = slotOf(grpParent[gi]);
+                const int pslot = plan ? plan->groupSlot(gi).parentGroupSlot : slotOf(grpParent[gi]);
                 float* dest = pslot >= 0 ? groupBus_[pslot].data() : out; // parent group bus, else master
-                const int32_t routeSlot = routeSlotForTrack(t.id());
+                const int32_t routeSlot = plan
+                    ? cachedRouteSlot(static_cast<size_t>(plan->groupSlot(gi).trackIndex), t.id())
+                    : routeSlotForTrack(t.id());
                 float* route = routeSlot >= 0 && !cueFeedOnly ? routeBusNext_[routeSlot].data() : nullptr;
                 const bool tapRec = (recSrc > 0 && t.id() == recSrc) && !cueFeedOnly;
                 float pkL = 0.0f, pkR = 0.0f;

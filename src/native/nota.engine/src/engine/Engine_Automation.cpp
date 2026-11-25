@@ -4,6 +4,7 @@
 // Engine — parameter automation (M9): read/apply, lane CRUD, hosted-plugin parameter surface, contextual write recording, self-tests.
 
 #include "Engine.h"
+#include "RenderRoutingPlan.h"
 #include "TempoMap.h"
 #include "ParamResolve.h"
 #include "bridge/PluginHostBridge.h"
@@ -22,6 +23,78 @@ namespace nota {
 // device / plug-in lanes drive the master chain; Tempo plays through the tempo map instead.
 // `beatEnd` is the block's end, for the instruments that read a lane at their own steps
 // (pluginParamLane, specs/100).
+static void applyLaneEndpoint(Track& t, const TrackLane& lane, const RenderRoutingPlan::CompiledParamEndpoint& ep, float v) {
+    using Kind = RenderRoutingPlan::CompiledParamEndpoint::Kind;
+    switch (ep.kind) {
+    case Kind::Invalid: return;
+    case Kind::Volume: t.setVolume(v); return;
+    case Kind::Pan: t.setPan(v); return;
+    case Kind::DeviceGeneric:
+        if (ep.device) ep.device->setLiveParam(ep.paramIndex, v);
+        return;
+    case Kind::MidiDeviceGeneric:
+        if (ep.midi) ep.midi->setParam(ep.paramIndex, v);
+        return;
+    case Kind::InstrumentPlugin:
+        if (ep.instrument) ep.instrument->pluginParamSet(ep.paramIndex, v);
+        return;
+    case Kind::DevicePlugin:
+        if (ep.device) ep.device->pluginParamSet(ep.paramIndex, v);
+        return;
+    case Kind::NestedRackDeviceGeneric:
+    case Kind::NestedRackMidiGeneric:
+    case Kind::NestedRackDevicePlugin:
+    case Kind::NestedRackInstrumentPlugin: {
+        Device* d = ep.device;
+        MidiDevice* m = ep.midi;
+        Instrument* inst = ep.instrument;
+        if (!ep.rack || ep.rack->liveGeneration() != ep.expectedRackGen) {
+            const ParamOwner o = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot);
+            d = o.device;
+            m = o.midi;
+            inst = o.instrument;
+        }
+        if (lane.target == AutomationTarget::PluginParam) {
+            if (inst) inst->pluginParamSet(lane.paramIndex, v);
+            else if (d) d->pluginParamSet(lane.paramIndex, v);
+        } else if (d) {
+            d->setLiveParam(lane.paramIndex, v);
+        } else if (m) {
+            m->setParam(lane.paramIndex, v);
+        }
+        return;
+    }
+    }
+}
+
+static void applyCompiledTrackLanes(
+    Track& t, const std::vector<RenderRoutingPlan::CompiledParamEndpoint>& targets, bool hasStepLanes, double beat,
+    double beatEnd) {
+    const size_t n = std::min(t.automation.size(), targets.size());
+    for (size_t i = 0; i < n; ++i) {
+        const TrackLane& lane = t.automation[i];
+        if (lane.points.empty() || lane.suppressRead || lane.target == AutomationTarget::Tempo) continue;
+        applyLaneEndpoint(t, lane, targets[i], lane.valueAt(beat));
+    }
+    if (!hasStepLanes) return;
+    for (size_t i = 0; i < n; ++i) {
+        const TrackLane& lane = t.automation[i];
+        if (lane.points.empty() || lane.suppressRead || lane.target != AutomationTarget::PluginParam ||
+            lane.paramIndex < 0)
+            continue;
+        const auto& ep = targets[i];
+        Instrument* inst = nullptr;
+        if (ep.nested) {
+            inst = (ep.rack && ep.rack->liveGeneration() == ep.expectedRackGen)
+                       ? ep.instrument
+                       : resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot).instrument;
+        } else if (lane.deviceIndex < 0) {
+            inst = ep.instrument ? ep.instrument : t.instrument.get();
+        }
+        if (inst) inst->pluginParamLane(lane.paramIndex, lane, beat, beatEnd);
+    }
+}
+
 static void applyTrackLanes(Track& t, double beat, double beatEnd) {
     for (const TrackLane& lane : t.automation) {
         if (lane.points.empty() || lane.suppressRead) continue; // M9-C: control leads while writing
@@ -85,12 +158,17 @@ const TrackLane* Engine::masterPanLane(const Track& master) {
 
 void Engine::applyAutomation(Graph* g, double beat, double beatEnd) {
     if (beatEnd < beat) beatEnd = beat;
-    // Most tracks carry no lanes: skip them before the (out-of-line) per-lane body.
-    for (auto& tptr : g->tracks)
-        if (!tptr->automation.empty()) applyTrackLanes(*tptr, beat, beatEnd);
-    // Master lanes (specs/099): Pan and the master chain's device / plug-in parameters.
-    // A master Volume lane is not added there — master volume stays the graph-level lane.
-    if (g->masterTrack && !g->masterTrack->automation.empty()) applyTrackLanes(*g->masterTrack, beat, beatEnd);
+    if (const RenderRoutingPlan* plan = g ? g->routingPlan.get() : nullptr) {
+        for (const auto& cat : plan->automatedTracks())
+            if (cat.track) applyCompiledTrackLanes(*cat.track, cat.laneTargets, cat.hasAnyPluginStepLane, beat, beatEnd);
+        if (g->masterTrack && !g->masterTrack->automation.empty())
+            applyCompiledTrackLanes(*g->masterTrack, plan->masterLaneTargets(), false, beat, beatEnd);
+    } else {
+        // Fallback when no routing plan is attached (e.g. unit self-tests).
+        for (auto& tptr : g->tracks)
+            if (!tptr->automation.empty()) applyTrackLanes(*tptr, beat, beatEnd);
+        if (g->masterTrack && !g->masterTrack->automation.empty()) applyTrackLanes(*g->masterTrack, beat, beatEnd);
+    }
     // Master-volume lane (graph-level, M9 follow-up): write the master gain atomic.
     if (!g->masterVolume.points.empty() && !g->masterVolume.suppressRead)
         masterVolume_.store(std::clamp(g->masterVolume.valueAt(beat), 0.0f, 2.0f), std::memory_order_relaxed);

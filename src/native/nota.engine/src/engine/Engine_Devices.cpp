@@ -1800,6 +1800,7 @@ void Engine::recomputeRouting() {
         }
     };
     forEachRouteKey([&](int32_t src, uint64_t part) { claim(src, part); });
+    routingEpoch_.fetch_add(1, std::memory_order_release);
 }
 
 // Every route a consumer asks for, in claim order: track instruments and devices (and keyed

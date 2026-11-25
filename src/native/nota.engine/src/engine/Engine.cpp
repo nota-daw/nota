@@ -4,6 +4,8 @@
 // Engine — lifecycle, audio/MIDI device config, preview, tone/transport setters, immutable-graph publish/clone/undo/reset, post-fader meters. Definitions of the rest of the class live in the sibling Engine_*.cpp slices.
 
 #include "Engine.h"
+#include "RenderRoutingPlan.h"
+#include "TimelineIndex.h"
 #include "devices/effects/Eq.h"
 #include "devices/racks/RackCore.h"
 #include "audio_io/AudioBackendFactory.h"
@@ -885,6 +887,7 @@ void Engine::ensureRenderScratch(size_t tracks) {
     s->blockExpr.assign(cap, std::vector<ExprEv>(kMaxBlockExpr));
     s->blockExprN.assign(cap, 0);
     s->parIdx.assign(cap, 0);
+    s->trackRouteSlot.assign(cap, -1);
     scratchHist_.publish(std::move(s));
 }
 
@@ -1043,6 +1046,13 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     else if (g) {
         for (auto& t : g->tracks) t->ccRoutesDirty = false;
         if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
+    }
+    if (g) {
+        for (auto& t : g->tracks) {
+            if (t && !t->timelineIndex && (!t->clips.empty() || !t->midiClips.empty()))
+                t->timelineIndex = TimelineIndex::buildForTrack(*t);
+        }
+        g->routingPlan = RenderRoutingPlan::build(*g);
     }
     graphHist_.publish(g); // frees the graphs no render can still be walking
     busState_.requestInvalidate();
