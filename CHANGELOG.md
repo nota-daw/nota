@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.61.1] — 2026-11-24
+
 ### Added
 - **Nota Remote: Macros is a controller surface with an LED display** (specs/114).
   - **Track ◀ ▶** and **Device ◀ ▶** buttons step through the tracks and through the track's

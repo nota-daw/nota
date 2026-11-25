@@ -116,7 +116,9 @@ void Engine::resolveLoadedPluginLanes() {
 }
 
 void Engine::giveUpVanishedPluginLoads(const Graph& before, const Graph& after) {
-    // Cheap first: usually nothing is loading, and then nothing is compared.
+    // Cheap first: usually nothing is loading (the loader's own count), and then no graph is
+    // walked at all — this runs on every publish.
+    if (pendingPluginLoads() == 0) return;
     auto loading = [](int32_t s) { return s > 0 && s < 4; }; // waiting, loading, not responding
     std::vector<Instrument*> insts;
     std::vector<Device*> devs;

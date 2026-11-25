@@ -1842,6 +1842,7 @@ void Engine::computeBlockMidi(
         }
         return;
     }
+    const bool keepHeld = heldMidiKeysRead(); // a Nota Color somewhere reads held notes
     for (size_t i = 0; i < nt; ++i) {
         rs_->blockMidiN[i] = 0;
         rs_->blockExprN[i] = 0;
@@ -1869,10 +1870,12 @@ void Engine::computeBlockMidi(
         }
         rs_->blockMidiN[i] = computeInstrumentMidi(
             t, buf.data(), frames, blockStart, spb, playing, arrangementActive, xbuf.data(), &rs_->blockExprN[i]);
-        // Frozen source audio is a recording and does not expose its former MIDI.
-        if (t.frozen() && t.frozenBuf) {
-            held = {};
-            rs_->blockMidiStart[i] = {};
+        // Frozen source audio is a recording and does not expose its former MIDI. With no device
+        // reading held notes (keepHeld) no books are kept. A zero mask means every count is zero,
+        // so the 260-byte clears run only when something was held.
+        if (!keepHeld || (t.frozen() && t.frozenBuf)) {
+            if (held.mask) held = {};
+            if (rs_->blockMidiStart[i].mask) rs_->blockMidiStart[i] = {};
         } else {
             if (held.mask || rs_->blockMidiStart[i].mask) rs_->blockMidiStart[i] = held;
             for (int k = 0; k < rs_->blockMidiN[i]; ++k) held.apply(buf[k]);
@@ -3204,7 +3207,11 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, d
         // MIDI pre-pass: each instrument track's post-FX output for this block, so the render
         // below can feed instruments their own notes plus any routed-in source's notes.
         computeBlockMidi(g, frames, blockStart, spb, playing, arrangementActive);
+        // Only a device holding a HeldMidiKeyReader wants its key while silent: with none, a
+        // silent track's chain is not walked at all (audio-tails-8 in the perf gate).
+        const bool silentKeys = heldMidiKeysRead();
         const auto feedSilentMidiKeys = [&](Track& t) {
+            if (!silentKeys) return;
             const auto feed = [&](Device& d) {
                 const int32_t source = d.sidechainSourceTrackId();
                 if (source >= 0 && d.wantsMidiKeyWhenSilent() && !d.bypassed()) feedMidiKey(g, d, source);
