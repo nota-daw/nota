@@ -201,6 +201,7 @@ def main():
              "Process CPU while playing in real time. Lower is better.",
              "% of one core", small_cpu),
         ]
+    charts = [chart for chart in charts if chart[4]]
     for fname, title, sub, unit, groups in charts:
         p = os.path.join(out, fname)
         bar_chart(p, title, sub, unit, groups, labels, names)
