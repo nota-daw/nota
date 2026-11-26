@@ -3044,8 +3044,8 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
     masterPeakR_.store(mpkR, std::memory_order_relaxed);
     transport_.publishPresentation(presentationStart, presentationFrames, presentationLead,
         deviceBlock_ && backend_ ? std::max(numFrames, backend_->bufferFrames()) : numFrames);
-    masterRmsL_.store(numFrames ? static_cast<float>(std::sqrt(msqL / numFrames)) : 0.0f, std::memory_order_relaxed);
-    masterRmsR_.store(numFrames ? static_cast<float>(std::sqrt(msqR / numFrames)) : 0.0f, std::memory_order_relaxed);
+    masterRmsL_.store(render_detail::rmsFromSquareSum(msqL, numFrames), std::memory_order_relaxed);
+    masterRmsR_.store(render_detail::rmsFromSquareSum(msqR, numFrames), std::memory_order_relaxed);
     cueSeg_ = nullptr;
     if (cue) finishCue(cue, numFrames);
 }
@@ -3072,8 +3072,8 @@ void Engine::finishCue(float* cue, int32_t numFrames) {
     }
     cuePeakL_.store(pkL, std::memory_order_relaxed);
     cuePeakR_.store(pkR, std::memory_order_relaxed);
-    cueRmsL_.store(numFrames ? static_cast<float>(std::sqrt(sqL / numFrames)) : 0.0f, std::memory_order_relaxed);
-    cueRmsR_.store(numFrames ? static_cast<float>(std::sqrt(sqR / numFrames)) : 0.0f, std::memory_order_relaxed);
+    cueRmsL_.store(render_detail::rmsFromSquareSum(sqL, numFrames), std::memory_order_relaxed);
+    cueRmsR_.store(render_detail::rmsFromSquareSum(sqR, numFrames), std::memory_order_relaxed);
 }
 
 // Fill `dst` with what a monitoring audio track hears: the hardware input pulled for this

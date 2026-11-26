@@ -406,15 +406,18 @@ class WavetableSynth final : public Instrument {
         int idx = 0;
     };
 
+    struct BlockScalars;
+    struct BlockArrays;
     struct BatchParams;
     struct BatchWork;
-    BatchParams snapshotBlockParams(int32_t frames);
-    bool publishBlockTelemetry(const BatchParams& bp) noexcept;
-    void stepFilterSmoothing(const BatchParams& bp, double& f1base, double& f2base, double& reso1, double& reso2) noexcept;
-    void stepLfos(const BatchParams& bp, double& lfo1, double& lfo2) noexcept;
-    float processFxAndMixSample(const BatchParams& bp, float mixL, float mixR, float* dstSample) noexcept;
-    bool renderVoiceSample(const BatchParams& bp, Voice& v, double lfo1, double lfo2, const BatchWork* bw, int32_t bwIdx,
-        double scalarF1, double scalarF2, double scalarR1, double scalarR2, float& outL, float& outR) const noexcept;
+    void snapshotBlockParams(int32_t frames, BlockScalars& s, BlockArrays& a);
+    bool publishBlockTelemetry(BlockScalars s, const BlockArrays& a) noexcept;
+    void stepFilterSmoothing(BlockScalars s, double& f1base, double& f2base, double& reso1, double& reso2) noexcept;
+    void stepLfos(BlockScalars s, double& lfo1, double& lfo2) noexcept;
+    float processFxAndMixSample(BlockScalars s, float mixL, float mixR, float* dstSample) noexcept;
+    bool renderVoiceSample(BlockScalars s, const BlockArrays& a, Voice& v, double lfo1, double lfo2,
+        const BatchWork* bw, int32_t bwIdx, double scalarF1, double scalarF2, double scalarR1, double scalarR2,
+        float& outL, float& outR) const noexcept;
     void renderVoiceBatch(const BatchParams& bp, const BatchWork& bw, int32_t chunk, Voice* const* vList, int vCount,
         float* dstL, float* dstR) const;
     NOTA_NOINLINE bool renderLinear(float* out, int32_t frames);

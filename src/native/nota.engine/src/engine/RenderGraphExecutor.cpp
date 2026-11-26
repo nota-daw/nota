@@ -473,7 +473,7 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
         for (auto& d : t.devices)
             if (d && !d->bypassed()) {
                 feed(*d);
-                if (auto* rack = d->asRack()) rack->forEachChildDevice(feed);
+                if (auto* rack = d->asRack(); rack && rack->hasSidechainChild()) rack->forEachChildDevice(feed);
             }
     };
 
@@ -1023,8 +1023,8 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
                     if (w.sends[b] != 0.0f) eng.busState_.returns.markActive(static_cast<size_t>(b));
         }
         t.stereoFold(acc.sqL, acc.sqR, acc.sLR, ctx.frames, ctx.stereoA);
-        t.setMeter(acc.peakL, acc.peakR, static_cast<float>(std::sqrt(acc.sqL / ctx.frames)),
-            static_cast<float>(std::sqrt(acc.sqR / ctx.frames)));
+        t.setMeter(acc.peakL, acc.peakR, render_detail::rmsFromSquareSum(acc.sqL, ctx.frames),
+            render_detail::rmsFromSquareSum(acc.sqR, ctx.frames));
     }
 
     for (int s = 0; s < ctx.nRoutes; ++s)
@@ -1050,8 +1050,8 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
             eng.renderMonitorInput(g, t, eng.scratch_.data(), ctx.frames);
         }
         const BusAccumResult m = scanPannedMetrics(in, ctx.frames, false, eng.internalQueue_, false);
-        t.setMeter(m.peakL, m.peakR, static_cast<float>(std::sqrt(m.sqL / ctx.frames)),
-            static_cast<float>(std::sqrt(m.sqR / ctx.frames)));
+        t.setMeter(m.peakL, m.peakR, render_detail::rmsFromSquareSum(m.sqL, ctx.frames),
+            render_detail::rmsFromSquareSum(m.sqR, ctx.frames));
     };
     if (ctx.plan) {
         for (int32_t ai : ctx.plan->audioTrackIndices())
@@ -1223,8 +1223,8 @@ void RenderGraphExecutor::runGroupWaves(MixContext& ctx) {
                     eng.busState_.groups.markActive(static_cast<size_t>(pslot));
                 if (cueFeedOnly) t.setMeter(0, 0, 0, 0);
                 else
-                    t.setMeter(acc.peakL, acc.peakR, static_cast<float>(std::sqrt(acc.sqL / ctx.frames)),
-                        static_cast<float>(std::sqrt(acc.sqR / ctx.frames)));
+                    t.setMeter(acc.peakL, acc.peakR, render_detail::rmsFromSquareSum(acc.sqL, ctx.frames),
+                        render_detail::rmsFromSquareSum(acc.sqR, ctx.frames));
                 ctx.markFresh(t.id());
             }
         }
@@ -1366,8 +1366,8 @@ void RenderGraphExecutor::runReturnWaves(MixContext& ctx) {
             }
             if (acc.recDropped) eng.inputDroppedFrames_.fetch_add(acc.recDropped, std::memory_order_relaxed);
             t.stereoFold(acc.sqL, acc.sqR, acc.sLR, ctx.frames, ctx.stereoA);
-            t.setMeter(acc.peakL, acc.peakR, static_cast<float>(std::sqrt(acc.sqL / ctx.frames)),
-                static_cast<float>(std::sqrt(acc.sqR / ctx.frames)));
+            t.setMeter(acc.peakL, acc.peakR, render_detail::rmsFromSquareSum(acc.sqL, ctx.frames),
+                render_detail::rmsFromSquareSum(acc.sqR, ctx.frames));
             ctx.markFresh(t.id());
         }
     }

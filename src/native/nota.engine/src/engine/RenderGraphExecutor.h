@@ -78,6 +78,10 @@ inline float stereoBlockStep(int32_t frames, double sr) noexcept {
     return static_cast<float>(1.0 - std::exp(-frames / (0.3 * (sr > 0.0 ? sr : 44100.0))));
 }
 
+inline float rmsFromSquareSum(double sqSum, int32_t frames) noexcept {
+    return (sqSum > 0.0 && frames > 0) ? static_cast<float>(std::sqrt(sqSum / frames)) : 0.0f;
+}
+
 inline void stereoFold(std::atomic<float>& eL, std::atomic<float>& eR, std::atomic<float>& eLR, double sqL, double sqR,
     double sLR, int32_t frames, float a) noexcept {
     const double n = frames > 0 ? frames : 1;

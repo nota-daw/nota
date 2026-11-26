@@ -14,6 +14,27 @@
 
 namespace nota {
 
+namespace {
+
+inline float computeChainSelector(const float* buf, int32_t frames, float manualSel, bool follow) noexcept {
+    if (!follow) return manualSel;
+    double sum = 0.0;
+    const int32_t total = frames * 2;
+    for (int32_t i = 0; i < total; ++i) sum += static_cast<double>(buf[i]) * buf[i];
+    const double rms = sum > 0.0 ? std::sqrt(sum / std::max(1, total)) : 0.0;
+    const double db = rms > 1e-6 ? 20.0 * std::log10(rms) : -60.0;
+    return static_cast<float>(std::clamp((db + 48.0) / 48.0, 0.0, 1.0)); // −48..0 dB → 0..1
+}
+
+inline void chainStereoGains(const RackCore::RackChain& c, float& lg, float& rg) noexcept {
+    const float g = c.ctl->gain.load(std::memory_order_relaxed);
+    const float pan = c.ctl->pan.load(std::memory_order_relaxed);
+    lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
+    rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
+}
+
+} // namespace
+
 void RackDevice::process(float* buf, int32_t frames) {
     const auto done = renderScope();
     RackState* st = live();
@@ -22,6 +43,10 @@ void RackDevice::process(float* buf, int32_t frames) {
 }
 
 void RackDevice::processActive(RackState& st, float* buf, int32_t frames) {
+    if (!st.hasChildren && st.chains.size() == 1) {
+        processEmptySingleChain(st, buf, frames);
+        return;
+    }
     if (st.hasChildren && isIdle() &&
         dsp::SilenceGate::isBufferSilent(buf, frames * 2, dsp::SilenceGate::kDefaultReleaseThreshold))
         return;
@@ -34,10 +59,52 @@ void RackDevice::processActive(RackState& st, float* buf, int32_t frames) {
     }
 }
 
+void RackDevice::processEmptySingleChain(RackState& st, float* buf, int32_t frames) {
+    RackChain& c = st.chains[0];
+    const int32_t mode = mode_.load(std::memory_order_relaxed);
+    const float gain = rackVolume_.load(std::memory_order_relaxed);
+    const float dw = dryWet_.load(std::memory_order_relaxed);
+    const float wet = dw, dry = 1.0f - dw;
+    const float sel =
+        computeChainSelector(buf, frames, chainSelect_.load(std::memory_order_relaxed), mode == 2 && selFollow_.load(std::memory_order_relaxed));
+    liveSel_.store(sel, std::memory_order_relaxed);
+
+    const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
+    bool selected = !mute;
+    if (selected && mode == 2) {
+        const float lo = c.ctl->velLo.load(std::memory_order_relaxed) / 127.0f;
+        const float hi = c.ctl->velHi.load(std::memory_order_relaxed) / 127.0f;
+        selected = sel >= lo && sel <= hi;
+    }
+    if (!selected) {
+        c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+        const float outScale = (mode == 1 ? (dry + wet) : dry) * gain;
+        for (int32_t i = 0; i < frames * 2; ++i) buf[i] *= outScale;
+        return;
+    }
+
+    float lg = 0.0f, rg = 0.0f;
+    if (mode == 1) {
+        lg = rg = c.ctl->gain.load(std::memory_order_relaxed);
+    } else {
+        chainStereoGains(c, lg, rg);
+    }
+    float peak = 0.0f;
+    for (int32_t i = 0; i < frames; ++i) {
+        const float inL = buf[i * 2], inR = buf[i * 2 + 1];
+        const float chL = inL * lg, chR = inR * rg;
+        const float a = std::max(std::fabs(chL), std::fabs(chR));
+        if (a > peak) peak = a;
+        buf[i * 2] = (inL * dry + chL * wet) * gain;
+        buf[i * 2 + 1] = (inR * dry + chR * wet) * gain;
+    }
+    c.ctl->meter.store(peak, std::memory_order_relaxed);
+}
+
 void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
-    float* const input = arena_.buffer(0);
-    float* const acc = arena_.buffer(1);
-    float* const scratch = arena_.buffer(2);
+    float* __restrict const input = arena_.buffer(0);
+    float* __restrict const acc = arena_.buffer(1);
+    float* __restrict const scratch = arena_.buffer(2);
     const int32_t mode = mode_.load(std::memory_order_relaxed);
     const float gain = rackVolume_.load(std::memory_order_relaxed);
     const float dw = dryWet_.load(std::memory_order_relaxed);
@@ -51,14 +118,8 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
         }
 
     // Select-mode selector position: manual, or driven by the input level.
-    float sel = chainSelect_.load(std::memory_order_relaxed);
-    if (mode == 2 && selFollow_.load(std::memory_order_relaxed)) {
-        double sum = 0.0;
-        for (int32_t i = 0; i < frames * 2; ++i) sum += (double)input[i] * input[i];
-        const double rms = std::sqrt(sum / std::max(1, frames * 2));
-        const double db = rms > 1e-6 ? 20.0 * std::log10(rms) : -60.0;
-        sel = (float)std::clamp((db + 48.0) / 48.0, 0.0, 1.0); // −48..0 dB → 0..1
-    }
+    const float sel =
+        computeChainSelector(input, frames, chainSelect_.load(std::memory_order_relaxed), mode == 2 && selFollow_.load(std::memory_order_relaxed));
     liveSel_.store(sel, std::memory_order_relaxed);
 
     if (mode == 1) {
@@ -97,13 +158,7 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
             }
             return true;
         };
-        auto chainGains = [](const RackChain& c, float& lg, float& rg) {
-            const float g = c.ctl->gain.load(std::memory_order_relaxed);
-            const float pan = c.ctl->pan.load(std::memory_order_relaxed);
-            lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
-            rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
-        };
-        auto mixChainBuffer = [&](RackChain& c, const float* src, float lg, float rg) {
+        auto mixChainBuffer = [&](RackChain& c, const float* __restrict src, float lg, float rg) {
             float peak = 0.0f;
             for (int32_t i = 0; i < frames; ++i) {
                 const float l = src[i * 2] * lg, r = src[i * 2 + 1] * rg;
@@ -128,7 +183,7 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
                     continue;
                 }
                 float lg = 0.0f, rg = 0.0f;
-                chainGains(c, lg, rg);
+                chainStereoGains(c, lg, rg);
                 runSequentialChain(c, lg, rg);
             }
         } else {
@@ -149,7 +204,7 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
                     continue;
                 }
                 float lg = 0.0f, rg = 0.0f;
-                chainGains(c, lg, rg);
+                chainStereoGains(c, lg, rg);
                 if (nActive < dsp::ChainScratchBank::kMaxSlots) {
                     work[static_cast<size_t>(nActive++)] = {&c, lg, rg};
                     for (const auto& d : c.devices)
@@ -183,7 +238,7 @@ void RackDevice::processChunk(RackState& st, float* buf, int32_t frames) {
                 for (auto& c : st.chains) {
                     if (!chainSelected(c)) continue;
                     float lg = 0.0f, rg = 0.0f;
-                    chainGains(c, lg, rg);
+                    chainStereoGains(c, lg, rg);
                     runSequentialChain(c, lg, rg);
                 }
             }

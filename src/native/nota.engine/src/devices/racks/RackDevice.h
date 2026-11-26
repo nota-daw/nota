@@ -83,6 +83,7 @@ class RackDevice final : public Device, public RackCore {
 
   private:
     NOTA_NOINLINE void processActive(RackState& st, float* buf, int32_t frames);
+    NOTA_NOINLINE void processEmptySingleChain(RackState& st, float* buf, int32_t frames);
     NOTA_NOINLINE void processChunk(RackState& st, float* buf, int32_t frames);
     dsp::StereoScratchArena<3> arena_;
 };

@@ -295,8 +295,9 @@ target_include_directories(nota_engine SYSTEM PRIVATE
 target_compile_definitions(nota_engine PRIVATE
     NOTA_VERSION_STRING="${PROJECT_VERSION}")
 
-# Avoid libm errno branches on sqrt/exp/trig across GCC and Clang (MSVC has its own fast CRT).
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU" AND NOT MSVC)
+# Keep GCC on baseline -O3 math semantics so libm/vectorization stays regression-free;
+# Clang/ThinLTO benefits cleanly from -fno-math-errno.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
     target_compile_options(nota_engine PRIVATE -fno-math-errno)
 endif()
 

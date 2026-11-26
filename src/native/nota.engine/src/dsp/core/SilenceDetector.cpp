@@ -33,7 +33,7 @@ SignalState SilenceDetector::process(const float* interleaved, int32_t frames) N
     lastMaxPeak_ = peak;
 
     const double total = static_cast<double>(frames * 2);
-    const double rms = total > 0.0 ? std::sqrt(sumSq / total) : 0.0;
+    const double rms = (sumSq > 0.0 && total > 0.0) ? std::sqrt(sumSq / total) : 0.0;
 
     if (rms >= attackThreshold_ || static_cast<double>(peak) >= attackThreshold_) {
         state_ = SignalState::Active;
