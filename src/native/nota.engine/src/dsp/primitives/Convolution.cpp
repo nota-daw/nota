@@ -6,7 +6,6 @@
 
 #include "dsp/primitives/Convolution.h"
 #include "dsp/math/Simd.h"
-#include "dsp/math/SimdDispatch.h"
 
 #include <algorithm>
 
@@ -284,7 +283,7 @@ void ConvKernel::Stage::compute(const Path* paths, int nPaths, const bool* used)
                 if (!live[static_cast<size_t>(ph.in) * P + s]) continue;
                 const size_t xo = (static_cast<size_t>(ph.in) * P + s) * B;
                 const size_t ho = (static_cast<size_t>(ph.k) * P + j) * B;
-                nota::simd::convCmac(accR, accI, &Xr[xo], &Xi[xo], &Hr[ho], &Hi[ho], B);
+                nota::dsp::accumulatePackedSpectrum(accR, accI, &Xr[xo], &Xi[xo], &Hr[ho], &Hi[ho], B);
                 any[ph.out] = true;
             }
         }

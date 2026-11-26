@@ -24,7 +24,7 @@
 
 - Cached `Eq::BandCache` coefficients match uncached `buildBand` identically for unchanged `(sr, freq, gain, q, scale, type, slope, ch)`.
 - Flat-stereo `double2` SIMD biquad loops preserve scalar DF2T multiply-add semantics within `< -120 dBFS` (`< -240 dBFS` on double2 SIMD) and produce `0.0` sample diff across `0` vs `N` threads.
-- Per-function `__attribute__((target("avx2,fma")))` (Clang/GCC) and per-TU `/arch:AVX2` (MSVC on `x86_64`, zero global C++ initializers in `src/dsp/math/SimdAvx2.cpp`) keep baseline binaries SSE2-safe while accelerating `convCmac` (`Chamber` / `Convolution`, `bins >= 33`) and large-buffer `peakAbs`/`peakAndSumSquares` (`count >= 512`), leaving small buffers and ARM64 NEON on zero-overhead inlined paths; Clang uses `-fno-math-errno`, and Clang/MSVC Release targets enable IPO while keeping GCC on baseline `-O3`.
+- Header-only baseline SSE2 / ARM64 NEON SIMD (`Simd.h`, `SimdAudio.h`, plus `nota::dsp::accumulatePackedSpectrum` in `Convolution.h`) keeps universal desktop binaries clean without runtime dispatch complexity, accelerating `Chamber` / `Convolution` (`accumulatePackedSpectrum` + `nota::simd::dot`) and buffer peak/RMS metering (`peakAbs` / `peakAndSumSquares` -> `Simd.h`); Clang uses `-fno-math-errno`, and Clang/MSVC Release targets enable IPO while keeping GCC on baseline `-O3`.
 
 ## 5. Cooperative Parallel Execution & Determinism Contracts (`0` vs `N` == `0.0`)
 

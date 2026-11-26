@@ -7,7 +7,7 @@
 
 #include "Flanger.h"
 
-#include "dsp/math/SimdDispatch.h"
+#include "dsp/math/SimdAudio.h"
 
 #include <algorithm>
 #include <chrono>
@@ -177,7 +177,7 @@ void Flanger::processDsp(float* buf, int32_t frames) {
     float pushPk = 0.0f;
     for (int at = w0, left = std::min<int32_t>(frames, kBuf); left > 0;) {
         const int run = std::min(left, kBuf - at);
-        pushPk = std::max({pushPk, nota::simd::peakAbs(lineL_ + at, run), nota::simd::peakAbs(lineR_ + at, run)});
+        pushPk = std::max({pushPk, simd_audio::peakAbs(lineL_ + at, run), simd_audio::peakAbs(lineR_ + at, run)});
         left -= run;
         at = (at + run) & kMask;
     }

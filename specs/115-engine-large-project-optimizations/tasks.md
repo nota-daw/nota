@@ -10,7 +10,7 @@ description: "Consolidated task list for nota-daw/nota#1050 (specs/115-engine-la
 ## Foundational C ABI & Shared DSP Primitives
 
 - [x] T001 Define C ABI structs, enums, and declarations in `src/native/nota.engine/include/nota/nota_engine.h` (`NotaTrackMeterEntry`, `NotaTelemetryMode`, `NotaPluginSleepMode`, `NotaSampleLoadPolicy`, `NotaStreamingStats`, `NotaHybridBufferMode`, `NotaHybridBufferStats`, and corresponding `nota_*` entry points)
-- [x] T002 Implement shared real-time DSP headers under `src/native/nota.engine/src/dsp/`: `core/DeviceTelemetry.h`, `core/SilenceGate.h`, `core/ScratchArena.h` (`StereoScratchArena`, `ChainScratchBank`), `core/AudioBufferView.h` (`PlanarStereoBuffer`), `core/RenderExecutor.h`, `poly/PolyVoiceScheduler.h`, and `math/SimdDispatch.{h,cpp}` + `math/SimdAvx2.cpp`
+- [x] T002 Implement shared real-time DSP headers under `src/native/nota.engine/src/dsp/`: `core/DeviceTelemetry.h`, `core/SilenceGate.h`, `core/ScratchArena.h` (`StereoScratchArena`, `ChainScratchBank`), `core/AudioBufferView.h` (`PlanarStereoBuffer`), `core/RenderExecutor.h`, `poly/PolyVoiceScheduler.h`, `math/Simd.h`, and `math/SimdAudio.h`
 - [x] T003 [P] Add managed C# contracts and `[LibraryImport]` P/Invoke wrappers across `src/managed/Nota.Application/Engine/{EngineContracts,IAudioEngine}.cs` and `src/managed/Nota.Infrastructure/Interop/{NativeMethods,NotaEngine}{,.Devices}.cs`
 
 ---
@@ -45,7 +45,7 @@ description: "Consolidated task list for nota-daw/nota#1050 (specs/115-engine-la
 
 - [x] T015 Convert `Track` heavy snapshot vectors (`clips`, `takes`, `midiClips`, `sessionSlots`, `automation`, `modulators`, `cvLinks`) in `Track.h` to `CowSlice<T>` (`TrackContent.h`), update `.write()` mutators across `Engine*.cpp`, reuse `TimelineIndex` via storage tokens, seal on `publishRaw()`, skip no-op `recomputeRouting()` / telemetry sync, and optimize `recomputePdc()` to a single pass
 - [x] T016 Migrate `RackDevice`, `RackInstrument`, `DrumRack`, and `Engine::RenderScratch::leafBuf` to `StereoScratchArena` session-sized capacity (`2048` live frames, expanding up to `kMaxBlock` prior to offline bounces)
-- [x] T017 Upgrade `Eq.{h,cpp}` with per-band `BandCache` coefficients, SIMD `peakAbs`, and flat-stereo `double2` NEON/SSE2 filtering; wire shared `convCmac` / `dot` (`Chamber`, `Convolution`), thresholded `peakAbs`/`peakAndSumSquares` runtime AVX2+FMA `SimdDispatch.{h,cpp}` / `SimdAvx2.cpp` (with MSVC `/arch:AVX2`), Clang `-fno-math-errno`, and Clang/MSVC Release IPO in `CMakeLists.txt`
+- [x] T017 Upgrade `Eq.{h,cpp}` with per-band `BandCache` coefficients, SIMD `peakAbs`, and flat-stereo `double2` NEON/SSE2 filtering; consolidate pure vector math in `Simd.h` (`complexMulAdd`, `dot`, `maxAbs`, `peakAndSumSquares`), delegate `SimdAudio.h` peak/RMS helpers cleanly, share `accumulatePackedSpectrum` (`Convolution.h`) + `dot` (`Chamber`, `Convolution`), and enable Clang `-fno-math-errno` and Clang/MSVC Release IPO in `CMakeLists.txt`
 
 ---
 

@@ -10,7 +10,7 @@
 #include "devices/racks/RackCore.h"
 #include "dsp/core/AudioBufferView.h"
 #include "dsp/core/RenderExecutor.h"
-#include "dsp/math/SimdDispatch.h"
+#include "dsp/math/SimdAudio.h"
 #include "engine/Engine.h"
 #include "engine/RenderRoutingPlan.h"
 
@@ -86,7 +86,7 @@ bool canSkipInactiveBus(Track& t) noexcept {
 void settleInactiveBus(Track& t, const float* buf, int32_t frames, double sr, float tailFloor,
     double tailQuietSec, double tailMaxQuietSec) noexcept {
     int64_t& quiet = t.tailQuiet();
-    if (nota::simd::peakAbs(buf, frames * 2) > tailFloor || trackRequiresActiveProcessing(t)) {
+    if (simd_audio::peakAbs(buf, frames * 2) > tailFloor || trackRequiresActiveProcessing(t)) {
         quiet = 0;
         return;
     }
@@ -980,7 +980,7 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
 
         if (w.path == Engine::LeafPath::Tail) {
             int64_t& quiet = t.tailQuiet();
-            if (nota::simd::peakAbs(post, ctx.frames * 2) > Engine::kTailFloor || trackRequiresActiveProcessing(t))
+            if (simd_audio::peakAbs(post, ctx.frames * 2) > Engine::kTailFloor || trackRequiresActiveProcessing(t))
                 quiet = 0;
             else
                 quiet += ctx.frames;

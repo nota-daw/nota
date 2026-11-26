@@ -9,7 +9,7 @@
 #include "Eq.h"
 
 #include "dsp/math/FastMath.h"
-#include "dsp/math/SimdDispatch.h"
+#include "dsp/math/SimdAudio.h"
 
 #include <cstring>
 
@@ -388,7 +388,7 @@ void Eq::process(float* buf, int32_t frames) {
     const double glideC = 1.0 - std::exp(-(double)kCtrl / (0.02 * sr)); // the same, per control step
 
     // Pre-pass: input peak (SIMD) + pre ring (the filter pass overwrites the buffer).
-    const float inPk = nota::simd::peakAbs(buf, frames * 2);
+    const float inPk = simd_audio::peakAbs(buf, frames * 2);
     if (ringOk0) writeMidRing(ring_[0].data(), ringMask_, w0, buf, frames);
 
     // Bands in series, sample-major: every frame runs through all active bands before
@@ -467,7 +467,7 @@ void Eq::process(float* buf, int32_t frames) {
         outCur_ = outTarget;
         const float g = static_cast<float>(autoCur_ * outCur_);
         if (std::fabs(g - 1.0f) > 1e-7f) simd_audio::scaleStereo(buf, buf, g, g, frames);
-        outPk = nota::simd::peakAbs(buf, frames * 2);
+        outPk = simd_audio::peakAbs(buf, frames * 2);
         if (ringOk0) writeMidRing(ring_[1].data(), ringMask_, w0, buf, frames);
     } else {
         uint32_t w = w0;

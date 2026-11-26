@@ -359,6 +359,7 @@ inline float dot(const float* a, const float* b, int32_t count) noexcept {
 
 // Vectorized peak absolute amplitude finder
 inline float maxAbs(const float* src, int32_t count) noexcept {
+    if (!src || count <= 0) return 0.0f;
     int32_t i = 0;
     float peak = 0.0f;
 #if defined(NOTA_SIMD_NEON)
@@ -404,6 +405,141 @@ inline float maxAbs(const float* src, int32_t count) noexcept {
         if (a > peak) peak = a;
     }
     return peak;
+}
+
+// Single-pass peak absolute amplitude finder and sum-of-squares accumulator.
+inline void peakAndSumSquares(const float* src, int32_t count, float& outPeak, double& outSumSquares) noexcept {
+    if (!src || count <= 0) {
+        outPeak = 0.0f;
+        outSumSquares = 0.0;
+        return;
+    }
+    int32_t i = 0;
+    float peak = 0.0f;
+    double sumSq = 0.0;
+#if defined(NOTA_SIMD_NEON)
+    float32x4_t maxv = vdupq_n_f32(0.0f);
+    float32x4_t sq0 = vdupq_n_f32(0.0f), sq1 = vdupq_n_f32(0.0f), sq2 = vdupq_n_f32(0.0f), sq3 = vdupq_n_f32(0.0f);
+    for (; i + 16 <= count; i += 16) {
+        const float32x4_t r0 = vld1q_f32(src + i);
+        const float32x4_t r1 = vld1q_f32(src + i + 4);
+        const float32x4_t r2 = vld1q_f32(src + i + 8);
+        const float32x4_t r3 = vld1q_f32(src + i + 12);
+        maxv = vmaxq_f32(maxv, vabsq_f32(r0));
+        maxv = vmaxq_f32(maxv, vabsq_f32(r1));
+        maxv = vmaxq_f32(maxv, vabsq_f32(r2));
+        maxv = vmaxq_f32(maxv, vabsq_f32(r3));
+        sq0 = vmlaq_f32(sq0, r0, r0);
+        sq1 = vmlaq_f32(sq1, r1, r1);
+        sq2 = vmlaq_f32(sq2, r2, r2);
+        sq3 = vmlaq_f32(sq3, r3, r3);
+    }
+    for (; i + 4 <= count; i += 4) {
+        const float32x4_t r = vld1q_f32(src + i);
+        maxv = vmaxq_f32(maxv, vabsq_f32(r));
+        sq0 = vmlaq_f32(sq0, r, r);
+    }
+    peak = vmaxvq_f32(maxv);
+    sumSq = static_cast<double>(vaddvq_f32(vaddq_f32(vaddq_f32(sq0, sq1), vaddq_f32(sq2, sq3))));
+#elif defined(NOTA_SIMD_SSE)
+    static const __m128 absMask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff));
+    __m128 maxv = _mm_setzero_ps();
+    __m128 sq0 = _mm_setzero_ps(), sq1 = _mm_setzero_ps(), sq2 = _mm_setzero_ps(), sq3 = _mm_setzero_ps();
+    for (; i + 16 <= count; i += 16) {
+        const __m128 r0 = _mm_loadu_ps(src + i);
+        const __m128 r1 = _mm_loadu_ps(src + i + 4);
+        const __m128 r2 = _mm_loadu_ps(src + i + 8);
+        const __m128 r3 = _mm_loadu_ps(src + i + 12);
+        maxv = _mm_max_ps(maxv, _mm_and_ps(r0, absMask));
+        maxv = _mm_max_ps(maxv, _mm_and_ps(r1, absMask));
+        maxv = _mm_max_ps(maxv, _mm_and_ps(r2, absMask));
+        maxv = _mm_max_ps(maxv, _mm_and_ps(r3, absMask));
+#if defined(NOTA_SIMD_FMA)
+        sq0 = _mm_fmadd_ps(r0, r0, sq0);
+        sq1 = _mm_fmadd_ps(r1, r1, sq1);
+        sq2 = _mm_fmadd_ps(r2, r2, sq2);
+        sq3 = _mm_fmadd_ps(r3, r3, sq3);
+#else
+        sq0 = _mm_add_ps(sq0, _mm_mul_ps(r0, r0));
+        sq1 = _mm_add_ps(sq1, _mm_mul_ps(r1, r1));
+        sq2 = _mm_add_ps(sq2, _mm_mul_ps(r2, r2));
+        sq3 = _mm_add_ps(sq3, _mm_mul_ps(r3, r3));
+#endif
+    }
+    for (; i + 4 <= count; i += 4) {
+        const __m128 r = _mm_loadu_ps(src + i);
+        maxv = _mm_max_ps(maxv, _mm_and_ps(r, absMask));
+#if defined(NOTA_SIMD_FMA)
+        sq0 = _mm_fmadd_ps(r, r, sq0);
+#else
+        sq0 = _mm_add_ps(sq0, _mm_mul_ps(r, r));
+#endif
+    }
+    maxv = _mm_max_ps(maxv, _mm_movehl_ps(maxv, maxv));
+    maxv = _mm_max_ss(maxv, _mm_shuffle_ps(maxv, maxv, 1));
+    peak = _mm_cvtss_f32(maxv);
+    alignas(16) float sqArr[4];
+    _mm_store_ps(sqArr, _mm_add_ps(_mm_add_ps(sq0, sq1), _mm_add_ps(sq2, sq3)));
+    sumSq = static_cast<double>(sqArr[0] + sqArr[1] + sqArr[2] + sqArr[3]);
+#endif
+    for (; i < count; ++i) {
+        const float x = src[i];
+        const float ax = std::fabs(x);
+        if (ax > peak) peak = ax;
+        sumSq += static_cast<double>(x) * static_cast<double>(x);
+    }
+    outPeak = peak;
+    outSumSquares = sumSq;
+}
+
+// Vectorized complex multiply-accumulate:
+// ar[i] += xr[i] * hr[i] - xi[i] * hi[i]
+// ai[i] += xr[i] * hi[i] + xi[i] * hr[i]
+inline void complexMulAdd(float* __restrict ar, float* __restrict ai, const float* __restrict xr,
+    const float* __restrict xi, const float* __restrict hr, const float* __restrict hi, int32_t count) noexcept {
+    if (!ar || !ai || !xr || !xi || !hr || !hi || count <= 0) return;
+    int32_t i = 0;
+#if defined(NOTA_SIMD_NEON)
+    for (; i + 8 <= count; i += 8) {
+        const float32x4_t ar0 = vld1q_f32(ar + i), ar1 = vld1q_f32(ar + i + 4);
+        const float32x4_t ai0 = vld1q_f32(ai + i), ai1 = vld1q_f32(ai + i + 4);
+        const float32x4_t xr0 = vld1q_f32(xr + i), xr1 = vld1q_f32(xr + i + 4);
+        const float32x4_t xi0 = vld1q_f32(xi + i), xi1 = vld1q_f32(xi + i + 4);
+        const float32x4_t hr0 = vld1q_f32(hr + i), hr1 = vld1q_f32(hr + i + 4);
+        const float32x4_t hi0 = vld1q_f32(hi + i), hi1 = vld1q_f32(hi + i + 4);
+
+        vst1q_f32(ar + i, vfmaq_f32(vfmsq_f32(ar0, xi0, hi0), xr0, hr0));
+        vst1q_f32(ar + i + 4, vfmaq_f32(vfmsq_f32(ar1, xi1, hi1), xr1, hr1));
+        vst1q_f32(ai + i, vfmaq_f32(vfmaq_f32(ai0, xr0, hi0), xi0, hr0));
+        vst1q_f32(ai + i + 4, vfmaq_f32(vfmaq_f32(ai1, xr1, hi1), xi1, hr1));
+    }
+    for (; i + 4 <= count; i += 4) {
+        const float32x4_t ar0 = vld1q_f32(ar + i), ai0 = vld1q_f32(ai + i);
+        const float32x4_t xr0 = vld1q_f32(xr + i), xi0 = vld1q_f32(xi + i);
+        const float32x4_t hr0 = vld1q_f32(hr + i), hi0 = vld1q_f32(hi + i);
+        vst1q_f32(ar + i, vfmaq_f32(vfmsq_f32(ar0, xi0, hi0), xr0, hr0));
+        vst1q_f32(ai + i, vfmaq_f32(vfmaq_f32(ai0, xr0, hi0), xi0, hr0));
+    }
+#elif defined(NOTA_SIMD_SSE)
+    for (; i + 4 <= count; i += 4) {
+        const __m128 ar0 = _mm_loadu_ps(ar + i), ai0 = _mm_loadu_ps(ai + i);
+        const __m128 xr0 = _mm_loadu_ps(xr + i), xi0 = _mm_loadu_ps(xi + i);
+        const __m128 hr0 = _mm_loadu_ps(hr + i), hi0 = _mm_loadu_ps(hi + i);
+#if defined(NOTA_SIMD_FMA)
+        _mm_storeu_ps(ar + i, _mm_fmadd_ps(xr0, hr0, _mm_fnmadd_ps(xi0, hi0, ar0)));
+        _mm_storeu_ps(ai + i, _mm_fmadd_ps(xi0, hr0, _mm_fmadd_ps(xr0, hi0, ai0)));
+#else
+        const __m128 pr = _mm_sub_ps(_mm_mul_ps(xr0, hr0), _mm_mul_ps(xi0, hi0));
+        const __m128 pi = _mm_add_ps(_mm_mul_ps(xr0, hi0), _mm_mul_ps(xi0, hr0));
+        _mm_storeu_ps(ar + i, _mm_add_ps(ar0, pr));
+        _mm_storeu_ps(ai + i, _mm_add_ps(ai0, pi));
+#endif
+    }
+#endif
+    for (; i < count; ++i) {
+        ar[i] += xr[i] * hr[i] - xi[i] * hi[i];
+        ai[i] += xr[i] * hi[i] + xi[i] * hr[i];
+    }
 }
 
 // Vectorized buffer clamping: dst[i] = std::clamp(src[i], minVal, maxVal)
@@ -496,10 +632,12 @@ inline void squashNonFinite(float* dst, int32_t count) noexcept {
 using simd::add;
 using simd::addScaled;
 using simd::clip;
+using simd::complexMulAdd;
 using simd::dot;
 using simd::dot16;
 using simd::maxAbs;
 using simd::mul;
+using simd::peakAndSumSquares;
 using simd::scale;
 using simd::squashNonFinite;
 

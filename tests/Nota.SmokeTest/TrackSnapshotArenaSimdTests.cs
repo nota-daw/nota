@@ -4,7 +4,7 @@
 // Track CoW (CowSlice) snapshot isolation & Undo/Redo parity, session-sized
 // StereoScratchArena live-to-offline transitions (128 -> 8192 -> 16384), Eq per-band
 // cache + double2 SIMD scalar reference parity (< -120 dBFS), gliding/M-S/AutoGain
-// parity across 0 vs 4 worker threads, and SimdKernels/EQ self-test (#1050).
+// parity across 0 vs 4 worker threads, and SIMD/EQ self-test (#1050).
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -404,6 +404,6 @@ internal static class TrackSnapshotArenaSimdTests
         yield return CheckCowTrackIsolationAndUndoParity();
         yield return CheckScratchArenaLiveToOfflineTransition();
         yield return CheckEqCacheVectorizedScalarAndMsParity();
-        yield return (NotaEngine.FxSelfTest(), "SimdKernels & native Eq scalar reference self-test (FxSelfTest)");
+        yield return (NotaEngine.FxSelfTest(), "SIMD & native Eq scalar reference self-test (FxSelfTest)");
     }
 }

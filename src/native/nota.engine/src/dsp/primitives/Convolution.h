@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "dsp/math/Simd.h"
 #include <signalsmith-linear/fft.h>
 
 #include <cstdint>
@@ -19,6 +20,16 @@
 
 namespace nota {
 namespace dsp {
+
+// Packed RealFFT layout stores DC (real) and Nyquist (imag) independently in bin 0;
+// bins 1..bins-1 are complex pairs accelerated via nota::simd::complexMulAdd.
+inline void accumulatePackedSpectrum(float* __restrict ar, float* __restrict ai, const float* __restrict xr,
+    const float* __restrict xi, const float* __restrict hr, const float* __restrict hi, int32_t bins) noexcept {
+    if (!ar || !ai || !xr || !xi || !hr || !hi || bins <= 0) return;
+    ar[0] += xr[0] * hr[0];
+    ai[0] += xi[0] * hi[0];
+    if (bins > 1) nota::simd::complexMulAdd(ar + 1, ai + 1, xr + 1, xi + 1, hr + 1, hi + 1, bins - 1);
+}
 
 class ConvKernel {
   public:

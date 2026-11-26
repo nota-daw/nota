@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "dsp/math/SimdDispatch.h"
+#include "dsp/math/SimdAudio.h"
 #include "dsp/math/Simd.h"
 
 #include <algorithm>

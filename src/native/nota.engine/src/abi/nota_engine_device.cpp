@@ -11,8 +11,10 @@
 #include "engine/EditorKeys.h"
 #include "bridge/PluginHostBridge.h"
 
-#include "dsp/math/SimdDispatch.h"
+#include "dsp/math/Simd.h"
+#include "dsp/math/SimdAudio.h"
 #include "dsp/math/FastMath.h"
+#include "dsp/primitives/Convolution.h"
 #include "dsp/primitives/CompensationDelay.h"
 #include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
@@ -602,16 +604,13 @@ int32_t nota_fx_selftest(void) {
     const double aliasDrop = alias1 > 1e-9 ? 20.0 * std::log10(alias8 / alias1) : 0.0;
     std::fprintf(stderr, "  Forge oversampling: alias 1x=%.5f  8x=%.5f  (%.1f dB)\n", alias1, alias8, aliasDrop);
 
-    // Verify active/baseline SimdKernels, thresholded convCmac/peak/RMS, and simd::dot against scalar reference.
+    // Verify Simd (complexMulAdd, maxAbs, peakAndSumSquares, dot), SimdAudio delegates,
+    // and Convolution::accumulatePackedSpectrum against scalar references.
     bool p4Ok = [&]() -> bool {
-        const auto& act = nota::simd::SimdKernels::active();
-        const auto& base = nota::simd::SimdKernels::baseline();
-        if (!act.name || act.name[0] == '\0' || !act.convCmac || !act.peakAbs || !act.peakAndSumSquares) return false;
-        if (!base.convCmac || !base.peakAbs || !base.peakAndSumSquares) return false;
-
         for (int bins : {17, 513}) {
             std::vector<float> ar0(static_cast<size_t>(bins), 0.125f), ai0(static_cast<size_t>(bins), -0.25f);
-            std::vector<float> ar1 = ar0, ai1 = ai0, ar2 = ar0, ai2 = ai0, arRef = ar0, aiRef = ai0;
+            std::vector<float> ar1 = ar0, ai1 = ai0, arRef = ar0, aiRef = ai0;
+            std::vector<float> arRaw = ar0, aiRaw = ai0, arRawRef = ar0, aiRawRef = ai0;
             std::vector<float> xr(static_cast<size_t>(bins)), xi(static_cast<size_t>(bins));
             std::vector<float> hr(static_cast<size_t>(bins)), hi(static_cast<size_t>(bins));
             for (int i = 0; i < bins; ++i) {
@@ -628,18 +627,23 @@ int32_t nota_fx_selftest(void) {
                 arRef[k] += xr[k] * hr[k] - xi[k] * hi[k];
                 aiRef[k] += xr[k] * hi[k] + xi[k] * hr[k];
             }
-            base.convCmac(ar0.data(), ai0.data(), xr.data(), xi.data(), hr.data(), hi.data(), bins);
-            act.convCmac(ar1.data(), ai1.data(), xr.data(), xi.data(), hr.data(), hi.data(), bins);
-            nota::simd::convCmac(ar2.data(), ai2.data(), xr.data(), xi.data(), hr.data(), hi.data(), bins);
+            for (int i = 0; i < bins; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                arRawRef[k] += xr[k] * hr[k] - xi[k] * hi[k];
+                aiRawRef[k] += xr[k] * hi[k] + xi[k] * hr[k];
+            }
+            nota::dsp::accumulatePackedSpectrum(
+                ar1.data(), ai1.data(), xr.data(), xi.data(), hr.data(), hi.data(), bins);
+            nota::simd::complexMulAdd(
+                arRaw.data(), aiRaw.data(), xr.data(), xi.data(), hr.data(), hi.data(), bins);
             for (size_t k = 0; k < static_cast<size_t>(bins); ++k) {
-                if (std::fabs(ar0[k] - arRef[k]) > 1e-5f || std::fabs(ai0[k] - aiRef[k]) > 1e-5f ||
-                    std::fabs(ar1[k] - arRef[k]) > 1e-5f || std::fabs(ai1[k] - aiRef[k]) > 1e-5f ||
-                    std::fabs(ar2[k] - arRef[k]) > 1e-5f || std::fabs(ai2[k] - aiRef[k]) > 1e-5f)
+                if (std::fabs(ar1[k] - arRef[k]) > 1e-5f || std::fabs(ai1[k] - aiRef[k]) > 1e-5f ||
+                    std::fabs(arRaw[k] - arRawRef[k]) > 1e-5f || std::fabs(aiRaw[k] - aiRawRef[k]) > 1e-5f)
                     return false;
             }
         }
 
-        for (int count : {64, 4096}) {
+        for (int count : {17, 64, 4096}) {
             std::vector<float> a(static_cast<size_t>(count)), b(static_cast<size_t>(count));
             float pkRef = 0.0f;
             double sqRef = 0.0, dotRef = 0.0;
@@ -651,20 +655,17 @@ int32_t nota_fx_selftest(void) {
                 sqRef += static_cast<double>(a[k]) * static_cast<double>(a[k]);
                 dotRef += static_cast<double>(a[k]) * static_cast<double>(b[k]);
             }
-            const float pkBase = base.peakAbs(a.data(), count);
-            const float pkAct = act.peakAbs(a.data(), count);
-            const float pkEntry = nota::simd::peakAbs(a.data(), count);
-            float p0 = 0.0f, p1 = 0.0f, p2 = 0.0f;
-            double s0 = 0.0, s1 = 0.0, s2 = 0.0;
-            base.peakAndSumSquares(a.data(), count, p0, s0);
-            act.peakAndSumSquares(a.data(), count, p1, s1);
-            nota::simd::peakAndSumSquares(a.data(), count, p2, s2);
+            const float pkSimd = nota::simd::maxAbs(a.data(), count);
+            const float pkAudio = nota::simd_audio::peakAbs(a.data(), count);
+            float p0 = 0.0f, p1 = 0.0f;
+            double s0 = 0.0, s1 = 0.0;
+            nota::simd::peakAndSumSquares(a.data(), count, p0, s0);
+            nota::simd_audio::peakAndSumSquares(a.data(), count, p1, s1);
             const float dotGot = nota::simd::dot(a.data(), b.data(), count);
             const double sqTol = std::max(1e-3, sqRef * 1e-5);
-            if (std::fabs(pkBase - pkRef) > 1e-6f || std::fabs(pkAct - pkRef) > 1e-6f ||
-                std::fabs(pkEntry - pkRef) > 1e-6f || std::fabs(p0 - pkRef) > 1e-6f ||
-                std::fabs(p1 - pkRef) > 1e-6f || std::fabs(p2 - pkRef) > 1e-6f ||
-                std::fabs(s0 - sqRef) > sqTol || std::fabs(s1 - sqRef) > sqTol || std::fabs(s2 - sqRef) > sqTol ||
+            if (std::fabs(pkSimd - pkRef) > 1e-6f || std::fabs(pkAudio - pkRef) > 1e-6f ||
+                std::fabs(p0 - pkRef) > 1e-6f || std::fabs(p1 - pkRef) > 1e-6f ||
+                std::fabs(s0 - sqRef) > sqTol || std::fabs(s1 - sqRef) > sqTol ||
                 std::fabs(static_cast<double>(dotGot) - dotRef) > std::max(1e-4, std::fabs(dotRef) * 1e-5))
                 return false;
         }

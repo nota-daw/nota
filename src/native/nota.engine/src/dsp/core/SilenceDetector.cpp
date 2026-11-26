@@ -7,7 +7,7 @@
 
 #include <cmath>
 
-#include "dsp/math/SimdDispatch.h"
+#include "dsp/math/SimdAudio.h"
 
 namespace nota {
 namespace dsp {
@@ -29,7 +29,7 @@ SignalState SilenceDetector::process(const float* interleaved, int32_t frames) N
 
     float peak = 0.0f;
     double sumSq = 0.0;
-    nota::simd::peakAndSumSquares(interleaved, frames * 2, peak, sumSq);
+    simd_audio::peakAndSumSquares(interleaved, frames * 2, peak, sumSq);
     lastMaxPeak_ = peak;
 
     const double total = static_cast<double>(frames * 2);

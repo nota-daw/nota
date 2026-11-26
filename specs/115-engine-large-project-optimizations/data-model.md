@@ -35,7 +35,7 @@
   - `monitorFeeds`, `automatedTracks`, `modulatorTracks`, `cvTracks`, `ccRoutePlans`, `masterLanes`, `masterPanLane`.
   - `CompiledParamEndpoint`: resolves direct `Track`/`Device`/`MidiDevice`/`Instrument` pointers or `(rack, chainUid, host, slot, expectedRackGen)` verified in $O(1)$ against `RackCore::RackState::generation` before falling back to `resolveNested()`.
 
-## 4. Track CoW Containers, Scratch Arenas & SIMD (`TrackContent.h`, `ScratchArena.h`, `Eq.h`, `SimdDispatch.h`)
+## 4. Track CoW Containers, Scratch Arenas & SIMD (`TrackContent.h`, `ScratchArena.h`, `Eq.h`, `Simd.h`, `SimdAudio.h`)
 
 - **`CowSlice<T>` (`TrackContent.h`)**:
   - `std::shared_ptr<const std::vector<T>> data_` (copied across `cloneTrack()` snapshots) + `std::shared_ptr<std::vector<T>> mutable_` (cleared by `seal()`, allocated/detached on `.write()` when `!mutable_ || data_.use_count() > 1`).
@@ -43,9 +43,9 @@
 - **`dsp::StereoScratchArena<N>` & `dsp::ChainScratchBank` (`ScratchArena.h`)**:
   - Live capacity defaults to `kDefaultLiveFrames = 2048` (`8×` smaller than `16384`-frame `kMaxBlock`), prepared outside RT to handle offline chunks cleanly (`Engine::ensureRenderScratch` + `ensureBlockCapacity`).
   - `ChainScratchBank` dynamically prepares aligned multi-chain scratch buffers for `RackInstrument`, `DrumRack`, and `RackDevice`.
-- **`Eq::BandCache` & `SimdKernels`**:
+- **`Eq::BandCache` & Header-Only Math/Convolution SIMD**:
   - Per-band cached `BiquadCoeffs[kMaxSec]` + inputs (`sr, freq, gain, q, scale, type, slope, ch`) and flat-stereo `double2` L/R SIMD biquad runner.
-  - `nota::simd::SimdIsa` + `SimdKernels` (`SimdDispatch.h` layered strictly over `SimdAudio.h`) selecting runtime AVX2+FMA (`SimdAvx2.cpp`) or baseline SSE2/NEON kernels specifically for heavy block operations (`nota::simd::convCmac` in `Chamber`/`Convolution` for `bins >= 33`, and `nota::simd::peakAbs`/`peakAndSumSquares` for `count >= 512`), alongside inlined `nota::simd::dot` for multi-tap FIR heads.
+  - `Simd.h` (`nota::simd`) provides pure inline generic vector math (`dot`, `dot16`, `maxAbs`, `peakAndSumSquares`, `complexMulAdd`, `add`, `addScaled`, `scale`, `mul`, `clip`, `squashNonFinite`); `SimdAudio.h` (`nota::simd_audio`) provides stereo/planar audio utilities delegating `peakAbs`/`peakAndSumSquares` directly to `Simd.h`; and `Convolution.h` defines `nota::dsp::accumulatePackedSpectrum` (RealFFT DC/Nyquist bin `0` + `nota::simd::complexMulAdd`) shared by `Chamber` and `dsp::ConvKernel`.
 
 ## 5. Render DAG, Intra-Track Parallelism & Planar Chains (`AudioThreadPool.h`, `RenderExecutor.h`, `RenderGraphExecutor.h`, `PolyVoiceScheduler.h`, `AudioBufferView.h`)
 
