@@ -3039,7 +3039,7 @@ void Engine::processBlock(float* out, float* cue, int32_t numFrames) {
         msLR += l * (double)r;
     }
     render_detail::stereoFold(masterStereoL_, masterStereoR_, masterStereoLR_, msqL, msqR, msLR, numFrames,
-        render_detail::stereoBlockStep(numFrames, transport_.sampleRate()));
+        cachedStereoBlockStep(numFrames, transport_.sampleRate()));
     masterPeakL_.store(mpkL, std::memory_order_relaxed);
     masterPeakR_.store(mpkR, std::memory_order_relaxed);
     transport_.publishPresentation(presentationStart, presentationFrames, presentationLead,

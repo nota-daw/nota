@@ -410,8 +410,8 @@ class WavetableSynth final : public Instrument {
     struct BlockArrays;
     struct BatchParams;
     struct BatchWork;
-    void snapshotBlockParams(int32_t frames, BlockScalars& s, BlockArrays& a);
-    bool publishBlockTelemetry(BlockScalars s, const BlockArrays& a) noexcept;
+    NOTA_NOINLINE BlockScalars snapshotBlockParams(int32_t frames, BlockArrays& a);
+    NOTA_NOINLINE bool publishBlockTelemetry(BlockScalars s, const BlockArrays& a) noexcept;
     void stepFilterSmoothing(BlockScalars s, double& f1base, double& f2base, double& reso1, double& reso2) noexcept;
     void stepLfos(BlockScalars s, double& lfo1, double& lfo2) noexcept;
     float processFxAndMixSample(BlockScalars s, float mixL, float mixR, float* dstSample) noexcept;

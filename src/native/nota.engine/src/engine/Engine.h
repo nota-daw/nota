@@ -2522,6 +2522,18 @@ class Engine {
     // Set by the message thread when the law comes from a load / reset / the new-project
     // baseline rather than a user switch: the audio thread then takes it at once, no fade.
     std::atomic<bool> panLawSnap_{false};
+    int32_t cachedStereoFrames_ = 0;
+    double cachedStereoSr_ = 0.0;
+    float cachedStereoStepA_ = 0.0f;
+    float cachedStereoBlockStep(int32_t frames, double sr) noexcept {
+        const double rate = sr > 0.0 ? sr : 44100.0;
+        if (frames != cachedStereoFrames_ || rate != cachedStereoSr_) {
+            cachedStereoFrames_ = frames;
+            cachedStereoSr_ = rate;
+            cachedStereoStepA_ = static_cast<float>(1.0 - std::exp(-frames / (0.3 * rate)));
+        }
+        return cachedStereoStepA_;
+    }
     bool seekedThisBlock_ = false;    // a Seek command was drained this block (audio thread)
     bool seekedWhileRolling_ = false; // ...and it arrived while the transport was rolling
     bool chaseNotes_ = false;         // this segment starts at a discontinuity: re-trigger held clip notes

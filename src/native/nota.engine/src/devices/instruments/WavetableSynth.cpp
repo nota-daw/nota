@@ -600,186 +600,156 @@ void WavetableSynth::allNotesOff() {
     wake();
 }
 
-NOTA_ALWAYS_INLINE void WavetableSynth::snapshotBlockParams(int32_t frames, BlockScalars& s, BlockArrays& a) {
-    // ---- macros first: seven of the twelve destinations ride the per-voice bus
-    //      below, the other five move this block's snapshot ----
-    s.mPitch = s.mOsc2Pitch = s.mPos = s.mCut = s.mReso = s.mLevel = s.mPan = 0.0;
-    double macroBlk[5] = {0, 0, 0, 0, 0}; // warp · osc2 level · sub level · unison · drive
-    for (int m = 0; m < kMacros; ++m) {
-        const double x = get((Param)macroIdx(m, 0)) * (get((Param)macroIdx(m, 2)) - 0.5) * 2.0;
-        if (std::fabs(x) <= 1e-4) continue;
-        switch (macroDestOf(get((Param)macroIdx(m, 1)))) {
-        case 0: s.mPitch += x; break;     // Pitch
-        case 2: s.mOsc2Pitch += x; break; // Osc 2 Pitch
-        case 4: s.mPos += x; break;       // Position
-        case 6: s.mCut += x; break;       // Cutoff
-        case 7: s.mReso += x; break;      // Reso
-        case 9: s.mLevel += x; break;     // Level
-        case 11: s.mPan += x; break;      // Pan
-        case 1: macroBlk[0] += x; break;  // Warp
-        case 3: macroBlk[1] += x; break;  // Osc 2 Level
-        case 5: macroBlk[2] += x; break;  // Sub Level
-        case 8: macroBlk[3] += x; break;  // Unison detune
-        default: macroBlk[4] += x; break; // Drive
-        }
+NOTA_ALWAYS_INLINE void WavetableSynth::setSvf(SvfCoef& c, double fc, double k) const {
+    double g = std::tan(kPi * fc / sampleRate_);
+    c.a1 = 1.0 / (1.0 + g * (g + k));
+    c.a2 = g * c.a1;
+    c.a3 = g * c.a2;
+    c.k = k;
+}
+
+NOTA_ALWAYS_INLINE double WavetableSynth::svf(const SvfCoef& c, double& ic1, double& ic2, double in, int type) {
+    double v3 = in - ic2, v1 = c.a1 * ic1 + c.a2 * v3, v2 = ic2 + c.a2 * ic1 + c.a3 * v3;
+    ic1 = 2 * v1 - ic1;
+    ic2 = 2 * v2 - ic2;
+    switch (type) {
+    case 1: return in - c.k * v1 - v2;
+    case 2: return v1;
+    case 3: return in - c.k * v1;
+    case 4: return in + (c.k > 0 ? v1 * (2.0 - c.k) : v1);
+    default: return v2;
     }
+}
 
-    // ---- block snapshot ----
-    s.b1 = bankOf(Table);
-    s.b2 = bankOf(Osc2Table);
-    // Imported tables (specs/053): null unless the oscillator holds one and plays it.
-    const AuroraTableSet* tset = tableSet_.live();
-    s.ct1 = (tset && useCustom_[0].load(std::memory_order_relaxed)) ? tset->slot[0].get() : nullptr;
-    s.ct2 = (tset && useCustom_[1].load(std::memory_order_relaxed)) ? tset->slot[1].get() : nullptr;
-    s.wm1 = warpModeOf(Osc1WarpMode);
-    s.wm2 = warpModeOf(Osc2WarpMode);
-    s.basePos1 = get(Position);
-    s.basePos2 = get(Osc2Position);
-    s.warp1 = std::clamp(get(Warp) + macroBlk[0], 0.0, 1.0);
-    s.warp2 = std::clamp(get(Osc2Warp) + macroBlk[0], 0.0, 1.0);
-    s.lvl1 = get(Osc1On) > 0.5f ? get(Osc1Level) : 0.0f;
-    s.lvl2 = get(Osc2On) > 0.5f ? (float)std::clamp(get(Osc2Level) + macroBlk[1], 0.0, 2.0) : 0.0f;
-    s.subLvl = (float)std::clamp(get(SubLevel) + macroBlk[2], 0.0, 2.0);
-    s.subWave = (int)std::lround(get(SubWave) * 2.0f);
-    s.m1 = pitchMul(Osc1Oct, Osc1Semi, Osc1Detune);
-    s.m2 = pitchMul(Osc2Oct, Osc2Semi, Osc2Detune);
-    s.subMul = std::exp2(std::lround((get(SubOct) - 0.5f) * 4.0f) - 1.0); // default one octave down
-    // Unison: the count, the detune in cents and the stereo spread are three separate
-    // dials — the detune no longer rides the count, so the readout says what you hear.
-    s.uniN = std::clamp(1 + (int)std::lround(get(Unison) * 6.0f), 1, kUnison);
-    const double uniDet = std::clamp(get(UniDetune) + macroBlk[3], 0.0, 1.0) * 50.0; // ± cents
-    const float uniSpread = get(UniSpread);
-    // Block-constant unison stack data (036-aurora-perf Tier-1): computed once per block.
-    for (int u = 0; u < s.uniN; ++u) {
-        const double d = (s.uniN > 1) ? ((double)u / (s.uniN - 1) - 0.5) * 2.0 : 0.0;
-        a.uniDetF[u] = std::exp2(d * uniDet / 1200.0);
-        const float pan = (float)d * uniSpread;
-        const float pan01 = (pan + 1.0f) * 0.125f;
-        a.uniPanL[u] = fast_math::cos(pan01);
-        a.uniPanR[u] = fast_math::sin(pan01);
+NOTA_ALWAYS_INLINE double WavetableSynth::filterPair(const SvfCoef* f, double* ic1a, double* ic2a, double* ic1b,
+    double* ic2b, double in1, double in2, bool series, int t1, int t2, bool slope1, bool slope2) {
+    if (series) {
+        double a = svf(f[0], ic1a[0], ic2a[0], in1 + in2, t1);
+        if (slope1) a = svf(f[0], ic1b[0], ic2b[0], a, t1);
+        double b = svf(f[1], ic1a[1], ic2a[1], a, t2);
+        if (slope2) b = svf(f[1], ic1b[1], ic2b[1], b, t2);
+        return b;
     }
-    s.uniNorm = 1.41421356f / std::sqrt((float)s.uniN);
-    s.uniMaxDet = 1.0;
-    for (int u = 0; u < s.uniN; ++u) s.uniMaxDet = std::max(s.uniMaxDet, a.uniDetF[u]);
-    s.stereoUni = s.uniN > 1 && uniSpread > 1e-6f;
-    if (!s.stereoUni)
-        for (auto& v : voices_) v.clearSide();
+    double a = svf(f[0], ic1a[0], ic2a[0], in1, t1);
+    if (slope1) a = svf(f[0], ic1b[0], ic2b[0], a, t1);
+    double b = svf(f[1], ic1a[1], ic2a[1], in2, t2);
+    if (slope2) b = svf(f[1], ic1b[1], ic2b[1], b, t2);
+    return a + b;
+}
 
-    s.atk = rateOf(Attack, 0.001, 2.0);
-    s.dec = rateOf(Decay, 0.002, 3.0);
-    s.rel = rateOf(Release, 0.002, 4.0);
-    s.sus = get(Sustain);
-    s.atk2 = rateOf(Env2Attack, 0.001, 2.0);
-    s.dec2 = rateOf(Env2Decay, 0.002, 3.0);
-    s.rel2 = rateOf(Env2Release, 0.002, 4.0);
-    s.sus2 = get(Env2Sustain);
-    s.bend1 = envBends({get(DCurve), get(RCurve), get(EnvExp)});
-    s.bend2 = envBends({get(E2DCurve), get(E2RCurve), get(E2EnvExp)});
-
-    s.t1type = filtType(Fil1Type);
-    s.t2type = filtType(Fil2Type);
-    s.slope1 = get(Fil1Slope) > 0.5f;
-    s.slope2 = get(Fil2Slope) > 0.5f;
-    s.f1tgt = std::log2(expMap(get(Cutoff), 20.0, 18000.0));
-    s.f2tgt = std::log2(expMap(get(Fil2Freq), 20.0, 18000.0));
-    s.r1tgt = get(Resonance);
-    s.r2tgt = get(Fil2Reso);
-    if (f1Sm_ < -1e8) {
-        f1Sm_ = s.f1tgt;
-        f2Sm_ = s.f2tgt;
-        r1Sm_ = s.r1tgt;
-        r2Sm_ = s.r2tgt;
+NOTA_ALWAYS_INLINE double WavetableSynth::warpRead(int mode, double phase, double amt) {
+    switch (mode) {
+    case 1: {
+        double p = phase * (1.0 + amt * 3.0);
+        return p - std::floor(p);
+    } // Sync
+    case 2: {
+        double d = std::clamp(0.5 + (amt - 0.5) * 0.9, 0.05, 0.95);
+        return phase < d ? 0.5 * phase / d : 0.5 + 0.5 * (phase - d) / (1.0 - d);
+    } // Bend
+    case 3: {
+        double w = 0.05 + amt * 0.9;
+        return phase < w ? 0.5 * phase / w : 0.5 + 0.5 * (phase - w) / (1.0 - w);
+    } // PWM-ish
+    default: return phase; // Off / Fold (no phase change)
     }
-    s.fSm = 1.0 - std::exp(-1.0 / (0.005 * sampleRate_));
-    s.f1Env = bip(Fil1Env);
-    s.f1Lfo = bip(Fil1Lfo);
-    s.f1Key = get(Fil1Key);
-    s.f2Env = bip(Fil2Env);
-    s.f2Lfo = bip(Fil2Lfo);
-    s.f2Key = get(Fil2Key);
-    s.r1 = routeOf(RouteOsc1);
-    s.r2 = routeOf(RouteOsc2);
-    s.rs = routeOf(RouteSub);
-    s.series = get(FilSeries) > 0.5f;
+}
 
-    s.ls1 = shapeOf(Lfo1Shape);
-    s.ls2 = shapeOf(Lfo2Shape);
-    s.lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync);
-    s.lfo2Inc = lfoInc(Lfo2Rate, Lfo2Sync);
-    const double sliceBeat = spb_ > 0.0 ? beat_ + (double)sinceBlock_ / spb_ : beat_;
-    sinceBlock_ += frames;
-    if (playing_ && spb_ > 0.0) {
-        auto lock = [&](double& ph, float& sh, double cycleBeats) {
-            if (cycleBeats <= 0.0) return;
-            const double c = sliceBeat / cycleBeats;
-            const double p = c - std::floor(c);
-            if (p + 0.5 < ph) sh = frand() * 2.0f - 1.0f; // crossed a cycle start: new S&H step
-            ph = p;
-        };
-        lock(lfoPhase1_, lfoSh1_, syncBeats(Lfo1Sync));
-        lock(lfoPhase2_, lfoSh2_, syncBeats(Lfo2Sync));
+NOTA_ALWAYS_INLINE float WavetableSynth::foldOut(float s, double amt) {
+    const float g = 1.0f + (float)amt * 3.0f;
+    // Smooth wavefolder — downstream shaper, so the fast sine is transparent here.
+    return fast_math::sin(g * s * 0.25f); // == sin(π/2·g·s)
+}
+
+NOTA_ALWAYS_INLINE float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt,
+    int uniN, const double* detF, const float* panL, const float* panR, float norm, float& sideOut) const {
+    const float posF = pos * (kFrames - 1);
+    const int f0 = std::clamp((int)posF, 0, kFrames - 1), f1 = std::min(f0 + 1, kFrames - 1);
+    const float ff = posF - f0;
+    const float* t0 = frame(bank, f0);
+    const float* t1 = frame(bank, f1);
+    float accL = 0.0f, accR = 0.0f;
+    for (int u = 0; u < uniN; ++u) {
+        double rp = warpRead(mode, ph[u], warpAmt);
+        float s = readMorph(t0, t1, ff, rp);
+        if (mode == 4) s = foldOut(s, warpAmt);
+        // Detune factors and equal-power gains are block-constant (see snapshotBlockParams()).
+        accL += s * panL[u];
+        accR += s * panR[u];
+        ph[u] += inc * detF[u];
+        if (ph[u] >= 1.0) ph[u] -= 1.0;
     }
-    s.lfo1Depth = get(Lfo1Depth);
-    s.lfo2Depth = get(Lfo2Depth);
-    s.gain = get(Gain);
-    s.modWheel = get(ModWheel);
+    accL *= norm;
+    accR *= norm;
+    sideOut = (accL - accR) * 0.5f;
+    return (accL + accR) * 0.5f;
+}
 
-    // Pitch-bend wheel, in the range the patch declares (1..12 semitones).
-    s.bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * wheelRange() / 12.0);
-    gexpr_.offsets(wheelRange(), a.exAdd);
-    s.exprCoef = exprCoef_;
-    s.maxCutoffHz = sampleRate_ * 0.49;
-
-    // Output pan, equal power.
-    const float outPan = (get(OutPan) - 0.5f) * 2.0f;
-    s.opL = std::cos((outPan + 1.0f) * 0.25f * (float)kPi);
-    s.opR = std::sin((outPan + 1.0f) * 0.25f * (float)kPi);
-
-    // FX chain snapshot: each block has a switch, a character and its amounts.
-    s.driveOn = get(FxDriveOn) > 0.5f;
-    s.chorusOn = get(FxChorusOn) > 0.5f;
-    s.reverbOn = get(FxReverbOn) > 0.5f;
-    s.drive = (float)std::clamp(get(FxDrive) + macroBlk[4], 0.0, 1.0);
-    s.driveMode = std::clamp((int)std::lround(get(FxDriveMode) * 2.0f), 0, 2);
-    const float driveD = 1.0f + s.drive * 8.0f;
-    s.driveInvNorm = 1.0f / fast_math::tanhPrecise(driveD * 0.7f + 1.0f);
-    s.toneCoef = (float)std::clamp((get(FxTone) - 0.5) * 2.0, -1.0, 1.0);
-    s.chAmt = get(FxChorus);
-    s.chRate = expMap(get(FxChorusRate), 0.1, 6.0);
-    s.chVoices = 1 << std::clamp((int)std::lround(get(FxChorusVoices) * 2.0f), 0, 2); // 1 / 2 / 4
-    s.rvAmt = get(FxReverb);
-    const int revMode = std::clamp((int)std::lround(get(FxReverbMode) * 2.0f), 0, 2);
-    static const float fbBase[3] = {0.76f, 0.86f, 0.83f}, dampBase[3] = {0.45f, 0.72f, 0.18f};
-    s.revFb = std::clamp(fbBase[revMode] + (get(FxReverbSize) - 0.5f) * 0.16f, 0.5f, 0.96f);
-    s.revDamp = dampBase[revMode];
-
-    // Matrix active list.
-    s.amN = 0;
-    s.pitchStatic = s.mPitch == 0.0;
-    s.osc2PitchStatic = s.mOsc2Pitch == 0.0;
-    for (int src = 0; src < kSources; ++src)
-        for (int dst = 0; dst < kDests; ++dst) {
-            double amt = (get((Param)matrixIdx(src, dst)) - 0.5) * 2.0;
-            if (std::fabs(amt) > 1e-4) {
-                a.am[s.amN++] = {static_cast<uint8_t>(src), static_cast<uint8_t>(dst), amt};
-                if (dst == 0) s.pitchStatic = false;
-                if (dst == 1) s.osc2PitchStatic = false;
-            }
-        }
-
-    s.invSr = 1.0 / sampleRate_;
-    s.settled = std::fabs(s.f1tgt - f1Sm_) < 1e-7 && std::fabs(s.f2tgt - f2Sm_) < 1e-7 &&
-                std::fabs(s.r1tgt - r1Sm_) < 1e-7 && std::fabs(s.r2tgt - r2Sm_) < 1e-7;
-    if (s.settled) {
-        f1Sm_ = s.f1tgt;
-        f2Sm_ = s.f2tgt;
-        r1Sm_ = s.r1tgt;
-        r2Sm_ = s.r2tgt;
+NOTA_ALWAYS_INLINE float WavetableSynth::oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode,
+    double warpAmt, int uniN, const double* detF, double maxDet, const float* panL, const float* panR, float norm,
+    float& sideOut) const {
+    // Mip pick (research R4): the smallest level k whose top harmonic (below 1024 >> k)
+    // stays under 0.45 of the sample rate at the fastest unison voice, with the warp
+    // mode's bias — Sync squeezes the cycle up to 8×, Bend up to 4×.
+    double bias = 1.0;
+    if (mode == 1) bias = 1.0 + 7.0 * warpAmt;
+    else if (mode == 2) bias = 1.0 + 3.0 * warpAmt;
+    const double fEff = std::fabs(inc) * maxDet * bias;
+    int k = 0;
+    while (k < AuroraTable::kLevels - 1 && (double)AuroraTable::harmonics(k) * fEff > 0.45) ++k;
+    const int len = AuroraTable::len(k);
+    const int nf = t.frames;
+    const float posF = pos * (float)(nf - 1);
+    const int f0 = std::clamp((int)posF, 0, nf - 1), f1 = std::min(f0 + 1, nf - 1);
+    const float ff = posF - (float)f0;
+    const float* t0 = t.frame(k, f0);
+    const float* t1 = t.frame(k, f1);
+    float accL = 0.0f, accR = 0.0f;
+    for (int u = 0; u < uniN; ++u) {
+        double rp = warpRead(mode, ph[u], warpAmt);
+        float s = readMorphSized(t0, t1, ff, rp, len);
+        if (mode == 4) s = foldOut(s, warpAmt);
+        accL += s * panL[u];
+        accR += s * panR[u];
+        ph[u] += inc * detF[u];
+        if (ph[u] >= 1.0) ph[u] -= 1.0;
     }
-    s.f1base = std::exp2(f1Sm_);
-    s.f2base = std::exp2(f2Sm_);
-    s.reso1 = r1Sm_;
-    s.reso2 = r2Sm_;
+    accL *= norm;
+    accR *= norm;
+    sideOut = (accL - accR) * 0.5f;
+    return (accL + accR) * 0.5f;
+}
+
+NOTA_ALWAYS_INLINE double WavetableSynth::lfoValue(int shape, double ph, float sh) {
+    switch (shape) {
+    case 1: return ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph;
+    case 2: return ph < 0.5 ? 1 : -1;
+    case 3: return sh;
+    // Sine LFO: REVERTED to std:: (measured -44.8 dB with fast_math::sin).
+    default: return std::sin(kTwoPi * ph);
+    }
+}
+
+NOTA_ALWAYS_INLINE float WavetableSynth::driveSample(int mode, float x, float amt, float invNorm) {
+    const float d = 1.0f + amt * 8.0f;
+    switch (mode) {
+    case 1: {
+        float u = x * d + 0.35f * x * x * d;
+        float y = u / (1.0f + std::fabs(u));
+        return y / (1.0f - 1.0f / (d * 0.7f + 2.0f));
+    }
+    case 2: {
+        float y = std::sin((float)kHalfPi * std::clamp(x * d, -3.0f, 3.0f));
+        return y * 0.8f;
+    }
+    default: return fast_math::tanhPrecise(x * d) * invNorm;
+    }
+}
+
+NOTA_ALWAYS_INLINE float WavetableSynth::tone(float& z, float x, float coef) {
+    const float a = 0.12f + 0.55f * (1.0f - std::fabs(coef));
+    z += (x - z) * a;
+    return coef < 0 ? z + (x - z) * (1.0f + coef) : x + (x - z) * coef * 1.4f;
 }
 
 NOTA_ALWAYS_INLINE void WavetableSynth::stepFilterSmoothing(
@@ -934,43 +904,6 @@ NOTA_ALWAYS_INLINE float WavetableSynth::processFxAndMixSample(
     return std::max(std::fabs(al), std::fabs(ar));
 }
 
-NOTA_ALWAYS_INLINE bool WavetableSynth::publishBlockTelemetry(BlockScalars s, const BlockArrays& a) noexcept {
-    int live = 0;
-    const Voice* newest = nullptr;
-    for (const auto& v : voices_)
-        if (v.active) {
-            ++live;
-            if (!newest || v.seq > newest->seq) newest = &v;
-        }
-    activeVoices_.store(live, std::memory_order_relaxed);
-    // Live follow telemetry, once per block (relaxed: the UI only draws it).
-    float follow[2] = {-1.0f, -1.0f};
-    if (newest) {
-        double d = s.mPos;
-        if (s.amN) {
-            auto wrap = [](double ph) { return ph >= 1.0 ? ph - 1.0 : ph; };
-            const double lfo1 = lfoValue(s.ls1, wrap(lfoPhase1_), lfoSh1_) * s.lfo1Depth;
-            const double lfo2 = lfoValue(s.ls2, wrap(lfoPhase2_), lfoSh2_) * s.lfo2Depth;
-            const double src[kSources] = {newest->env, newest->env2, lfo1, lfo2, newest->velocity,
-                std::clamp(newest->ktOct / 4.0, -1.0, 1.0), s.modWheel, newest->rand};
-            for (int k = 0; k < s.amN; ++k)
-                if (a.am[k].dst == 2) d += src[a.am[k].src] * a.am[k].amt;
-        }
-        const float off = (float)d + newest->ex.slide() * 0.5f;
-        follow[0] = std::clamp(s.basePos1 + off, 0.0f, 1.0f);
-        follow[1] = std::clamp(s.basePos2 + off, 0.0f, 1.0f);
-    }
-    scope_[0].store(follow[0], std::memory_order_relaxed);
-    scope_[1].store(follow[1], std::memory_order_relaxed);
-    scope_[4].store((float)live, std::memory_order_relaxed);
-    Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
-    const bool on = lv && lv->active;
-    publishEnvTele(envTele_, on, on ? lv->stage : Stage::Off, on ? &lv->shape : nullptr, on ? lv->env : 0.0f, s.sus);
-    publishEnvTele(
-        envTele_ + kEnvTeleFloats, on, on ? lv->stage2 : Stage::Off, on ? &lv->shape2 : nullptr, on ? lv->env2 : 0.0f, s.sus2);
-    return live > 0;
-}
-
 void WavetableSynth::renderVoiceBatch(const BatchParams& bp, const BatchWork& bw, int32_t chunk, Voice* const* vList,
     int vCount, float* dstL, float* dstR) const {
     const BlockScalars s = bp.s;
@@ -1004,9 +937,8 @@ void WavetableSynth::render(float* out, int32_t frames) {
 }
 
 bool WavetableSynth::renderLinear(float* out, int32_t frames) {
-    BlockScalars s;
     BlockArrays a;
-    snapshotBlockParams(frames, s, a);
+    const BlockScalars s = snapshotBlockParams(frames, a);
     double f1base = s.f1base, f2base = s.f2base, reso1 = s.reso1, reso2 = s.reso2;
 
     float peak = 0.0f;
@@ -1033,7 +965,7 @@ bool WavetableSynth::renderLinear(float* out, int32_t frames) {
 
 bool WavetableSynth::renderBatched(float* out, int32_t frames) {
     BatchParams bp;
-    snapshotBlockParams(frames, bp.s, bp.a);
+    bp.s = snapshotBlockParams(frames, bp.a);
     const BlockScalars s = bp.s;
     BatchWork& bw = *batchWork_;
     Voice* act[kVoices];
@@ -1084,124 +1016,216 @@ bool WavetableSynth::renderBatched(float* out, int32_t frames) {
     return publishBlockTelemetry(s, bp.a) || peak > 1.0e-5f;
 }
 
-
-void WavetableSynth::setSvf(SvfCoef& c, double fc, double k) const {
-    double g = std::tan(kPi * fc / sampleRate_);
-    c.a1 = 1.0 / (1.0 + g * (g + k));
-    c.a2 = g * c.a1;
-    c.a3 = g * c.a2;
-    c.k = k;
-}
-
-double WavetableSynth::svf(const SvfCoef& c, double& ic1, double& ic2, double in, int type) {
-    double v3 = in - ic2, v1 = c.a1 * ic1 + c.a2 * v3, v2 = ic2 + c.a2 * ic1 + c.a3 * v3;
-    ic1 = 2 * v1 - ic1;
-    ic2 = 2 * v2 - ic2;
-    switch (type) {
-    case 1: return in - c.k * v1 - v2;
-    case 2: return v1;
-    case 3: return in - c.k * v1;
-    case 4: return in + (c.k > 0 ? v1 * (2.0 - c.k) : v1);
-    default: return v2;
+// Keep block setup and telemetry non-inlined so the hot per-sample DSP loops stay small
+// enough for GCC's inliner to fold oscStack, filterPair, svf, and warpRead completely.
+WavetableSynth::BlockScalars WavetableSynth::snapshotBlockParams(int32_t frames, BlockArrays& a) {
+    BlockScalars s{};
+    double macroBlk[5] = {0, 0, 0, 0, 0}; // warp · osc2 level · sub level · unison · drive
+    for (int m = 0; m < kMacros; ++m) {
+        const double x = get((Param)macroIdx(m, 0)) * (get((Param)macroIdx(m, 2)) - 0.5) * 2.0;
+        if (std::fabs(x) <= 1e-4) continue;
+        switch (macroDestOf(get((Param)macroIdx(m, 1)))) {
+        case 0: s.mPitch += x; break;     // Pitch
+        case 2: s.mOsc2Pitch += x; break; // Osc 2 Pitch
+        case 4: s.mPos += x; break;       // Position
+        case 6: s.mCut += x; break;       // Cutoff
+        case 7: s.mReso += x; break;      // Reso
+        case 9: s.mLevel += x; break;     // Level
+        case 11: s.mPan += x; break;      // Pan
+        case 1: macroBlk[0] += x; break;  // Warp
+        case 3: macroBlk[1] += x; break;  // Osc 2 Level
+        case 5: macroBlk[2] += x; break;  // Sub Level
+        case 8: macroBlk[3] += x; break;  // Unison detune
+        default: macroBlk[4] += x; break; // Drive
+        }
     }
-}
 
-double WavetableSynth::filterPair(const SvfCoef* f, double* ic1a, double* ic2a, double* ic1b, double* ic2b, double in1,
-    double in2, bool series, int t1, int t2, bool slope1, bool slope2) {
-    if (series) {
-        double a = svf(f[0], ic1a[0], ic2a[0], in1 + in2, t1);
-        if (slope1) a = svf(f[0], ic1b[0], ic2b[0], a, t1);
-        double b = svf(f[1], ic1a[1], ic2a[1], a, t2);
-        if (slope2) b = svf(f[1], ic1b[1], ic2b[1], b, t2);
-        return b;
+    // ---- block snapshot ----
+    s.b1 = bankOf(Table);
+    s.b2 = bankOf(Osc2Table);
+    // Imported tables (specs/053): null unless the oscillator holds one and plays it.
+    const AuroraTableSet* tset = tableSet_.live();
+    s.ct1 = (tset && useCustom_[0].load(std::memory_order_relaxed)) ? tset->slot[0].get() : nullptr;
+    s.ct2 = (tset && useCustom_[1].load(std::memory_order_relaxed)) ? tset->slot[1].get() : nullptr;
+    s.wm1 = warpModeOf(Osc1WarpMode);
+    s.wm2 = warpModeOf(Osc2WarpMode);
+    s.basePos1 = get(Position);
+    s.basePos2 = get(Osc2Position);
+    s.warp1 = std::clamp(get(Warp) + macroBlk[0], 0.0, 1.0);
+    s.warp2 = std::clamp(get(Osc2Warp) + macroBlk[0], 0.0, 1.0);
+    s.lvl1 = get(Osc1On) > 0.5f ? get(Osc1Level) : 0.0f;
+    s.lvl2 = get(Osc2On) > 0.5f ? (float)std::clamp(get(Osc2Level) + macroBlk[1], 0.0, 2.0) : 0.0f;
+    s.subLvl = (float)std::clamp(get(SubLevel) + macroBlk[2], 0.0, 2.0);
+    s.subWave = (int)std::lround(get(SubWave) * 2.0f);
+    s.m1 = pitchMul(Osc1Oct, Osc1Semi, Osc1Detune);
+    s.m2 = pitchMul(Osc2Oct, Osc2Semi, Osc2Detune);
+    s.subMul = std::exp2(std::lround((get(SubOct) - 0.5f) * 4.0f) - 1.0); // default one octave down
+    s.uniN = std::clamp(1 + (int)std::lround(get(Unison) * 6.0f), 1, kUnison);
+    const double uniDet = std::clamp(get(UniDetune) + macroBlk[3], 0.0, 1.0) * 50.0; // ± cents
+    const float uniSpread = get(UniSpread);
+    for (int u = 0; u < s.uniN; ++u) {
+        const double d = (s.uniN > 1) ? ((double)u / (s.uniN - 1) - 0.5) * 2.0 : 0.0;
+        a.uniDetF[u] = std::exp2(d * uniDet / 1200.0);
+        const float pan = (float)d * uniSpread;
+        const float pan01 = (pan + 1.0f) * 0.125f;
+        a.uniPanL[u] = fast_math::cos(pan01);
+        a.uniPanR[u] = fast_math::sin(pan01);
     }
-    double a = svf(f[0], ic1a[0], ic2a[0], in1, t1);
-    if (slope1) a = svf(f[0], ic1b[0], ic2b[0], a, t1);
-    double b = svf(f[1], ic1a[1], ic2a[1], in2, t2);
-    if (slope2) b = svf(f[1], ic1b[1], ic2b[1], b, t2);
-    return a + b;
-}
+    s.uniNorm = 1.41421356f / std::sqrt((float)s.uniN);
+    s.uniMaxDet = 1.0;
+    for (int u = 0; u < s.uniN; ++u) s.uniMaxDet = std::max(s.uniMaxDet, a.uniDetF[u]);
+    s.stereoUni = s.uniN > 1 && uniSpread > 1e-6f;
+    if (!s.stereoUni)
+        for (auto& v : voices_) v.clearSide();
 
-double WavetableSynth::warpRead(int mode, double phase, double amt) {
-    switch (mode) {
-    case 1: {
-        double p = phase * (1.0 + amt * 3.0);
-        return p - std::floor(p);
-    } // Sync
-    case 2: {
-        double d = std::clamp(0.5 + (amt - 0.5) * 0.9, 0.05, 0.95);
-        return phase < d ? 0.5 * phase / d : 0.5 + 0.5 * (phase - d) / (1.0 - d);
-    } // Bend
-    case 3: {
-        double w = 0.05 + amt * 0.9;
-        return phase < w ? 0.5 * phase / w : 0.5 + 0.5 * (phase - w) / (1.0 - w);
-    } // PWM-ish
-    default: return phase; // Off / Fold (no phase change)
+    s.atk = rateOf(Attack, 0.001, 2.0);
+    s.dec = rateOf(Decay, 0.002, 3.0);
+    s.rel = rateOf(Release, 0.002, 4.0);
+    s.sus = get(Sustain);
+    s.atk2 = rateOf(Env2Attack, 0.001, 2.0);
+    s.dec2 = rateOf(Env2Decay, 0.002, 3.0);
+    s.rel2 = rateOf(Env2Release, 0.002, 4.0);
+    s.sus2 = get(Env2Sustain);
+    s.bend1 = envBends({get(DCurve), get(RCurve), get(EnvExp)});
+    s.bend2 = envBends({get(E2DCurve), get(E2RCurve), get(E2EnvExp)});
+
+    s.t1type = filtType(Fil1Type);
+    s.t2type = filtType(Fil2Type);
+    s.slope1 = get(Fil1Slope) > 0.5f;
+    s.slope2 = get(Fil2Slope) > 0.5f;
+    s.f1tgt = std::log2(expMap(get(Cutoff), 20.0, 18000.0));
+    s.f2tgt = std::log2(expMap(get(Fil2Freq), 20.0, 18000.0));
+    s.r1tgt = get(Resonance);
+    s.r2tgt = get(Fil2Reso);
+    if (f1Sm_ < -1e8) {
+        f1Sm_ = s.f1tgt;
+        f2Sm_ = s.f2tgt;
+        r1Sm_ = s.r1tgt;
+        r2Sm_ = s.r2tgt;
     }
-}
+    s.fSm = 1.0 - std::exp(-1.0 / (0.005 * sampleRate_));
+    s.f1Env = bip(Fil1Env);
+    s.f1Lfo = bip(Fil1Lfo);
+    s.f1Key = get(Fil1Key);
+    s.f2Env = bip(Fil2Env);
+    s.f2Lfo = bip(Fil2Lfo);
+    s.f2Key = get(Fil2Key);
+    s.r1 = routeOf(RouteOsc1);
+    s.r2 = routeOf(RouteOsc2);
+    s.rs = routeOf(RouteSub);
+    s.series = get(FilSeries) > 0.5f;
 
-float WavetableSynth::foldOut(float s, double amt) {
-    const float g = 1.0f + (float)amt * 3.0f;
-    // Smooth wavefolder — downstream shaper, so the fast sine is transparent here.
-    return fast_math::sin(g * s * 0.25f); // == sin(π/2·g·s)
-}
-
-float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt, int uniN,
-    const double* detF, const float* panL, const float* panR, float norm, float& sideOut) const {
-    const float posF = pos * (kFrames - 1);
-    const int f0 = std::clamp((int)posF, 0, kFrames - 1), f1 = std::min(f0 + 1, kFrames - 1);
-    const float ff = posF - f0;
-    const float* t0 = frame(bank, f0);
-    const float* t1 = frame(bank, f1);
-    float accL = 0.0f, accR = 0.0f;
-    for (int u = 0; u < uniN; ++u) {
-        double rp = warpRead(mode, ph[u], warpAmt);
-        float s = readMorph(t0, t1, ff, rp);
-        if (mode == 4) s = foldOut(s, warpAmt);
-        // Detune factors and equal-power gains are block-constant (see render()).
-        accL += s * panL[u];
-        accR += s * panR[u];
-        ph[u] += inc * detF[u];
-        if (ph[u] >= 1.0) ph[u] -= 1.0;
+    s.ls1 = shapeOf(Lfo1Shape);
+    s.ls2 = shapeOf(Lfo2Shape);
+    s.lfo1Inc = lfoInc(Lfo1Rate, Lfo1Sync);
+    s.lfo2Inc = lfoInc(Lfo2Rate, Lfo2Sync);
+    const double sliceBeat = spb_ > 0.0 ? beat_ + (double)sinceBlock_ / spb_ : beat_;
+    sinceBlock_ += frames;
+    if (playing_ && spb_ > 0.0) {
+        auto lock = [&](double& ph, float& sh, double cycleBeats) {
+            if (cycleBeats <= 0.0) return;
+            const double c = sliceBeat / cycleBeats;
+            const double p = c - std::floor(c);
+            if (p + 0.5 < ph) sh = frand() * 2.0f - 1.0f; // crossed a cycle start: new S&H step
+            ph = p;
+        };
+        lock(lfoPhase1_, lfoSh1_, syncBeats(Lfo1Sync));
+        lock(lfoPhase2_, lfoSh2_, syncBeats(Lfo2Sync));
     }
-    accL *= norm;
-    accR *= norm;
-    sideOut = (accL - accR) * 0.5f;
-    return (accL + accR) * 0.5f;
+    s.lfo1Depth = get(Lfo1Depth);
+    s.lfo2Depth = get(Lfo2Depth);
+    s.gain = get(Gain);
+    s.modWheel = get(ModWheel);
+
+    s.bendMul = std::exp2((get(Bend) - 0.5) * 2.0 * wheelRange() / 12.0);
+    gexpr_.offsets(wheelRange(), a.exAdd);
+    s.exprCoef = exprCoef_;
+    s.maxCutoffHz = sampleRate_ * 0.49;
+
+    const float outPan = (get(OutPan) - 0.5f) * 2.0f;
+    s.opL = std::cos((outPan + 1.0f) * 0.25f * (float)kPi);
+    s.opR = std::sin((outPan + 1.0f) * 0.25f * (float)kPi);
+
+    s.driveOn = get(FxDriveOn) > 0.5f;
+    s.chorusOn = get(FxChorusOn) > 0.5f;
+    s.reverbOn = get(FxReverbOn) > 0.5f;
+    s.drive = (float)std::clamp(get(FxDrive) + macroBlk[4], 0.0, 1.0);
+    s.driveMode = std::clamp((int)std::lround(get(FxDriveMode) * 2.0f), 0, 2);
+    const float driveD = 1.0f + s.drive * 8.0f;
+    s.driveInvNorm = 1.0f / fast_math::tanhPrecise(driveD * 0.7f + 1.0f);
+    s.toneCoef = (float)std::clamp((get(FxTone) - 0.5) * 2.0, -1.0, 1.0);
+    s.chAmt = get(FxChorus);
+    s.chRate = expMap(get(FxChorusRate), 0.1, 6.0);
+    s.chVoices = 1 << std::clamp((int)std::lround(get(FxChorusVoices) * 2.0f), 0, 2);
+    s.rvAmt = get(FxReverb);
+    const int revMode = std::clamp((int)std::lround(get(FxReverbMode) * 2.0f), 0, 2);
+    static const float fbBase[3] = {0.76f, 0.86f, 0.83f}, dampBase[3] = {0.45f, 0.72f, 0.18f};
+    s.revFb = std::clamp(fbBase[revMode] + (get(FxReverbSize) - 0.5f) * 0.16f, 0.5f, 0.96f);
+    s.revDamp = dampBase[revMode];
+
+    s.amN = 0;
+    s.pitchStatic = s.mPitch == 0.0;
+    s.osc2PitchStatic = s.mOsc2Pitch == 0.0;
+    for (int src = 0; src < kSources; ++src)
+        for (int dst = 0; dst < kDests; ++dst) {
+            double amt = (get((Param)matrixIdx(src, dst)) - 0.5) * 2.0;
+            if (std::fabs(amt) > 1e-4) {
+                a.am[s.amN++] = {static_cast<uint8_t>(src), static_cast<uint8_t>(dst), amt};
+                if (dst == 0) s.pitchStatic = false;
+                if (dst == 1) s.osc2PitchStatic = false;
+            }
+        }
+
+    s.invSr = 1.0 / sampleRate_;
+    s.settled = std::fabs(s.f1tgt - f1Sm_) < 1e-7 && std::fabs(s.f2tgt - f2Sm_) < 1e-7 &&
+                std::fabs(s.r1tgt - r1Sm_) < 1e-7 && std::fabs(s.r2tgt - r2Sm_) < 1e-7;
+    if (s.settled) {
+        f1Sm_ = s.f1tgt;
+        f2Sm_ = s.f2tgt;
+        r1Sm_ = s.r1tgt;
+        r2Sm_ = s.r2tgt;
+    }
+    s.f1base = std::exp2(f1Sm_);
+    s.f2base = std::exp2(f2Sm_);
+    s.reso1 = r1Sm_;
+    s.reso2 = r2Sm_;
+    return s;
 }
 
-float WavetableSynth::oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode, double warpAmt,
-    int uniN, const double* detF, double maxDet, const float* panL, const float* panR, float norm, float& sideOut) const {
-    // Mip pick (research R4): the smallest level k whose top harmonic (below 1024 >> k)
-    // stays under 0.45 of the sample rate at the fastest unison voice, with the warp
-    // mode's bias — Sync squeezes the cycle up to 8×, Bend up to 4×.
-    double bias = 1.0;
-    if (mode == 1) bias = 1.0 + 7.0 * warpAmt;
-    else if (mode == 2) bias = 1.0 + 3.0 * warpAmt;
-    const double fEff = std::fabs(inc) * maxDet * bias;
-    int k = 0;
-    while (k < AuroraTable::kLevels - 1 && (double)AuroraTable::harmonics(k) * fEff > 0.45) ++k;
-    const int len = AuroraTable::len(k);
-    const int nf = t.frames;
-    const float posF = pos * (float)(nf - 1);
-    const int f0 = std::clamp((int)posF, 0, nf - 1), f1 = std::min(f0 + 1, nf - 1);
-    const float ff = posF - (float)f0;
-    const float* t0 = t.frame(k, f0);
-    const float* t1 = t.frame(k, f1);
-    float accL = 0.0f, accR = 0.0f;
-    for (int u = 0; u < uniN; ++u) {
-        double rp = warpRead(mode, ph[u], warpAmt);
-        float s = readMorphSized(t0, t1, ff, rp, len);
-        if (mode == 4) s = foldOut(s, warpAmt);
-        accL += s * panL[u];
-        accR += s * panR[u];
-        ph[u] += inc * detF[u];
-        if (ph[u] >= 1.0) ph[u] -= 1.0;
+bool WavetableSynth::publishBlockTelemetry(BlockScalars s, const BlockArrays& a) noexcept {
+    int live = 0;
+    const Voice* newest = nullptr;
+    for (const auto& v : voices_)
+        if (v.active) {
+            ++live;
+            if (!newest || v.seq > newest->seq) newest = &v;
+        }
+    activeVoices_.store(live, std::memory_order_relaxed);
+    float follow[2] = {-1.0f, -1.0f};
+    if (newest) {
+        double d = s.mPos;
+        if (s.amN) {
+            auto wrap = [](double ph) { return ph >= 1.0 ? ph - 1.0 : ph; };
+            const double lfo1 = lfoValue(s.ls1, wrap(lfoPhase1_), lfoSh1_) * s.lfo1Depth;
+            const double lfo2 = lfoValue(s.ls2, wrap(lfoPhase2_), lfoSh2_) * s.lfo2Depth;
+            const double src[kSources] = {newest->env, newest->env2, lfo1, lfo2, newest->velocity,
+                std::clamp(newest->ktOct / 4.0, -1.0, 1.0), s.modWheel, newest->rand};
+            for (int k = 0; k < s.amN; ++k)
+                if (a.am[k].dst == 2) d += src[a.am[k].src] * a.am[k].amt;
+        }
+        const float off = (float)d + newest->ex.slide() * 0.5f;
+        follow[0] = std::clamp(s.basePos1 + off, 0.0f, 1.0f);
+        follow[1] = std::clamp(s.basePos2 + off, 0.0f, 1.0f);
     }
-    accL *= norm;
-    accR *= norm;
-    sideOut = (accL - accR) * 0.5f;
-    return (accL + accR) * 0.5f;
+    scope_[0].store(follow[0], std::memory_order_relaxed);
+    scope_[1].store(follow[1], std::memory_order_relaxed);
+    scope_[4].store((float)live, std::memory_order_relaxed);
+    Voice* lv = lastVoice_ >= 0 ? &voices_[lastVoice_] : nullptr;
+    const bool on = lv && lv->active;
+    publishEnvTele(envTele_, on, on ? lv->stage : Stage::Off, on ? &lv->shape : nullptr, on ? lv->env : 0.0f, s.sus);
+    publishEnvTele(
+        envTele_ + kEnvTeleFloats, on, on ? lv->stage2 : Stage::Off, on ? &lv->shape2 : nullptr, on ? lv->env2 : 0.0f, s.sus2);
+    return live > 0;
 }
 
 float WavetableSynth::harmAmp(int bank, float t, int n) {
@@ -1242,46 +1266,6 @@ const float* WavetableSynth::sharedTables() {
         return tab;
     }();
     return t.data();
-}
-
-double WavetableSynth::lfoValue(int shape, double ph, float sh) {
-    switch (shape) {
-    case 1: return ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph;
-    case 2: return ph < 0.5 ? 1 : -1;
-    case 3: return sh;
-    // Sine LFO: REVERTED to std:: (measured -44.8 dB with fast_math::sin). The matrix
-    // can route either LFO to pitch or to a resonant cutoff, where the 7e-4 shape
-    // error is amplified into the audible band — so the LFO is pitch-critical here.
-    default: return std::sin(kTwoPi * ph);
-    }
-}
-
-float WavetableSynth::driveSample(int mode, float x, float amt, float invNorm) {
-    const float d = 1.0f + amt * 8.0f;
-    switch (mode) {
-    // Tape: a rational curve that bends earlier and saturates more slowly than tanh,
-    // with a second-harmonic term for the asymmetry a tape stage has.
-    case 1: {
-        float u = x * d + 0.35f * x * x * d;
-        float y = u / (1.0f + std::fabs(u));
-        return y / (1.0f - 1.0f / (d * 0.7f + 2.0f));
-    }
-    // Fold: REVERTED to std:: (measured −51 dB with fast_math::sin on the drive
-    // path — the folder output is near full-scale, so the 7e-4 shape error lands
-    // in the audible band).
-    case 2: {
-        float y = std::sin((float)kHalfPi * std::clamp(x * d, -3.0f, 3.0f));
-        return y * 0.8f;
-    }
-    // Tube: one precise tanh plus the hoisted block-rate reciprocal.
-    default: return fast_math::tanhPrecise(x * d) * invNorm;
-    }
-}
-
-float WavetableSynth::tone(float& z, float x, float coef) {
-    const float a = 0.12f + 0.55f * (1.0f - std::fabs(coef));
-    z += (x - z) * a;
-    return coef < 0 ? z + (x - z) * (1.0f + coef) : x + (x - z) * coef * 1.4f;
 }
 
 void WavetableSynth::chorus(float l, float r, float amt, int voices, double rateHz, float& outL, float& outR) {

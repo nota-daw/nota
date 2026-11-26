@@ -1442,7 +1442,7 @@ void RenderGraphExecutor::mixGraph(Engine& eng, Graph* g, float* out, int32_t fr
     ctx.cueOn = eng.cueSeg_ != nullptr;
     ctx.arrangementActive = eng.arrangementActive_.load(std::memory_order_relaxed);
     ctx.offline = !eng.deviceBlock_;
-    ctx.stereoA = render_detail::stereoBlockStep(frames, srLaw);
+    ctx.stereoA = eng.cachedStereoBlockStep(frames, srLaw);
     ctx.panLawStep = static_cast<float>(1.0 / (0.010 * srLaw));
     ctx.capTrackId = eng.freezeCaptureTrackId_.load(std::memory_order_relaxed);
     ctx.ti = eng.transport_.transportInfo(eng.transport_.hasTempoMap() ? eng.transport_.playheadSamples() : blockStart);
