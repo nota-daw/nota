@@ -68,8 +68,7 @@ int32_t PendulumSynth::scopeRead(float* out, int32_t maxN) const {
 }
 
 void PendulumSynth::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 std::string PendulumSynth::pluginParamId(int32_t i) const {
@@ -117,6 +116,7 @@ void PendulumSynth::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> PendulumSynth::clone() const {
@@ -180,6 +180,9 @@ int32_t PendulumSynth::heldNotes(int32_t* out, int32_t maxN) const {
 }
 
 void PendulumSynth::render(float* out, int32_t frames) {
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip) return;
     // Momentary Reset: restart every ball's swing, then self-clear the trigger.
     if (get(Reset) >= 0.5f) {
         resetPhases();
@@ -316,13 +319,7 @@ void PendulumSynth::render(float* out, int32_t frames) {
     int live = 0;
     for (auto& v : voices_)
         if (v.active) ++live;
-    if (live == 0 && heldCount_ == 0 && peak <= 1.0e-5f) {
-        quietSamples_ += (uint64_t)frames;
-        if (quietSamples_ > kIdleSamples) idle_ = true;
-    } else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
+    gate_.observe(live > 0 || heldCount_ > 0 || peak > 1.0e-5f, frames, gateEpoch);
 
     publish(count, baseInc, spread, motion, steps, rateMult, cycleSamp);
 }

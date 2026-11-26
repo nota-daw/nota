@@ -81,7 +81,7 @@ void AutoShift::wake() {
 }
 
 void AutoShift::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetReq_.exchange(false, std::memory_order_relaxed)) resetAnalysis();
     switch (learnReq_.exchange(0, std::memory_order_relaxed)) {
     case 1:
@@ -181,11 +181,6 @@ void AutoShift::process(float* buf, int32_t frames) {
     midiN_ = 0;
     midiLiveA_.store(midiFed_ ? 1.0f : 0.0f, std::memory_order_relaxed);
     midiFed_ = false;
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 // Telemetry, the pitch-class histogram, then the three histories (oldest first).
@@ -194,7 +189,7 @@ int32_t AutoShift::scopeRead(float* out, int32_t maxSamples) const {
     float t[kTele] = {};
     for (int k = 0; k < kTele; ++k) t[k] = tele_[(size_t)k].load(std::memory_order_relaxed);
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Latency] = (float)lat_;
     t[S_MidiLive] = midiLiveA_.load(std::memory_order_relaxed);
     t[S_Ratio] = ratioA_.load(std::memory_order_relaxed);

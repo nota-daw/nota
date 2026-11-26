@@ -113,7 +113,10 @@ class BassSynth final : public Instrument {
 
     // The mod wheel (CC1) moves the Mod Wheel control, as a learned knob would (specs/020).
     void controller(int32_t ctl, float value) override;
-    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    void setSampleRate(double sr) override {
+        sampleRate_ = sr > 0 ? sr : 44100.0;
+        gate_.prepare(sampleRate_, 0.0);
+    }
     // Envelope telemetry for the editor's graphs: the newest sounding voice's amp-env stage
     // and progress, then the filter env's (stage 0 A · 1 D · 2 S · 3 R · 4 none).
     int32_t scopeRead(float* out, int32_t maxN) const override {
@@ -151,8 +154,12 @@ class BassSynth final : public Instrument {
     // line). Idle only when no voice is sounding — then the voice loop adds
     // exact zeros and the output drive maps silence to silence.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     void render(float* out, int32_t frames) override;
 
@@ -224,7 +231,7 @@ class BassSynth final : public Instrument {
     std::atomic<float> pn_[kNumParams];
     int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
     std::atomic<float> envTele_[4]; // amp stage, amp progress, filter stage, filter progress
-    bool idle_ = false; // sleep flag: set when no voice sounds
+    dsp::SilenceGate gate_{0};
 };
 
 } // namespace nota

@@ -281,9 +281,8 @@ class Forge : public Device {
     double beatStart_ = 0, spb_ = 0;
     bool playing_ = false;
     float inPkM_ = 0, outPkM_ = 0, msIn_ = 0, msOut_ = 0, inLvl_ = 0;
-    double cpuS_ = 0.0;
     std::atomic<float> lfoLive_{0.5f}, driveModLive_{0.0f}, toneLive_{0.0f}, envA_{0.0f}, inLvlA_{0.0f};
-    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, inRmsA_{-120.0f}, outRmsA_{-120.0f}, cpuA_{0.0f},
+    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, inRmsA_{-120.0f}, outRmsA_{-120.0f},
         srA_{44100.0f};
     std::atomic<bool> resetReq_{false};
 

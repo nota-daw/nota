@@ -15,6 +15,7 @@ namespace nota {
 
 // --- live MIDI, arming, recording ------------------------------------------
 void Engine::setTrackArmed(int32_t trackId, bool armed) {
+    if (hybrid_) hybrid_->invalidate(true);
     auto t = findTrackAuthoring(trackId);
     const bool wasArmed = t && t->armed();
     if (t) t->setArmed(armed);
@@ -187,6 +188,7 @@ const CaptureLayoutSnapshot* Engine::layoutFor(uint32_t generation) const {
 
 // --- live input monitoring ---------------------------------------------------
 void Engine::setTrackMonitor(int32_t trackId, bool on) {
+    if (hybrid_) hybrid_->invalidate(true);
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return;
     t->setMonitor(on);
@@ -641,6 +643,7 @@ static MidiEvent liveEvent(bool on, int32_t pitch, float v, int32_t expr, int32_
 }
 
 void Engine::noteOn(int32_t pitch, float velocity, int32_t source, int32_t channel) {
+    if (hybrid_) hybrid_->invalidate(true);
     {
         std::lock_guard<std::mutex> lk(liveMidiMx_);
         liveMidi_.push(liveEvent(true, pitch, velocity, -1, source, channel));
@@ -648,6 +651,7 @@ void Engine::noteOn(int32_t pitch, float velocity, int32_t source, int32_t chann
     if (pitch >= 0 && pitch < 128) liveHeld_[pitch >> 5].fetch_or(1u << (pitch & 31), std::memory_order_relaxed);
 }
 void Engine::noteOff(int32_t pitch, float releaseVelocity, int32_t source, int32_t channel) {
+    if (hybrid_) hybrid_->invalidate(true);
     {
         std::lock_guard<std::mutex> lk(liveMidiMx_);
         liveMidi_.push(liveEvent(false, pitch, std::clamp(releaseVelocity, 0.0f, 1.0f), -1, source, channel));
@@ -881,7 +885,7 @@ void Engine::cutGrowingLane(MidiTakeLane& l) {
         el = l.player->playedBeats.load(std::memory_order_relaxed);
     if (auto old = findTrackAuthoring(l.trackId); old && l.scene < static_cast<int32_t>(old->sessionSlots.size())) {
         auto nt = cloneTrack(*old);
-        SessionSlot& sl = nt->sessionSlots[static_cast<size_t>(l.scene)];
+        SessionSlot& sl = nt->sessionSlots.write()[static_cast<size_t>(l.scene)];
         double len = roundedTakeBeats(el);
         if (cutShort) len = std::min(len, l.lenBeats);
         sl.lengthBeats = len;
@@ -1130,7 +1134,7 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
                 MidiClip c;
                 c.startBeat = playhead;
                 c.lengthBeats = 4.0;
-                nt->midiClips.push_back(c);
+                nt->midiClips.write().push_back(c);
                 idx = static_cast<int32_t>(nt->midiClips.size()) - 1;
                 TakePushScope takePush(*this); // the take's own clip (specs/078)
                 republishWithTrack(instT->id(), nt);
@@ -1743,10 +1747,11 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
     if (lane.scene >= 0) {
         const int32_t scene = lane.scene;
         recordSessionAudio_ = false;
-        if (static_cast<int32_t>(nt->sessionSlots.size()) < authoring_->sceneCount)
-            nt->sessionSlots.resize(authoring_->sceneCount);
-        if (scene < static_cast<int32_t>(nt->sessionSlots.size())) {
-            SessionSlot& s = nt->sessionSlots[scene];
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) < authoring_->sceneCount)
+            slots.resize(authoring_->sceneCount);
+        if (scene < static_cast<int32_t>(slots.size())) {
+            SessionSlot& s = slots[scene];
             s.hasClip = true;
             s.audio = AudioClip{};
             s.audio.sample = sample;
@@ -1819,8 +1824,9 @@ void Engine::materialiseCaptureLane(CaptureLane& lane, const TakeGeometry& g) {
         ne = beatAtFrame(clip.startBeat, kept);
     }
     if (ne <= ns) return;
-    overwriteAudioClipsInRange(nt->clips, ns, ne, spb);
-    nt->clips.push_back(clip);
+    auto& clipsW = nt->clips.write();
+    overwriteAudioClipsInRange(clipsW, ns, ne, spb);
+    clipsW.push_back(clip);
     republishWithTrack(trackId, nt);
 }
 
@@ -1859,7 +1865,8 @@ void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size
         takes.push_back(std::move(k));
     }
 
-    overwriteAudioClipsInRange(nt.clips, loopStartBeat,
+    auto& clipsW = nt.clips.write();
+    overwriteAudioClipsInRange(clipsW, loopStartBeat,
                                beatAtFrame(static_cast<double>(loopFrames)), authoringSamplesPerBeat());
     std::vector<std::pair<size_t, size_t>> open{{0, loopFrames}}; // loop frames no newer pass covers yet
     for (size_t i = passes.size(); i-- > 0 && !open.empty();) {
@@ -1877,13 +1884,14 @@ void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size
             clip.sourceOffsetFrames = static_cast<double>(s);
             clip.lengthFrames = static_cast<int64_t>(e - s);
             clip.takeId = takes[i].id;
-            nt.clips.push_back(std::move(clip));
+            clipsW.push_back(std::move(clip));
             if (a < s) rest.emplace_back(a, s);
             if (e < b) rest.emplace_back(e, b);
         }
         open = std::move(rest);
     }
-    for (auto& k : takes) nt.takes.push_back(std::move(k));
+    auto& takesW = nt.takes.write();
+    for (auto& k : takes) takesW.push_back(std::move(k));
 }
 
 double Engine::latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,

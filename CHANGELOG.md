@@ -57,18 +57,41 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   `rename_midi_output_role`, `rebind_midi_output_role`, `delete_midi_output_role`;
   `set_track_midi_input` / `get_track_midi_input` take and report a list of ports with their
   channels.
+- **Engine performance (#1050, specs/115)**: Introduced polymorphic `AudioSource` / `MemoryAudioSource` / `StreamingAudioSource` disk streaming (`Media`) with wait-free seqlock page rings (`kPageFrames = 8192`, `kRingPages = 32`), pinned head pages, sleep-on-idle `StreamingIoScheduler` (`0.0%` idle CPU), bounded-memory peak/RMS overview scanning, `AudioImportJob` streaming threshold support, and `nota_sample_read` extraction (auto-streaming WAV/FLAC/MP3 files above `16 MiB` decoded PCM threshold while keeping `AR-6` audio-thread safety); plus opt-in `HybridBufferController` (`HybridBufferMode::Auto`) pre-rendering non-live Arrangement tracks in `1024`-frame background chunks while keeping record-armed, monitored, live-MIDI, Session, sidechain, and mixer/fader controls at hardware buffer latency with epoch-based instant invalidation.
+- **Engine performance (#1050, specs/115)**: Extracted DAG wave scheduler and device-chain executor into `RenderGraphExecutor` (shrinking `Engine_Render.cpp`), added cache-aligned `JobSlot` and lock-free ABA-safe cooperative sub-task execution (`AudioThreadPool` + `dsp::RenderExecutor`) powering parallel Group depth/key waves and Return key waves with deterministic index reduction, intra-track multi-chain rack parallelism (`RackInstrument`, `DrumRack`, `RackDevice` via `ChainScratchBank`), deterministic polyphonic synth voice batching (`WavetableSynth`, `Twin`, `Consort` via `PolyVoiceScheduler`), contiguous planar `PluginEffect` chains (`AudioBufferView` / `PlanarStereoBuffer` eliminating intermediate deinterleave/interleave passes), vetted macOS AudioUnit parallel rendering (`hosting::isParallelRenderSafe`), and over-budget RT hysteresis + fast 2-block attack with zero offline `steady_clock` overhead.
+- **Engine performance (#1050, specs/115)**: Copy-on-Write (`CowSlice`) backing for track clip/automation/slot snapshots with incremental `publishRaw()` / single-pass `recomputePdc()` / unchanged `recomputeRouting()` skipping, session-sized `StereoScratchArena` & `RenderScratch` buffers (`2048` live frames growing safely for offline bounces), `Eq` per-band coefficient caching + `double2` stereo SIMD filter chains (`float64x2_t` NEON / `__m128d` SSE2), clean header-only `Simd` (`complexMulAdd`, `dot`, `maxAbs`, `peakAndSumSquares`) + `SimdAudio` + `accumulatePackedSpectrum` (`Chamber`, `Convolution`), `-fno-math-errno`, and Release ThinLTO.
 
 ### Changed
 - MIDI controller feedback (LEDs, motor faders, SysEx) and External MIDI share one owner of
   each MIDI output, so a port that is both works on Windows, which opens an output for one
   program part at a time.
 - Projects are saved as format 36; earlier projects open unchanged.
+- **Timeline indexing and precompiled render routing plans** (#1050, specs/115) replace linear
+  per-block arrangement scans and track-graph lookups with immutable snapshot indices.
+  Per-track `TimelineIndex` structures resolve active MIDI/audio clips, overlapping notes, and
+  envelope/automation/CC curve segments in O(log N + k) time via binary search and chunk
+  max-end segment trees, while `RenderRoutingPlan` precompiles sorted track-ID lookups,
+  group ancestry, sidechain-consumer tracks, live MIDI-In caches, and generation-guarded
+  automation, CV-modulation, and Arp-CC endpoints on publish.
+- **Idle instrument, plugin, and submix-bus sleep gating** (#1050, specs/115) removes silent-track
+  DSP overhead via a shared lock-free `SilenceGate` and per-block `ActiveBusMask`. All 10 remaining
+  built-in synths, nested racks (`RackInstrument`, `DrumRack`, `RackDevice`), and hosted plugins now
+  auto-sleep cleanly once tails finish (with per-device `PluginSleepMode` `Auto` / `Never`
+  control across the C ABI and `IAudioEngine`), while idle Group and Return buses skip redundant
+  clearing, chain execution, panning, and metering.
+- **Large-project meter polling and built-in device CPU timing** (#1050, specs/115) cut idle and UI
+  overhead without changing audio output. Desktop views (`ArrangementView`, `MixerView`,
+  `SessionView`) read all post-fader track meters in one engine snapshot (`nota_engine_read_track_meters`)
+  instead of per-track C ABI calls, and built-in devices and synths gate per-block clock
+  measurements behind `DeviceTelemetry` (`OnDemand` by default with a 3-second card-open lease,
+  plus `AlwaysOff` and `AlwaysOn`).
 
 ### Fixed
 - **More than 16 MIDI inputs no longer play as one another** (#1011). Nota listens to 16 MIDI
   inputs; a 17th used to share the 16th's place, so a track listening to one heard the other
   (and their half-sent messages could mix). Now an input past the limit isn't connected, and
   Settings ▸ MIDI and MCP `list_midi_devices` say so — switch another off to use it.
+- **Open VST3 and AudioUnit plugin editor keep-awake (#1050)**: Native VST3 and AudioUnit plugin UIs no longer freeze when the plugin goes silent, sits on a stopped audio track, muted track, group/return bus, or nested rack, or runs inside the Hybrid anticipative pool (`SilenceGate::holdAwake_`, lock-free `EditorHost::open_`, track/bus/rack active-editor propagation, and live Hybrid bypass without overwriting `PluginSleepMode`).
 
 ## [0.61.1] — 2026-11-24
 

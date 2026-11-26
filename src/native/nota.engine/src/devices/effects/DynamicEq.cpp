@@ -122,8 +122,8 @@ dsp::BiquadCoeffs DynamicEq::buildOne(int type, double sr, double f0, double gai
 }
 
 void DynamicEq::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
     if (frames <= 0) return;
+    const auto cpuTimer = blockTimer(frames, sr_);
     const double sr = sr_;
     const float* sc = (scBuf_ && scFrames_ >= frames) ? scBuf_ : nullptr;
     const double scGain = fast_math::dbToLin(sidechainGainDb());
@@ -313,11 +313,6 @@ void DynamicEq::process(float* buf, int32_t frames) {
     outPk_ = std::max(outPk, outPk_ * fall);
     inPkA_.store(db(inPk_), std::memory_order_relaxed);
     outPkA_.store(db(outPk_), std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / blockS) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 const char* DynamicEq::paramName(int32_t i) const {
@@ -399,7 +394,7 @@ int32_t DynamicEq::scopeRead(float* out, int32_t maxSamples) const {
         t[S_Level + b] = lvlA_[b].load(std::memory_order_relaxed);
     }
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_InPeak] = inPkA_.load(std::memory_order_relaxed);
     t[S_OutPeak] = outPkA_.load(std::memory_order_relaxed);
     t[S_KeyLive] = keyLive_.load(std::memory_order_relaxed);

@@ -107,6 +107,7 @@ void Pentad::controller(int32_t ctl, float value) {
 int32_t Pentad::scopeRead(float* out, int32_t maxN) const {
     const int n = std::min<int>(maxN, kScopeN);
     for (int i = 0; i < n; ++i) out[i] = tele_[i].load(std::memory_order_relaxed);
+    if (n > ScCpu) out[ScCpu] = readScopeCpuLoad();
     return n;
 }
 
@@ -171,6 +172,7 @@ void Pentad::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> Pentad::clone() const {
@@ -287,6 +289,7 @@ void Pentad::noteOff(int32_t pitch) {
 }
 
 void Pentad::noteExpression(int32_t pitch, int32_t dim, float value) {
+    wake();
     if (pitch < 0) {
         gexpr_.set(dim, value);
         return;
@@ -299,9 +302,12 @@ void Pentad::noteExpression(int32_t pitch, int32_t dim, float value) {
 }
 
 void Pentad::render(float* out, int32_t frames) {
-    dsp::ScopedNoDenormals ftz;
-    const auto t0 = std::chrono::steady_clock::now();
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
     const double pr = pendingRate_.load(std::memory_order_relaxed);
+    if (skip && pr == sampleRate_) return;
+    dsp::ScopedNoDenormals ftz;
+    const auto cpuTimer = blockTimer(frames, pr, 0.05);
     if (pr != sampleRate_) { // voices keep playing; only rate-derived state restarts
         sampleRate_ = pr;
         fadeLen_ = std::max(1, static_cast<int>(0.004 * sampleRate_));
@@ -318,23 +324,14 @@ void Pentad::render(float* out, int32_t frames) {
     }
     // Sleep: no sounding voice plus a silent block means the tail (voices and
     // the HIIR decimator drain) has settled; the hangover covers the drain.
-    if (activeCount_ == 0 && chunkOutPeak_ <= 1.0e-5f) quietSamples_ += (uint64_t)frames;
-    else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
-    if (quietSamples_ > kIdleHangover) idle_ = true;
+    gate_.observe(activeCount_ > 0 || chunkOutPeak_ > 1.0e-5f, frames, gateEpoch);
     chunkOutPeak_ = 0.0f;
     tFrames_ += frames;
-    const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    const double avail = frames / sampleRate_;
-    if (avail > 0.0) cpu_ += 0.05 * (el / avail - cpu_);
     publishTelemetry(frames);
 }
 
 void Pentad::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 int Pentad::allocate(int N, bool& fade) {
@@ -939,7 +936,7 @@ void Pentad::publishTelemetry(int32_t /*frames*/) {
     tele_[ScPeakL].store(peakL_, std::memory_order_relaxed);
     tele_[ScPeakR].store(peakR_, std::memory_order_relaxed);
     tele_[ScMixPeak].store(mixPeak_, std::memory_order_relaxed);
-    tele_[ScCpu].store(static_cast<float>(cpu_), std::memory_order_relaxed);
+    tele_[ScCpu].store(telemetryCpuLoad(), std::memory_order_relaxed);
     tele_[ScOs].store(static_cast<float>(osCur_), std::memory_order_relaxed);
     tele_[ScRate].store(static_cast<float>(sampleRate_), std::memory_order_relaxed);
     for (int v = 0; v < kMaxVoices; ++v)

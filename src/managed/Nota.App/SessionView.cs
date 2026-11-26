@@ -353,6 +353,7 @@ public sealed partial class SessionView : UserControl
         _sessionActive = active;
 
         SnapshotMixInfo();   // mixer sections and armed slots follow the engine (specs/054)
+        _meterBatch.Refresh(_engine);
         // Cells repaint only when their state moved or while they animate (progress, blink).
         foreach (var c in _cols)
         {

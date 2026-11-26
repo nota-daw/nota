@@ -17,6 +17,9 @@
 #include <vector>
 
 #include "devices/EditorPreview.h"
+#include "dsp/core/AudioSpan.h"
+#include "dsp/core/DeviceTelemetry.h"
+#include "dsp/core/SilenceGate.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
@@ -60,7 +63,10 @@ class Device {
     // The rack behind this device, if it is one (specs/044): a virtual call where the audio
     // thread walks rack chains every block, instead of a dynamic_cast per device.
     virtual const RackCore* asRack() const { return nullptr; }
-    virtual ~Device() = default;
+    virtual ~Device() {
+        if (countedNeverSleep_.exchange(false, std::memory_order_acq_rel))
+            dsp::gNeverSleepDevices.fetch_sub(1, std::memory_order_relaxed);
+    }
 
     // Which device this is, across the copies an edit swaps into its slot (a rack fork, a
     // loaded state): a new object gets a new id, a copy is given its source's. Take retry
@@ -72,16 +78,25 @@ class Device {
     // changes). maxBlock is the largest frame count a process() call may pass.
     virtual void setSampleRate(double sr, int32_t maxBlock) = 0;
 
+    // Pre-allocate scratch capacity for blocks up to `frames` (non-RT preparation; no-op by default).
+    virtual void ensureBlockCapacity(int32_t /*frames*/) {}
+
     // Process `frames` of interleaved stereo in place. Audio thread; no locks.
     virtual void process(float* buf, int32_t frames) = 0;
+
+    // Optional native planar stereo path (PluginEffect etc.) avoiding interleaved
+    // round-trips across contiguous planar inserts. Audio thread; no locks.
+    virtual bool prefersPlanar() const { return false; }
+    virtual void processPlanar(dsp::PlanarAudioSpan /*io*/, int32_t /*frames*/) {}
 
     // Reported processing latency, for future PDC (M3-7).
     virtual int32_t latencySamples() const { return 0; }
 
-    // Native editor GUI (M3-4). Message thread only.
+    // Native editor GUI (M3-4). Message thread to open/close; editorOpen() is audio-thread safe.
     virtual void openEditor() {}
     virtual void closeEditor() {}
     virtual bool editorOpen() const { return false; }
+    virtual void setEditorOpenForTest(bool /*open*/) {}
 
     // Opaque plugin state (M3-5), for project save/restore. Message thread only.
     virtual std::vector<uint8_t> getState() const { return {}; }
@@ -208,7 +223,20 @@ class Device {
     // existing device keeps rendering until it opts in. Audio thread.
     virtual bool hasTail() const { return false; }
     virtual bool isIdle() const { return false; }
+    virtual bool requiresActiveProcessing() const {
+        return sleepMode() == dsp::PluginSleepMode::Never || editorOpen();
+    }
     virtual void wake() {}
+    virtual void setSleepMode(dsp::PluginSleepMode mode) {
+        sleepMode_.store(mode, std::memory_order_release);
+        const bool never = (mode == dsp::PluginSleepMode::Never);
+        const bool prev = countedNeverSleep_.exchange(never, std::memory_order_acq_rel);
+        if (prev != never) dsp::gNeverSleepDevices.fetch_add(never ? 1 : -1, std::memory_order_relaxed);
+        wake();
+    }
+    virtual dsp::PluginSleepMode sleepMode() const {
+        return sleepMode_.load(std::memory_order_relaxed);
+    }
 
     // Live gain reduction (dB, >=0) for metering/visualization. Non-zero only for
     // dynamics devices (the built-in Compressor); others report 0. Audio thread
@@ -334,7 +362,23 @@ class Device {
     const EditorPreview& editorPreview() const { return preview_; }
     void setEditorPreview(EditorPreview p) { preview_ = std::move(p); }
 
+    // Per-device CPU telemetry (on-demand clock gating on the audio thread).
+    dsp::TelemetryMode telemetryMode() const noexcept { return telemetry_.mode(); }
+    virtual void setTelemetryMode(dsp::TelemetryMode mode) { telemetry_.setMode(mode); }
+    void observeTelemetry() const noexcept { telemetry_.observe(); }
+    float telemetryCpuLoad() const noexcept { return telemetry_.cpuLoad(); }
+
+  protected:
+    dsp::DeviceTelemetry::ScopedBlockTimer blockTimer(int32_t frames, double sampleRate, double smoothing = 0.1) noexcept {
+        return dsp::DeviceTelemetry::ScopedBlockTimer(telemetry_, frames, sampleRate, smoothing);
+    }
+    float readScopeCpuLoad() const noexcept { return telemetry_.observeAndReadCpu(); }
+    void resetTelemetry() noexcept { telemetry_.reset(); }
+
   private:
+    mutable dsp::DeviceTelemetry telemetry_;
+    std::atomic<dsp::PluginSleepMode> sleepMode_{dsp::PluginSleepMode::Auto};
+    std::atomic<bool> countedNeverSleep_{false};
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
     int32_t presetTag_ = 0;

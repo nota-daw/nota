@@ -69,6 +69,7 @@ class Synth final : public Instrument {
     void setSampleRate(double sr) override {
         sampleRate_ = sr > 0 ? sr : 44100.0;
         exprCoef_ = exprSmoothCoef(sampleRate_);
+        gate_.prepare(sampleRate_, 0.0);
     }
 
     // MPE: bend → pitch, pressure → level + brightness, slide → cutoff (±2 octaves).
@@ -110,12 +111,17 @@ class Synth final : public Instrument {
     // Idle only when no voice is sounding — then the render loop provably
     // writes nothing, so the block is silent by construction.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     void render(float* out, int32_t frames) override;
 
   private:
+    NOTA_NOINLINE bool renderBlock(float* out, int32_t frames);
     static constexpr double kPi = 3.14159265358979323846;
     static constexpr double kSqrt2 = 1.41421356237309504880; // equal-power pan back to unity at centre
     static constexpr int kMaxUnison = 7;
@@ -189,7 +195,7 @@ class Synth final : public Instrument {
     float exprCoef_ = exprSmoothCoef(44100.0);
     GlobalExpr gexpr_;                  // pitch wheel / channel pressure (pitch −1)
     std::atomic<float> pn_[kNumParams]; // normalized param values
-    bool idle_ = false;                 // sleep flag: set when no voice sounds
+    dsp::SilenceGate gate_{0};
 };
 
 } // namespace nota

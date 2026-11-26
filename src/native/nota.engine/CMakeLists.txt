@@ -103,13 +103,16 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Engine_Takes.cpp
     src/engine/Engine_TakeRetry.cpp
     src/engine/Engine_Render.cpp
+    src/engine/RenderGraphExecutor.cpp
     src/engine/Audition.cpp
     src/engine/AudioThreadPool.cpp  # fork-join pool
+    src/engine/HybridBufferController.cpp
     src/media/WarpStream.cpp
     src/media/TempoDetect.cpp
     src/media/SampleAnalysis.cpp
     src/media/AudioFile.cpp
     src/media/AudioImport.cpp
+    src/media/StreamingAudioSource.cpp
     src/media/SampleBuffer.cpp  # peak-table math (.h/.cpp)
     src/audio_io/AudioBackendFactory.cpp   # platform-selected backend construction
     src/audio_io/NotaConfigFile.cpp        # per-user data dir + atomic file IO (all platforms)
@@ -137,6 +140,8 @@ set(NOTA_ENGINE_SOURCES
     src/engine/ArticulationSchedule.cpp
     src/engine/ArticulationTable.cpp
     src/engine/Graph.cpp
+    src/engine/RenderRoutingPlan.cpp
+    src/engine/TimelineIndex.cpp
     src/engine/Track.cpp
     src/engine/Transport.cpp
     src/engine/SessionPlayer.cpp
@@ -289,6 +294,22 @@ target_include_directories(nota_engine SYSTEM PRIVATE
 
 target_compile_definitions(nota_engine PRIVATE
     NOTA_VERSION_STRING="${PROJECT_VERSION}")
+
+# Keep GCC on baseline -O3 math semantics so libm/vectorization stays regression-free;
+# Clang/ThinLTO benefits cleanly from -fno-math-errno.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
+    target_compile_options(nota_engine PRIVATE -fno-math-errno)
+endif()
+
+# Release-mode IPO (ThinLTO on Clang, LTCG on MSVC) for cross-TU inlining across DSP and ABI boundaries.
+# GCC's monolithic -flto hurts instruction counts across large polyphonic synth loops on Linux.
+if(MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT _nota_ipo_ok OUTPUT _nota_ipo_err LANGUAGES C CXX)
+    if(_nota_ipo_ok)
+        set_property(TARGET nota_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    endif()
+endif()
 
 # Output a stable name: libnota_engine.dylib / nota_engine.dll (consumed by P/Invoke).
 set_target_properties(nota_engine PROPERTIES
@@ -477,16 +498,20 @@ if(APPLE)
     target_link_libraries(nota-scanworker PRIVATE "-framework CoreAudioKit")
 endif()
 
-# A real, deterministic VST3 for hosted render-pool regression tests. It stays in
-# the build tree: never copied into a user's plugin directory or app package.
-option(NOTA_BUILD_RENDER_PROBE "Build the hosted render-pool test VST3" ON)
+# A real, deterministic VST3 (and AU on macOS) for hosted render-pool regression tests.
+# Stays in the build tree: never copied into a user's plugin directory or app package.
+option(NOTA_BUILD_RENDER_PROBE "Build the hosted render-pool test plugin" ON)
 if(NOTA_BUILD_RENDER_PROBE)
+    set(NOTA_RENDER_PROBE_FORMATS VST3)
+    if(APPLE)
+        list(APPEND NOTA_RENDER_PROBE_FORMATS AU)
+    endif()
     juce_add_plugin(nota-render-probe
         COMPANY_NAME Nota
         PLUGIN_MANUFACTURER_CODE Nota
         PLUGIN_CODE Nrpr
         PRODUCT_NAME "Nota Render Probe"
-        FORMATS VST3
+        FORMATS ${NOTA_RENDER_PROBE_FORMATS}
         IS_SYNTH TRUE
         NEEDS_MIDI_INPUT TRUE
         COPY_PLUGIN_AFTER_BUILD FALSE

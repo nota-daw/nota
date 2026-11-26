@@ -186,7 +186,6 @@ class Ceiling : public Device {
     double cGrSum_ = 0.0, cRelSum_ = 0.0;
     float pkInHold_ = -120.0f, pkOutHold_ = -120.0f, maxGrHold_ = 0.0f, tpHold_ = -120.0f;
     int64_t clips_ = 0;
-    double cpuS_ = 0.0;
 
     std::array<std::array<float, kLvl>, kLvlSeries> lvl_{};
     std::array<std::array<float, kLoud>, kLoudSeries> loud_{};
@@ -196,7 +195,7 @@ class Ceiling : public Device {
     std::atomic<float> lufsM_{-120.0f}, lufsS_{-120.0f}, lufsI_{-120.0f}, lraA_{0.0f};
     std::atomic<float> pkInHoldA_{-120.0f}, pkOutHoldA_{-120.0f}, maxGrHoldA_{-120.0f}, tpHoldA_{-120.0f},
         clipsA_{0.0f};
-    std::atomic<float> relNowA_{120.0f}, deltaA_{0.0f}, srA_{44100.0f}, cpuA_{0.0f}, measuredA_{0.0f}, maxMA_{-120.0f},
+    std::atomic<float> relNowA_{120.0f}, deltaA_{0.0f}, srA_{44100.0f}, measuredA_{0.0f}, maxMA_{-120.0f},
         maxSA_{-120.0f};
     std::atomic<bool> resetPeaksReq_{false}, resetLoudReq_{false};
     std::atomic<int32_t> scTrackId_{-1};

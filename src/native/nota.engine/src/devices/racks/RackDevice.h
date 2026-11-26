@@ -16,6 +16,7 @@
 #include <algorithm>
 
 #include "RackCore.h"
+#include "dsp/core/ScratchArena.h"
 
 #include <cstring>
 
@@ -29,6 +30,14 @@ class RackDevice final : public Device, public RackCore {
     bool hostsPlugin() const override { return chainsHostPlugin(); }
 
     void setSampleRate(double sr, int32_t maxBlock) override { setRates(sr, maxBlock); }
+    void ensureBlockCapacity(int32_t frames) override {
+        arena_.ensureCapacity(frames);
+        ensureChainBlockCapacity(frames);
+    }
+    void setTelemetryMode(dsp::TelemetryMode mode) override {
+        Device::setTelemetryMode(mode);
+        RackCore::setTelemetryMode(mode);
+    }
 
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }
@@ -36,6 +45,20 @@ class RackDevice final : public Device, public RackCore {
 
     // ---- in-place processing: Parallel / Series / Select + dry-wet + gain ----
     void process(float* buf, int32_t frames) override;
+
+    bool hasTail() const override { return chainsHaveTail(); }
+    bool requiresActiveProcessing() const override {
+        return Device::requiresActiveProcessing() || chainsRequireActiveProcessing(false);
+    }
+    bool isIdle() const override {
+        if (requiresActiveProcessing() || hasPendingRetire()) return false;
+        return chainsIdle(false);
+    }
+    void wake() override { wakeChains(false); }
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Device::setSleepMode(mode);
+        wake();
+    }
 
     // PDC: report chain latency only when compensation is on. Series accumulates
     // along the path; parallel/select align to the longest chain.
@@ -51,13 +74,18 @@ class RackDevice final : public Device, public RackCore {
 
     // ---- persistence + clone (shared blob) ----------------------------------
     std::vector<uint8_t> getState() const override { return serialize(); }
-    void setState(const uint8_t* data, int32_t size) override { deserialize(data, size); }
+    void setState(const uint8_t* data, int32_t size) override {
+        deserialize(data, size);
+        ensureChainBlockCapacity(arena_.capacityFrames());
+        wake();
+    }
     std::shared_ptr<Device> clone() const override;
 
   private:
-    float input_[kMaxBlock * 2];
-    float acc_[kMaxBlock * 2];
-    float scratch_[kMaxBlock * 2];
+    NOTA_NOINLINE void processActive(RackState& st, float* buf, int32_t frames);
+    NOTA_NOINLINE void processEmptySingleChain(RackState& st, float* buf, int32_t frames);
+    NOTA_NOINLINE void processChunk(RackState& st, float* buf, int32_t frames);
+    dsp::StereoScratchArena<3> arena_;
 };
 
 } // namespace nota

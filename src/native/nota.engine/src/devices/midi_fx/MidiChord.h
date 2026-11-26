@@ -82,6 +82,7 @@ class MidiChord final : public MidiDevice {
 
     void process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int maxOut, int32_t frames, double beatStart,
         double spb, bool playing) override;
+    bool isIdle() const override { return nPend_ == 0 && held_ == 0; }
 
   private:
     struct Key {

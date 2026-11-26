@@ -77,7 +77,7 @@ void BeatRepeat::wake() {
 }
 
 void BeatRepeat::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetReq_.exchange(false, std::memory_order_relaxed)) {
         repeating_ = false;
         forced_ = false;
@@ -272,11 +272,6 @@ void BeatRepeat::process(float* buf, int32_t frames) {
     playA_.store(playing_ ? 1.0f : 0.0f, std::memory_order_relaxed);
     tsA_.store((float)tsNum_, std::memory_order_relaxed);
     barBeatsA_.store((float)barBeats, std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 
     // Auto-sleep: silent input settles only once the transport is stopped and no burst
     // is sounding. While playing, interval boundaries keep firing Chance rolls (which
@@ -310,7 +305,7 @@ int32_t BeatRepeat::scopeRead(float* out, int32_t maxSamples) const {
     t[S_Bar] = barA_.load(std::memory_order_relaxed);
     t[S_BeatInBar] = beatA_.load(std::memory_order_relaxed);
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Latency] = 0.0f;
     t[S_Forced] = forcedA_.load(std::memory_order_relaxed);
     t[S_Gain] = gainA_.load(std::memory_order_relaxed);

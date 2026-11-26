@@ -4,6 +4,7 @@
 // Engine — hosted plugins & device chain (M3): load instrument/effect, device CRUD/params/bypass/editor/state, clone helpers, kind/id introspection, PDC latency.
 
 #include "Engine.h"
+#include "HybridBufferController.h"
 #include "ParamResolve.h"
 #include "devices/DeviceFactory.h"
 #include "devices/racks/MidiRack.h"
@@ -58,6 +59,7 @@
 #include "devices/effects/Utility.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <vector>
 
@@ -1149,8 +1151,9 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
         // An instrument lane for a parameter the new track already automates takes that lane's
         // place, so there is one lane per parameter (edits and recording find the first one).
         TrackLane* same = nullptr;
+        auto& dstLanes = nd->automation.write();
         if (inst && !l.nested())
-            for (auto& d : nd->automation)
+            for (auto& d : dstLanes)
                 if (!d.nested() && d.target == AutomationTarget::PluginParam && d.deviceIndex < 0
                     && (l.paramId.empty() ? d.paramId.empty() && d.paramIndex == l.paramIndex : d.paramId == l.paramId)) {
                     same = &d;
@@ -1160,7 +1163,7 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
             same->paramIndex = l.paramIndex;
             same->points = std::move(l.points);
         } else
-            nd->automation.push_back(std::move(l));
+            dstLanes.push_back(std::move(l));
     }
 
     const bool dropSource = inst && !keepSource;
@@ -1453,6 +1456,7 @@ float Engine::midiEffectGetParam(int32_t t, int32_t i, int32_t p) const {
 void Engine::midiEffectSetParam(int32_t t, int32_t i, int32_t p, float v) {
     routeCvBaseEdit(2, t, i, p, v);
     if (auto* m = midiDeviceAt(t, i)) m->setParam(p, v);
+    if (hybrid_) hybrid_->invalidate(true);
 }
 std::vector<uint8_t> Engine::midiEffectGetState(int32_t t, int32_t i) const {
     auto* m = midiDeviceAt(t, i);
@@ -1626,6 +1630,7 @@ void Engine::deviceSetParam(int32_t trackId, int32_t deviceIndex, int32_t paramI
     if (auto* d = deviceAt(trackId, deviceIndex)) {
         if (d->isLatencyConfigurationParam(paramIndex)) {
             setLatencyConfigurationParam(*d, paramIndex, value);
+            if (hybrid_) hybrid_->invalidate(true);
             return;
         }
         // Keep the CV base and the immediately visible value in step.
@@ -1634,6 +1639,7 @@ void Engine::deviceSetParam(int32_t trackId, int32_t deviceIndex, int32_t paramI
         const int32_t latBefore = d->latencySamples();
         d->setParam(paramIndex, value);
         if (d->latencySamples() != latBefore) recomputePdc();
+        if (hybrid_) hybrid_->invalidate(true);
     }
 }
 
@@ -1643,6 +1649,7 @@ void Engine::setLatencyConfigurationParam(Device& device, int32_t param, float v
     const auto oldLatency = device.latencySamples();
     device.setParam(param, value);
     if (device.latencySamples() != oldLatency) recomputePdc(true);
+    if (hybrid_) hybrid_->invalidate(true);
 }
 float Engine::deviceGainReduction(int32_t trackId, int32_t deviceIndex) const {
     auto* d = deviceAt(trackId, deviceIndex);
@@ -1778,28 +1785,52 @@ bool Engine::instrumentAcceptsSidechain(int32_t trackId) const {
 // instrument pointers are stable across snapshots, so the table the audio thread reads
 // stays valid).
 void Engine::recomputeRouting() {
-    // Slots at and past the count are always free, so only the used ones need clearing.
-    const int32_t used = routeSlotCount_.load(std::memory_order_relaxed);
-    routeSlotCount_.store(0, std::memory_order_release);
-    for (int32_t s = 0; s < used; ++s) routeSlotTrackId_[s].store(-1, std::memory_order_relaxed);
+    // Compute candidate slot assignments first; if identical to live table, skip atomic clears
+    // and avoid invalidating audio-thread routeSlot caches unnecessarily.
+    struct Candidate {
+        int32_t src = -1;
+        uint64_t part = 0;
+    };
+    Candidate nextList[kMaxRoutes];
     int32_t next = 0;
-    // A source that is not in the graph (its track was deleted; undo brings it back) gets no
-    // slot, so its consumers see no key at all rather than a silent one. A part key whose part
-    // is gone (the pad deleted, the rack replaced; specs/050) likewise.
+
     auto exists = [&](int32_t id, uint64_t part) {
         for (auto& t : authoring_->tracks)
             if (t->id() == id) return part == 0 || (t->instrument && t->instrument->partIndex(part) >= 0);
         return false;
     };
+    auto already = [&](int32_t src, uint64_t part) {
+        for (int32_t s = 0; s < next; ++s)
+            if (nextList[s].src == src && nextList[s].part == part) return true;
+        return false;
+    };
     auto claim = [&](int32_t src, uint64_t part) {
-        if (src < 0 || routeSlotFor(src, part) >= 0 || !exists(src, part)) return; // none / already assigned / gone
-        if (next < kMaxRoutes) {
-            routeSlotPart_[next].store(part, std::memory_order_relaxed);
-            routeSlotTrackId_[next++].store(src, std::memory_order_relaxed);
-            routeSlotCount_.store(next, std::memory_order_release); // claim() looks up as it goes
-        }
+        if (src < 0 || next >= kMaxRoutes || already(src, part) || !exists(src, part)) return;
+        nextList[next++] = {src, part};
     };
     forEachRouteKey([&](int32_t src, uint64_t part) { claim(src, part); });
+
+    const int32_t used = routeSlotCount_.load(std::memory_order_relaxed);
+    if (next == used) {
+        bool unchanged = true;
+        for (int32_t s = 0; s < used; ++s) {
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) != nextList[s].src ||
+                routeSlotPart_[s].load(std::memory_order_relaxed) != nextList[s].part) {
+                unchanged = false;
+                break;
+            }
+        }
+        if (unchanged) return;
+    }
+
+    routeSlotCount_.store(0, std::memory_order_release);
+    for (int32_t s = 0; s < used; ++s) routeSlotTrackId_[s].store(-1, std::memory_order_relaxed);
+    for (int32_t s = 0; s < next; ++s) {
+        routeSlotPart_[s].store(nextList[s].part, std::memory_order_relaxed);
+        routeSlotTrackId_[s].store(nextList[s].src, std::memory_order_relaxed);
+    }
+    routeSlotCount_.store(next, std::memory_order_release);
+    routingEpoch_.fetch_add(1, std::memory_order_release);
 }
 
 // Every route a consumer asks for, in claim order: track instruments and devices (and keyed
@@ -1972,6 +2003,7 @@ void Engine::openTrackEditor(int32_t trackId, int32_t deviceIndex) {
     } else if (deviceIndex < static_cast<int32_t>(t->devices.size())) {
         if (t->devices[deviceIndex]) t->devices[deviceIndex]->openEditor();
     }
+    if (hybrid_ && hybrid_->mode() == HybridBufferMode::Auto) hybrid_->invalidate(true);
 }
 
 void Engine::closeTrackEditor(int32_t trackId, int32_t deviceIndex) {
@@ -1982,6 +2014,7 @@ void Engine::closeTrackEditor(int32_t trackId, int32_t deviceIndex) {
     } else if (deviceIndex < static_cast<int32_t>(t->devices.size())) {
         if (t->devices[deviceIndex]) t->devices[deviceIndex]->closeEditor();
     }
+    if (hybrid_ && hybrid_->mode() == HybridBufferMode::Auto) hybrid_->invalidate(true);
 }
 
 bool Engine::trackEditorOpen(int32_t trackId, int32_t deviceIndex) const {
@@ -2062,6 +2095,31 @@ bool Engine::trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const {
     return t->devices[deviceIndex] && t->devices[deviceIndex]->bypassed();
 }
 
+bool Engine::setPluginSleepMode(int32_t trackId, int32_t deviceIndex, int32_t mode) {
+    if (mode != NOTA_PLUGIN_SLEEP_AUTO && mode != NOTA_PLUGIN_SLEEP_NEVER) return false;
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return false;
+    const auto policy = static_cast<dsp::PluginSleepMode>(mode);
+    if (deviceIndex == -1) {
+        if (!t->instrument) return false;
+        t->instrument->setSleepMode(policy);
+        return true;
+    }
+    if (deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size()) || !t->devices[deviceIndex]) return false;
+    t->devices[deviceIndex]->setSleepMode(policy);
+    return true;
+}
+
+int32_t Engine::pluginSleepMode(int32_t trackId, int32_t deviceIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return NOTA_PLUGIN_SLEEP_AUTO;
+    if (deviceIndex == -1)
+        return t->instrument ? static_cast<int32_t>(t->instrument->sleepMode()) : NOTA_PLUGIN_SLEEP_AUTO;
+    if (deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(t->devices.size()) || !t->devices[deviceIndex])
+        return NOTA_PLUGIN_SLEEP_AUTO;
+    return static_cast<int32_t>(t->devices[deviceIndex]->sleepMode());
+}
+
 void Engine::setTrackDeviceFolded(int32_t trackId, int32_t deviceIndex, bool folded) {
     auto t = findTrackAuthoring(trackId);
     if (!t) return;
@@ -2097,10 +2155,261 @@ int32_t Engine::trackLatencySamples(int32_t trackId) const {
 
 // Delay every track by (maxLatency - itsOwnLatency) so all outputs stay aligned.
 void Engine::recomputePdc(bool resetChangedDelays) {
+    const size_t n = authoring_->tracks.size();
+    std::array<int32_t, 512> stackLat{};
+    std::vector<int32_t> heapLat;
+    int32_t* lats = n <= stackLat.size() ? stackLat.data() : (heapLat.resize(n), heapLat.data());
     int32_t maxLat = 0;
-    for (auto& t : authoring_->tracks) maxLat = std::max(maxLat, trackLatency(*t));
-    for (auto& t : authoring_->tracks)
-        if (t->pdc) t->pdc->setDelay(maxLat - trackLatency(*t), resetChangedDelays);
+    for (size_t i = 0; i < n; ++i) {
+        const auto& t = authoring_->tracks[i];
+        const int32_t lat = t ? trackLatency(*t) : 0;
+        lats[i] = lat;
+        if (lat > maxLat) maxLat = lat;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        const auto& t = authoring_->tracks[i];
+        if (t && t->pdc) {
+            const int32_t target = maxLat - lats[i];
+            if (resetChangedDelays || t->pdc->delay() != target)
+                t->pdc->setDelay(target, resetChangedDelays);
+        }
+    }
+}
+
+int32_t Engine::pluginEditorSleepSelftest(int32_t catalogIndex) {
+    if (catalogIndex < 0) return 1;
+    constexpr int32_t kBlock = 128;
+    constexpr double kSr = 48000.0;
+    std::vector<float> buf(static_cast<size_t>(kBlock) * 2, 0.0f);
+
+    auto initWorkGain = [](Engine& eng, int32_t tid, int32_t dev) {
+        const int32_t pc = eng.pluginParamCount(tid, dev);
+        for (int32_t i = 0; i < pc; ++i) {
+            const std::string nm = eng.pluginParamName(tid, dev, i);
+            if (nm == "Work" || nm == "Gain") eng.pluginParamSet(tid, dev, i, 1.0f);
+        }
+    };
+    auto maxAbsAndSig = [](const std::vector<float>& b, double& outSig) {
+        float pk = 0.0f;
+        for (float v : b) pk = std::max(pk, std::fabs(v));
+        outSig = static_cast<double>(b[0]) + 2.0 * static_cast<double>(b[2]);
+        return pk;
+    };
+
+    // --- Test A: PluginInstrument (stopped past hangover), muted keep-alive, and Hybrid live bypass ---
+    bool supportsInstrument = false;
+    {
+        auto ep = std::make_unique<Engine>();
+        Engine& e = *ep;
+        e.setRenderThreads(0);
+        e.renderOffline(buf.data(), kBlock, kSr);
+        const int32_t t = e.addPluginInstrumentTrack(catalogIndex);
+        if (t > 0) {
+            supportsInstrument = true;
+            if (e.waitPluginLoads(60000) != 0) return 2;
+            auto trk = e.findTrackAuthoring(t);
+            if (!trk || !trk->instrument) return 2;
+            initWorkGain(e, t, -1);
+            e.setPluginSleepMode(t, -1, NOTA_PLUGIN_SLEEP_AUTO);
+
+            for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+            if (!trk->instrument->isIdle()) return 3;
+            e.renderOffline(buf.data(), kBlock);
+            double sigSleep = 0.0;
+            if (maxAbsAndSig(buf, sigSleep) != 0.0f) return 4;
+
+            // Open editor: must wake immediately without mutating PluginSleepMode::Auto.
+            trk->instrument->setEditorOpenForTest(true);
+            if (!trk->instrument->editorOpen() || trk->instrument->isIdle() ||
+                !trk->instrument->requiresActiveProcessing())
+                return 5;
+            if (e.pluginSleepMode(t, -1) != NOTA_PLUGIN_SLEEP_AUTO) return 6;
+
+            int32_t activeAdvances = 0;
+            for (int i = 0; i < 160; ++i) {
+                e.renderOffline(buf.data(), kBlock);
+                double s = 0.0;
+                if (maxAbsAndSig(buf, s) > 0.0f) ++activeAdvances;
+            }
+            if (trk->instrument->isIdle()) return 7;
+            const std::string instName = trk->instrument->displayName() ? trk->instrument->displayName() : "";
+            const bool isProbe = instName.find("Render Probe") != std::string::npos;
+            if (isProbe && activeAdvances < 150) return 8;
+
+            // Muted track with open editor continues processing without leaking audio to master.
+            e.setTrackMute(t, true);
+            for (int i = 0; i < 160; ++i) {
+                e.renderOffline(buf.data(), kBlock);
+                double s = 0.0;
+                if (maxAbsAndSig(buf, s) != 0.0f) return 9;
+            }
+            if (trk->instrument->isIdle()) return 10;
+            e.setTrackMute(t, false);
+            e.renderOffline(buf.data(), kBlock);
+            double sigAfterUnmute = 0.0;
+            if (isProbe && maxAbsAndSig(buf, sigAfterUnmute) == 0.0f) return 11;
+
+            // Closing editor leaves SleepMode::Auto intact and allows sleep again after hangover.
+            trk->instrument->setEditorOpenForTest(false);
+            if (e.pluginSleepMode(t, -1) != NOTA_PLUGIN_SLEEP_AUTO) return 12;
+            for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+            if (!trk->instrument->isIdle()) return 13;
+            e.renderOffline(buf.data(), kBlock);
+            if (maxAbsAndSig(buf, sigSleep) != 0.0f) return 14;
+        }
+    }
+
+    if (supportsInstrument) {
+        auto ehp = std::make_unique<Engine>();
+        Engine& eh = *ehp;
+        eh.setRenderThreads(2);
+        eh.setHybridBufferingMode(HybridBufferMode::Auto);
+        eh.renderOffline(buf.data(), kBlock, kSr);
+        const int32_t th = eh.addPluginInstrumentTrack(catalogIndex);
+        if (th <= 0) return 15;
+        if (eh.waitPluginLoads(60000) != 0) return 15;
+        auto trk = eh.findTrackAuthoring(th);
+        eh.transportPlay();
+        eh.renderDeviceBlock(buf.data(), kBlock);
+        if (eh.hybridStats().anticipativeTracks < 1) return 16;
+
+        trk->instrument->setEditorOpenForTest(true);
+        if (eh.hybrid_) eh.hybrid_->invalidate(true);
+        eh.renderDeviceBlock(buf.data(), kBlock);
+        const auto hsOpen = eh.hybridStats();
+        if (hsOpen.anticipativeTracks != 0 || hsOpen.liveTracks < 1) return 17;
+
+        trk->instrument->setEditorOpenForTest(false);
+        if (eh.hybrid_) eh.hybrid_->invalidate(true);
+        eh.renderDeviceBlock(buf.data(), kBlock);
+        if (eh.hybridStats().anticipativeTracks < 1) return 18;
+        eh.transportStop();
+    }
+
+    // --- Test B: PluginEffect on stopped Audio track + Group bus ---
+    {
+        auto ep = std::make_unique<Engine>();
+        Engine& e = *ep;
+        e.setRenderThreads(0);
+        e.renderOffline(buf.data(), kBlock, kSr);
+        const int32_t grp = e.addGroupTrack();
+        const int32_t audio = e.addAudioTrack();
+        e.setTrackGroup(audio, grp);
+        const int32_t fxAudio = e.addTrackEffectPlugin(audio, catalogIndex);
+        const int32_t fxGrp = e.addTrackEffectPlugin(grp, catalogIndex);
+        if (fxAudio < 0 || fxGrp < 0) return 19;
+        if (e.waitPluginLoads(60000) != 0) return 19;
+        initWorkGain(e, audio, fxAudio);
+        initWorkGain(e, grp, fxGrp);
+
+        auto tAudio = e.findTrackAuthoring(audio);
+        auto tGrp = e.findTrackAuthoring(grp);
+        auto dAudio = tAudio->devices[static_cast<size_t>(fxAudio)];
+        auto dGrp = tGrp->devices[static_cast<size_t>(fxGrp)];
+
+        // Activate audio track with brief transport roll, then stop so tail & SilenceGate settle to sleep.
+        e.transportPlay();
+        for (int i = 0; i < 4; ++i) e.renderOffline(buf.data(), kBlock);
+        e.transportStop();
+        for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+        if (!dAudio->isIdle() || !dGrp->isIdle()) return 20;
+
+        const std::string devName = dAudio->displayName() ? dAudio->displayName() : "";
+        const bool isProbe = devName.find("Render Probe") != std::string::npos;
+
+        // Stopped audio track with settled tailQuiet < 0 must wake immediately on editor open.
+        dAudio->setEditorOpenForTest(true);
+        int32_t audioAdvances = 0;
+        for (int i = 0; i < 160; ++i) {
+            e.renderOffline(buf.data(), kBlock);
+            double s = 0.0;
+            if (maxAbsAndSig(buf, s) > 0.0f) ++audioAdvances;
+        }
+        if (dAudio->isIdle()) return 21;
+        if (isProbe && audioAdvances < 150) return 22;
+
+        dAudio->setEditorOpenForTest(false);
+        for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+        if (!dAudio->isIdle()) return 23;
+
+        // Group bus keeps processing while child plugin editor is open.
+        dGrp->setEditorOpenForTest(true);
+        int32_t grpAdvances = 0;
+        for (int i = 0; i < 160; ++i) {
+            e.renderOffline(buf.data(), kBlock);
+            double s = 0.0;
+            if (maxAbsAndSig(buf, s) > 0.0f) ++grpAdvances;
+        }
+        if (dGrp->isIdle()) return 24;
+        if (isProbe && grpAdvances < 150) return 25;
+
+        dGrp->setEditorOpenForTest(false);
+        for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+        if (!dGrp->isIdle()) return 26;
+    }
+
+    // --- Test C: RackDevice & InstrumentRack propagation ---
+    {
+        auto ep = std::make_unique<Engine>();
+        Engine& e = *ep;
+        e.setRenderThreads(0);
+        e.renderOffline(buf.data(), kBlock, kSr);
+        const int32_t trk = e.addAudioTrack();
+        const int32_t rackIdx = e.addTrackBuiltinDevice(trk, 5); // RackDevice
+        if (rackIdx < 0) return 27;
+        const int32_t ch = e.rackAddChain(trk, rackIdx, 0);
+        const int32_t fxIdx = e.rackAddPluginChainDevice(trk, rackIdx, ch, catalogIndex);
+        if (fxIdx < 0) return 28;
+        if (e.waitPluginLoads(60000) != 0) return 28;
+
+        auto tAuth = e.findTrackAuthoring(trk);
+        auto* rackDev = tAuth->devices[static_cast<size_t>(rackIdx)].get();
+        auto* rackCore = rackDev ? rackDev->asRack() : nullptr;
+        Device* childFx = rackCore ? rackCore->chainDeviceAt(ch, fxIdx) : nullptr;
+        if (!childFx) return 29;
+
+        e.transportPlay();
+        for (int i = 0; i < 4; ++i) e.renderOffline(buf.data(), kBlock);
+        e.transportStop();
+        for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+        if (!rackDev->isIdle() || !childFx->isIdle()) return 30;
+
+        childFx->setEditorOpenForTest(true);
+        if (rackDev->isIdle() || !rackDev->requiresActiveProcessing() || childFx->isIdle()) return 31;
+        for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+        if (rackDev->isIdle() || childFx->isIdle()) return 32;
+
+        childFx->setEditorOpenForTest(false);
+        for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+        if (!rackDev->isIdle() || !childFx->isIdle()) return 33;
+
+        if (supportsInstrument) {
+            const int32_t ir = e.addInstrumentRackTrack();
+            const int32_t pChain = e.rackAddPluginInstrumentChain(ir, -1, catalogIndex);
+            if (pChain < 0) return 34;
+            if (e.waitPluginLoads(60000) != 0) return 34;
+            auto irAuth = e.findTrackAuthoring(ir);
+            auto* irCore = irAuth->instrument ? irAuth->instrument->asRack() : nullptr;
+            Instrument* childInst = irCore ? irCore->chainInstrument(pChain) : nullptr;
+            if (!childInst) return 35;
+
+            for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+            if (!irAuth->instrument->isIdle() || !childInst->isIdle()) return 36;
+
+            childInst->setEditorOpenForTest(true);
+            if (irAuth->instrument->isIdle() || !irAuth->instrument->requiresActiveProcessing() ||
+                childInst->isIdle())
+                return 37;
+            for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+            if (irAuth->instrument->isIdle() || childInst->isIdle()) return 38;
+
+            childInst->setEditorOpenForTest(false);
+            for (int i = 0; i < 160; ++i) e.renderOffline(buf.data(), kBlock);
+            if (!irAuth->instrument->isIdle() || !childInst->isIdle()) return 39;
+        }
+    }
+
+    return 0;
 }
 
 } // namespace nota

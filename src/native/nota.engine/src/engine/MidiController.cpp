@@ -23,8 +23,13 @@ float ControllerCurve::valueAt(double beat) const {
 
 bool ControllerCurve::movesIn(double b0, double b1) const {
     if (ctlIsSwitch(ctl) || points.size() < 2) return false;
-    for (size_t i = 1; i < points.size(); ++i)
-        if (points[i].beat > b0 && points[i - 1].beat < b1 && points[i].value != points[i - 1].value) return true;
+    const auto first = std::upper_bound(points.begin() + 1, points.end(), b0,
+        [](double b, const AutomationPoint& q) { return b < q.beat; });
+    for (auto it = first; it != points.end(); ++it) {
+        const auto& prev = *(it - 1);
+        if (prev.beat >= b1) break;
+        if (it->value != prev.value) return true;
+    }
     return false;
 }
 

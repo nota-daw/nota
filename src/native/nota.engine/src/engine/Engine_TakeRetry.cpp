@@ -169,11 +169,12 @@ void Engine::discardTake() {
             nt->clips = base->clips;
             nt->takes = base->takes;
             nt->midiClips = base->midiClips;
-            nt->automation = lanesOnto(*base, *cur);
+            nt->automation.replace(lanesOnto(*base, *cur));
             return nt;
         }
-        if (static_cast<int32_t>(nt->sessionSlots.size()) <= sc) nt->sessionSlots.resize(sc + 1);
-        nt->sessionSlots[sc] =
+        auto& slots = nt->sessionSlots.write();
+        if (static_cast<int32_t>(slots.size()) <= sc) slots.resize(sc + 1);
+        slots[sc] =
             sc < static_cast<int32_t>(base->sessionSlots.size()) ? base->sessionSlots[sc] : SessionSlot{};
         return nt;
     };

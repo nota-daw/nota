@@ -102,6 +102,58 @@ void AudioThreadPool::park(uint64_t seen) {
     sleepers_.fetch_sub(1, std::memory_order_relaxed);
 }
 
+bool AudioThreadPool::tryRunSub(int32_t count, dsp::RenderExecutorHost::RunFn fn, void* ctx) noexcept {
+    if (count <= 1 || workers_.empty()) return false;
+    uint64_t s = subState_.load(std::memory_order_acquire);
+    if ((s & (kSubPublishBit | kSubActiveBit | kSubRefMask)) != 0) return false;
+    const uint64_t nextGen = ((s >> kSubGenShift) + 1u) & 0x7FFFFFFFull;
+    const uint64_t pubState = (nextGen << kSubGenShift) | kSubPublishBit;
+    if (!subState_.compare_exchange_strong(s, pubState, std::memory_order_acq_rel, std::memory_order_relaxed))
+        return false;
+
+    subSlot_.fn = fn;
+    subSlot_.ctx = ctx;
+    subSlot_.total = count;
+    subSlot_.nextIdx.store(0, std::memory_order_relaxed);
+    subSlot_.done.store(0, std::memory_order_relaxed);
+    subState_.store((nextGen << kSubGenShift) | kSubActiveBit, std::memory_order_release);
+
+    for (;;) {
+        const int32_t idx = subSlot_.nextIdx.fetch_add(1, std::memory_order_relaxed);
+        if (idx >= count) break;
+        fn(ctx, idx);
+        subSlot_.done.fetch_add(1, std::memory_order_release);
+    }
+
+    subState_.fetch_and(~kSubActiveBit, std::memory_order_acq_rel);
+    while ((subState_.load(std::memory_order_acquire) & kSubRefMask) != 0 ||
+           subSlot_.done.load(std::memory_order_acquire) < count) {
+        NOTA_CPU_PAUSE();
+    }
+    return true;
+}
+
+bool AudioThreadPool::tryHelpSubTask() noexcept {
+    uint64_t s = subState_.load(std::memory_order_acquire);
+    if ((s & kSubActiveBit) == 0) return false;
+    while ((s & kSubActiveBit) != 0) {
+        if (subState_.compare_exchange_weak(s, s + 1, std::memory_order_acquire, std::memory_order_relaxed)) {
+            const auto fn = subSlot_.fn;
+            void* const ctx = subSlot_.ctx;
+            const int32_t total = subSlot_.total;
+            for (;;) {
+                const int32_t idx = subSlot_.nextIdx.fetch_add(1, std::memory_order_relaxed);
+                if (idx >= total) break;
+                fn(ctx, idx);
+                subSlot_.done.fetch_add(1, std::memory_order_release);
+            }
+            subState_.fetch_sub(1, std::memory_order_release);
+            return true;
+        }
+    }
+    return false;
+}
+
 void AudioThreadPool::setWorkgroup(void* osWorkgroup, double periodNs) {
 #if defined(__APPLE__)
     if (osWorkgroup != nullptr) {
@@ -195,34 +247,58 @@ void AudioThreadPool::workerLoop(int id) {
 #endif
         }
     } leaveOnExit{wgJoined, &wgToken};
+    const dsp::RenderExecutorHost host = executorHost();
+    const dsp::RenderExecutor::ScopedHost workerExecScope(&host, false);
+    const AudioThreadPool* const prevPool = tTopDispatchPool_;
+    tTopDispatchPool_ = this;
     for (;;) {
         const uint64_t e = epoch_.load(std::memory_order_acquire);
         if (e == seen) { // idle: brief pause-spin, then park on the futex word
-            if (stop_.load(std::memory_order_relaxed)) return;
+            if (stop_.load(std::memory_order_relaxed)) {
+                tTopDispatchPool_ = prevPool;
+                return;
+            }
+            if (hasSubTask() && tryHelpSubTask()) {
+                spins = 0;
+                continue;
+            }
             if (spins < kSpinPauses) {
-                if (++spins == kSpinPauses) idleSince = Clock::now();
+                ++spins;
                 NOTA_CPU_PAUSE();
                 continue;
             }
-            if (const int64_t ns = lingerNs_.load(std::memory_order_relaxed);
-                ns > 0 && Clock::now() - idleSince < std::chrono::nanoseconds(ns)) {
-                NOTA_CPU_PAUSE();
-                continue;
+            if (const int64_t ns = lingerNs_.load(std::memory_order_relaxed); ns > 0) {
+                if (spins == kSpinPauses) idleSince = Clock::now();
+                ++spins;
+                // Sample the monotonic clock every 16 pauses instead of every spin iteration.
+                if (((spins - kSpinPauses) & 15) != 0 ||
+                    Clock::now() - idleSince < std::chrono::nanoseconds(ns)) {
+                    NOTA_CPU_PAUSE();
+                    continue;
+                }
             }
             park(seen);
             spins = 0;
             continue;
         }
         seen = e;
-        if (stop_.load(std::memory_order_relaxed)) return;
+        if (stop_.load(std::memory_order_relaxed)) {
+            tTopDispatchPool_ = prevPool;
+            return;
+        }
         followWorkgroup(wgSeen, wgJoined, &wgToken); // one relaxed load unless the device changed
         // Same check-then-CAS claim loop as the caller (see header
         // comment): overshoot probes never consume, so a lagging probe
         // can never eat the next job's head tickets.
+        uint64_t subGen = 0;
         for (;;) {
             const uint64_t t = claimed_.load(std::memory_order_relaxed);
             const uint64_t lg = epoch_.load(std::memory_order_acquire);
-            if (stop_.load(std::memory_order_relaxed)) return;
+            if (stop_.load(std::memory_order_relaxed)) {
+                dsp::RenderExecutor::setCurrentAllowed(false);
+                tTopDispatchPool_ = prevPool;
+                return;
+            }
             // Snapshot the slot, then prove it is generation lg's: the slot is rewritten
             // only for generation lg + kSlots, published once epoch_ has passed lg, and
             // a field read from that rewrite makes the re-load below see the newer epoch.
@@ -231,9 +307,14 @@ void AudioThreadPool::workerLoop(int id) {
             const int n = s.n.load(std::memory_order_relaxed);
             const JobCall call = s.call.load(std::memory_order_relaxed);
             void* const ctx = s.ctx.load(std::memory_order_relaxed);
+            const bool allowSub = s.allowSub.load(std::memory_order_relaxed);
             std::atomic_thread_fence(std::memory_order_acquire);
             if (epoch_.load(std::memory_order_relaxed) != lg) continue; // moved on: re-read
             if (t - base >= (uint64_t)n) break;                           // stable: truly beyond
+            if (subGen != lg) {
+                dsp::RenderExecutor::setCurrentAllowed(allowSub);
+                subGen = lg;
+            }
             uint64_t expect = t;
             if (claimed_.compare_exchange_weak(expect, t + 1, std::memory_order_relaxed)) {
                 // The CAS proved no ticket was claimed since t, so job lg is still live.
@@ -241,6 +322,7 @@ void AudioThreadPool::workerLoop(int id) {
                 done_.fetch_add(1, std::memory_order_release); // publishes this task's writes
             }
         }
+        if (subGen != 0) dsp::RenderExecutor::setCurrentAllowed(false);
         spins = 0;
     }
 }

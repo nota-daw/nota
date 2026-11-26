@@ -262,7 +262,6 @@ class Shutter : public Device {
     int colN_ = 0;
     std::array<std::array<float, kHist>, 3> hist_{};
     std::atomic<int> histW_{0};
-    double cpuS_ = 0.0;
 
     // Auto-sleep hangover (flight-time rule).
     uint64_t quietSamples_ = 0;
@@ -285,7 +284,7 @@ class Shutter : public Device {
 
     std::atomic<float> inDb_{-120.0f}, outDb_{-120.0f}, keyDb_{-120.0f}, gateGain_{1.0f}, grDb_{0.0f}, peakGrA_{0.0f},
         detDb_{-120.0f}, openF_{0.0f}, stateA_{0.0f}, envA_{0.0f}, ratioA_{0.0f}, trigBarA_{0.0f}, trigTotA_{0.0f},
-        extA_{0.0f}, bpmA_{120.0f}, winA_{1.0f}, srA_{44100.0f}, cpuA_{0.0f};
+        extA_{0.0f}, bpmA_{120.0f}, winA_{1.0f}, srA_{44100.0f};
 };
 
 } // namespace nota

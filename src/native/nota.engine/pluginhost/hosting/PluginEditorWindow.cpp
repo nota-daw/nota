@@ -191,23 +191,40 @@ void PluginEditorWindow::removeKeyMonitor() {
 #endif
 }
 
+EditorHost::~EditorHost() {
+    applyOpenState(false);
+}
+
+void EditorHost::applyOpenState(bool nowOpen) {
+    const bool prev = open_.exchange(nowOpen, std::memory_order_acq_rel);
+    if (prev != nowOpen && onOpenChanged) onOpenChanged(nowOpen);
+}
+
 void EditorHost::open(juce::AudioPluginInstance& p) {
     if (juce::MessageManager::getInstanceWithoutCreating() == nullptr) return;
     if (window == nullptr) {
         window = std::make_unique<PluginEditorWindow>(p);
         window->onNoteOn = onNoteOn;
         window->onNoteOff = onNoteOff;
-        window->onHide = [this] { snapshot(); };
+        window->onHide = [this] {
+            snapshot();
+            applyOpenState(false);
+        };
     } else {
         window->setVisible(true);
         window->toFront(true);
     }
+    applyOpenState(window != nullptr && window->isVisible());
 }
 
 void EditorHost::close() {
-    if (!isOpen()) return;
-    snapshot(); // while it is still on screen
-    window->setVisible(false);
+    if (window != nullptr && window->isVisible()) {
+        snapshot(); // while it is still on screen
+        applyOpenState(false);
+        window->setVisible(false);
+    } else {
+        applyOpenState(false);
+    }
 }
 
 void EditorHost::snapshot() {

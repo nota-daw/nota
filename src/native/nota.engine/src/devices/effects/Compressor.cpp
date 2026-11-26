@@ -75,7 +75,7 @@ float Compressor::dbToLin(float db) {
 
 void Compressor::process(float* buf, int32_t frames) {
     if (frames <= 0) return;
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     const double sr = sr_;
     const int chr = charIndex();
     static const float chAtk[kNumChars] = {1.0f, 1.4f, 0.5f, 1.7f, 0.3f}; // Clean/Glue/Punch/Opto/FET
@@ -290,9 +290,6 @@ void Compressor::process(float* buf, int32_t frames) {
     atkA_.store(atkMs, std::memory_order_relaxed);
     relA_.store(autoRel && maxGr > 3.0f ? relMs * 4.0f : relMs, std::memory_order_relaxed);
     bpmA_.store(spb_ > 0.0 ? static_cast<float>(60.0 * sr_ / spb_) : 0.0f, std::memory_order_relaxed);
-    const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-    cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
 }
 
 int32_t Compressor::scopeRead(float* out, int32_t maxSamples) const {
@@ -308,7 +305,7 @@ int32_t Compressor::scopeRead(float* out, int32_t maxSamples) const {
     out[S_SampleRate] = srA_.load(std::memory_order_relaxed);
     out[S_Bpm] = bpmA_.load(std::memory_order_relaxed);
     out[S_Latency] = static_cast<float>(latencySamples());
-    out[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    out[S_Cpu] = readScopeCpuLoad();
     out[S_ExtKey] = extA_.load(std::memory_order_relaxed);
     out[S_EnvMs] = kEnvMs;
     int32_t n = kScope;

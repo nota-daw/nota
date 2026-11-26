@@ -145,6 +145,7 @@ class Sampler final : public Instrument {
     // never cuts a tail. noteOn/noteOff/pluginParamSet/setSample wake.
     bool hasTail() const override { return true; }
     bool isIdle() const override { return idle_; }
+    bool outputAlwaysSilent() const override { return idle_ || !sample_ || sample_->empty(); }
     void wake() override {
         idle_ = false;
         quietSamples_ = 0;

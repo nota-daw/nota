@@ -111,6 +111,7 @@ void BassSynth::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> BassSynth::clone() const {
@@ -211,6 +212,9 @@ void BassSynth::noteOff(int32_t pitch) {
 }
 
 void BassSynth::render(float* out, int32_t frames) {
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip) return;
     // ---- per-block param snapshot ----
     const double shape = std::clamp((double)get(OscShape), 0.0, 1.0);
     const double pw = 0.05 + 0.9 * get(OscPW);
@@ -328,16 +332,17 @@ void BassSynth::render(float* out, int32_t frames) {
         publishEnvTele(envTele_ + kEnvTeleFloats, on, on ? lv->fStage : Stage::Off, on ? &lv->fShape : nullptr, on ? lv->fEnv : 0.0f, fS);
     }
     // Sleep: with no sounding voice the loop above accumulated exact zeros.
-    idle_ = true;
+    bool anyVoice = false;
     for (const auto& v : voices_)
         if (v.active) {
-            idle_ = false;
+            anyVoice = true;
             break;
         }
+    gate_.observe(anyVoice, frames, gateEpoch);
 }
 
 void BassSynth::wake() {
-    idle_ = false;
+    gate_.wake();
 }
 
 void BassSynth::startVoice(Voice& v) {

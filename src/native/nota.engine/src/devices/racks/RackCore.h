@@ -18,6 +18,8 @@
 #pragma once
 
 #include "devices/Instrument.h"
+#include "dsp/core/RtAttributes.h"
+#include "dsp/core/ScratchArena.h"
 #include "engine/SnapshotHistory.h"
 #include "devices/Device.h"
 #include "devices/MidiDevice.h"
@@ -131,6 +133,9 @@ class RackCore {
     static float padParamMax(int32_t p) { return p == PadVolume ? 2.0f : p == PadTune ? 48.0f : 1.0f; }
 
     struct RackState {
+        uint64_t generation = 0;
+        bool hasChildren = false;
+        bool hasSidechainChild = false;
         std::vector<RackChain> chains;
         std::vector<MacroMapping> mappings;
     };
@@ -157,14 +162,38 @@ class RackCore {
     // Audio-thread view of the current snapshot (raw pointer, retained by states_
     // until the renders that could still hold it have finished).
     RackState* live() const { return states_.live(); }
+    bool hasChains() const noexcept {
+        const RackState* st = live();
+        return st && !st->chains.empty();
+    }
+    bool hasChildren() const noexcept {
+        const RackState* st = live();
+        return st && st->hasChildren;
+    }
+    bool hasSidechainChild() const noexcept {
+        const RackState* st = live();
+        return st && st->hasSidechainChild;
+    }
+    uint64_t liveGeneration() const {
+        const RackState* st = live();
+        return st ? st->generation : 0;
+    }
 
     // Fan the transport snapshot out to every chain child so hosted plugins nested
     // in a rack sync to the DAW clock too (the Instrument/Device overrides call this).
-    void forwardTransport(const TransportInfo& ti);
+    void forwardTransport(const TransportInfo& ti) {
+        RackState* st = live();
+        if (!st || !st->hasChildren) return;
+        forwardTransportSlow(*st, ti);
+    }
 
     // The DAW tempo for tempo-synced chain children (a synced Delay, Auto Filter, Auto Pan …):
     // without it they ran on their free times inside a rack. Audio thread, once per block.
-    void forwardTempo(double beatStart, double spb, bool playing);
+    void forwardTempo(double beatStart, double spb, bool playing) {
+        RackState* st = live();
+        if (!st || !st->hasChildren) return;
+        forwardTempoSlow(*st, beatStart, spb, playing);
+    }
 
     // Whether any chain child (instrument or insert, at any nesting depth) is a hosted
     // plugin. Walks the live snapshot: reads only. Audio thread safe.
@@ -172,6 +201,12 @@ class RackCore {
 
     // Sample rate + max block; forwarded to every child. Message thread.
     void setRates(double sr, int32_t maxBlock);
+
+    // Grow chain child device/instrument scratch capacity before large offline/device blocks.
+    void ensureChainBlockCapacity(int32_t frames);
+
+    // Telemetry mode propagation across chain instruments, devices, and nested racks. Message thread.
+    void setTelemetryMode(dsp::TelemetryMode mode);
 
     // ---- chain name (message thread; UI metadata) -------------------------
     std::string chainName(int32_t c) const {
@@ -267,6 +302,22 @@ class RackCore {
         if (!st) return;
         for (auto& c : st->chains)
             if (c.instrument) fn(*c.instrument);
+    }
+    bool chainsHaveOpenEditor(bool includeInstruments) const {
+        RackState* st = live();
+        if (!st) return false;
+        for (const auto& c : st->chains) {
+            if (includeInstruments && c.instrument && !c.instrument->bypassed()) {
+                if (c.instrument->editorOpen()) return true;
+                if (const auto* r = c.instrument->asRack(); r && r->chainsHaveOpenEditor(true)) return true;
+            }
+            for (const auto& d : c.devices) {
+                if (!d || d->bypassed()) continue;
+                if (d->editorOpen()) return true;
+                if (const auto* r = d->asRack(); r && r->chainsHaveOpenEditor(false)) return true;
+            }
+        }
+        return false;
     }
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
@@ -504,6 +555,72 @@ class RackCore {
     // Audio thread: hold one for the whole render/process call (it ends the render
     // epoch that frees retired snapshots).
     SnapshotHistory<RackState>::RenderScope renderScope() { return SnapshotHistory<RackState>::RenderScope(states_); }
+    bool hasPendingRetire() const noexcept { return states_.hasPendingRetire(); }
+
+    bool chainsHaveTail() const {
+        RackState* st = live();
+        if (!st || !st->hasChildren) return false;
+        for (const auto& c : st->chains) {
+            if (c.instrument && !c.instrument->bypassed() && c.instrument->hasTail()) return true;
+            for (const auto& d : c.devices)
+                if (d && !d->bypassed() && d->hasTail()) return true;
+        }
+        return false;
+    }
+
+    static bool chainIdle(const RackChain& c, bool includeInstrument) {
+        if (includeInstrument && c.instrument && !c.instrument->bypassed() &&
+            (!c.instrument->isIdle() || c.instrument->requiresActiveProcessing()))
+            return false;
+        for (const auto& d : c.devices)
+            if (d && !d->bypassed() && (!d->isIdle() || d->requiresActiveProcessing())) return false;
+        return true;
+    }
+
+    bool chainsIdle(bool includeInstruments) const {
+        RackState* st = live();
+        if (!st || !st->hasChildren) return true;
+        for (const auto& c : st->chains)
+            if (!chainIdle(c, includeInstruments)) return false;
+        return true;
+    }
+
+    bool chainsRequireActiveProcessing(bool includeInstruments) const {
+        RackState* st = live();
+        if (!st || !st->hasChildren) return false;
+        for (const auto& c : st->chains) {
+            if (includeInstruments && c.instrument && !c.instrument->bypassed() &&
+                c.instrument->requiresActiveProcessing())
+                return true;
+            for (const auto& d : c.devices)
+                if (d && !d->bypassed() && d->requiresActiveProcessing()) return true;
+        }
+        return false;
+    }
+
+    static bool chainMidiDevicesIdle(const RackChain& c) {
+        for (const auto& d : c.midiDevices)
+            if (d && !d->isIdle()) return false;
+        return true;
+    }
+
+    bool allChainMidiDevicesIdle() const {
+        RackState* st = live();
+        if (!st || !st->hasChildren) return true;
+        for (const auto& c : st->chains)
+            if (!chainMidiDevicesIdle(c)) return false;
+        return true;
+    }
+
+    void wakeChains(bool includeInstruments) {
+        RackState* st = live();
+        if (!st || !st->hasChildren) return;
+        for (auto& c : st->chains) {
+            if (includeInstruments && c.instrument) c.instrument->wake();
+            for (auto& d : c.devices)
+                if (d) d->wake();
+        }
+    }
 
     // Macro response curve applied to the 0..1 value before mapping to [min,max].
     static float applyCurve(float v, int32_t curve);
@@ -527,17 +644,49 @@ class RackCore {
     std::atomic<float> liveSel_{0.5f};     // runtime selector position (audio writes, UI reads)
     double sampleRate_ = 44100.0;
     int32_t maxBlock_ = kMaxBlock;
+    dsp::TelemetryMode telemetryMode_ = dsp::TelemetryMode::OnDemand;
+
+  protected:
+    static bool chainSupportsParallel(const RackChain& c);
+    void prepareParallelScratch(const RackState* st, int32_t minFrames);
+    dsp::ChainScratchBank parallelArena_;
 
   private:
+    NOTA_NOINLINE void forwardTransportSlow(RackState& st, const TransportInfo& ti);
+    NOTA_NOINLINE void forwardTempoSlow(RackState& st, double beatStart, double spb, bool playing);
+    void propagateTelemetry(RackState& st) const;
     // duplicateChain: the keys and Arp targets the blob doesn't carry, from src to its copy.
     static void copyExternalLinks(const RackChain& src, RackChain& dst);
     std::shared_ptr<RackState> copyState() const {
         return authoring_ ? std::make_shared<RackState>(*authoring_) : std::make_shared<RackState>();
     }
     void commit(std::shared_ptr<RackState> ns) {
+        if (ns) {
+            ns->generation = ++nextStateGen_;
+            bool hasChild = false;
+            bool hasSidechain = false;
+            for (const auto& c : ns->chains) {
+                if (c.instrument) {
+                    hasChild = true;
+                    if (c.instrument->acceptsSidechain() || c.instrument->asRack() != nullptr) hasSidechain = true;
+                }
+                if (!c.devices.empty()) {
+                    hasChild = true;
+                    for (const auto& d : c.devices) {
+                        if (d && (d->acceptsSidechain() || d->asRack() != nullptr)) hasSidechain = true;
+                    }
+                }
+                if (!c.midiDevices.empty()) hasChild = true;
+            }
+            ns->hasChildren = hasChild;
+            ns->hasSidechainChild = hasSidechain;
+            propagateTelemetry(*ns);
+            prepareParallelScratch(ns.get(), maxBlock_);
+        }
         authoring_ = ns;
         states_.publish(std::move(ns));
     }
+    uint64_t nextStateGen_ = 0;
     static void pruneMappings(std::shared_ptr<RackState>& ns, int32_t removedChain);
     static std::shared_ptr<MidiDevice> makeChainMidiDevice(int32_t kind);
 

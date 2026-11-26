@@ -184,9 +184,8 @@ class Crush : public Device {
 
     // Meters (audio thread) and their published copies.
     float inPkM_ = 0.0f, outPkM_ = 0.0f, outPkHold1s_ = 0.0f, drvPkHold_ = 0.0f, inHold_ = 0.0f, outHold_ = 0.0f;
-    double cpuS_ = 0.0;
     std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, inRmsA_{-120.0f}, outRmsA_{-120.0f}, outHold1sA_{-120.0f};
-    std::atomic<float> drvPkA_{0.0f}, inHoldA_{-120.0f}, outHoldA_{-120.0f}, autoGA_{0.0f}, cpuA_{0.0f}, srA_{44100.0f};
+    std::atomic<float> drvPkA_{0.0f}, inHoldA_{-120.0f}, outHoldA_{-120.0f}, autoGA_{0.0f}, srA_{44100.0f};
     std::atomic<bool> resetReq_{false};
 
     // Auto-sleep hangover.

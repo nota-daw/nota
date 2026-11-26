@@ -144,7 +144,7 @@ int32_t AutoFilter::scopeRead(float* out, int32_t maxSamples) const {
     t[S_LfoPhase] = lfoPhA_.load(std::memory_order_relaxed);
     t[S_InPk] = inPkA_.load(std::memory_order_relaxed);
     t[S_OutPk] = outPkA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
     t[S_Bpm] = bpmA_.load(std::memory_order_relaxed);
     t[S_Onsets] = static_cast<float>(onsets_.load(std::memory_order_relaxed));
@@ -220,8 +220,8 @@ void AutoFilter::controlChunk(CtlOut& o, double beat, bool sync, bool& doRetrig,
 }
 
 void AutoFilter::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
     if (frames <= 0) return;
+    const auto cpuTimer = blockTimer(frames, sr_);
     const double baseHz = expMap(get(Freq), 30.0, 18000.0);
     const double resBase = std::clamp(get(Res), 0.0f, 1.0f);
     const int type = std::clamp((int)std::lround(get(Type) * 3.0f), 0, 3);
@@ -349,7 +349,7 @@ void AutoFilter::process(float* buf, int32_t frames) {
         uint32_t sws = scopeW_.load(std::memory_order_relaxed);
         for (int32_t s = 0; s < frames; ++s) scope_[(sws++) & (kScope - 1)] = 0.0f;
         scopeW_.store(sws, std::memory_order_relaxed);
-        publishTelemetry(t0, fcLast, fcRLast, resLast, lastLfoL, lastPhase, held, lfoOn, 0.0f, 0.0f, frames, sr_);
+        publishTelemetry(fcLast, fcRLast, resLast, lastLfoL, lastPhase, held, lfoOn, 0.0f, 0.0f, frames, sr_);
         return;
     }
 
@@ -440,12 +440,11 @@ void AutoFilter::process(float* buf, int32_t frames) {
     idle_ = quietSamples_ > kIdleSamples;
 
     // ---- telemetry -----------------------------------------------------------
-    publishTelemetry(t0, fcLast, fcRLast, resLast, lastLfoL, lastPhase, held, lfoOn, inPk, outPk, frames, sr_);
+    publishTelemetry(fcLast, fcRLast, resLast, lastLfoL, lastPhase, held, lfoOn, inPk, outPk, frames, sr_);
 }
 
-void AutoFilter::publishTelemetry(std::chrono::steady_clock::time_point t0, double fcLast, double fcRLast,
-    double resLast, double lastLfoL, double lastPhase, bool held, bool lfoOn, float inPk, float outPk, int32_t frames,
-    double sr) {
+void AutoFilter::publishTelemetry(double fcLast, double fcRLast, double resLast, double lastLfoL, double lastPhase,
+    bool held, bool lfoOn, float inPk, float outPk, int32_t frames, double /*sr*/) {
     auto norm = [](double hz) { return (float)std::clamp(std::log(hz / 30.0) / std::log(18000.0 / 30.0), 0.0, 1.0); };
     cutA_.store(norm(fcLast), std::memory_order_relaxed);
     cutRA_.store(norm(fcRLast), std::memory_order_relaxed);
@@ -459,11 +458,6 @@ void AutoFilter::publishTelemetry(std::chrono::steady_clock::time_point t0, doub
     outPkA_.store(std::max(outPk, outPkA_.load(std::memory_order_relaxed) * fall), std::memory_order_relaxed);
     bpmA_.store(spb_ > 0.0 ? (float)(60.0 * sr_ / spb_) : 0.0f, std::memory_order_relaxed);
     srA_.store((float)sr_, std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 const char* AutoFilter::paramName(int32_t i) const {

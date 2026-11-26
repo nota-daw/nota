@@ -17,6 +17,8 @@
 #include <vector>
 
 #include "devices/EditorPreview.h"
+#include "dsp/core/DeviceTelemetry.h"
+#include "dsp/core/SilenceGate.h"
 #include "engine/MidiController.h"
 #include "engine/NoteExpression.h"
 #include "engine/TransportInfo.h"
@@ -33,9 +35,15 @@ class Instrument {
     // The rack behind this device, if it is one (specs/044): a virtual call where the audio
     // thread walks rack chains every block, instead of a dynamic_cast per device.
     virtual const RackCore* asRack() const { return nullptr; }
-    virtual ~Instrument() = default;
+    virtual ~Instrument() {
+        if (countedNeverSleep_.exchange(false, std::memory_order_acq_rel))
+            dsp::gNeverSleepDevices.fetch_sub(1, std::memory_order_relaxed);
+    }
 
     virtual void setSampleRate(double sr) = 0;
+
+    // Pre-allocate scratch capacity for blocks up to `frames` (non-RT preparation; no-op by default).
+    virtual void ensureBlockCapacity(int32_t /*frames*/) {}
 
     // MIDI effects inside the instrument (an Instrument Rack chain's, issue #329). An instrument
     // that wants the block's notes up front says so; the engine then hands it the block's sorted
@@ -261,7 +269,25 @@ class Instrument {
     // with no MIDI this block can skip rendering entirely. Defaults never-idle.
     virtual bool hasTail() const { return false; }
     virtual bool isIdle() const { return false; }
+    // True when a sleeping instrument still needs render() called for cheap phase/clock continuity.
+    virtual bool needsIdleRender() const { return false; }
+    // True when render() is guaranteed to emit only silence in its current state (e.g. an idle
+    // instrument or an unpopulated sample player with no sounding voices).
+    virtual bool outputAlwaysSilent() const { return isIdle(); }
+    virtual bool requiresActiveProcessing() const {
+        return sleepMode() == dsp::PluginSleepMode::Never || editorOpen();
+    }
     virtual void wake() {}
+    virtual void setSleepMode(dsp::PluginSleepMode mode) {
+        sleepMode_.store(mode, std::memory_order_release);
+        const bool never = (mode == dsp::PluginSleepMode::Never);
+        const bool prev = countedNeverSleep_.exchange(never, std::memory_order_acq_rel);
+        if (prev != never) dsp::gNeverSleepDevices.fetch_add(never ? 1 : -1, std::memory_order_relaxed);
+        wake();
+    }
+    virtual dsp::PluginSleepMode sleepMode() const {
+        return sleepMode_.load(std::memory_order_relaxed);
+    }
 
     // Currently sounding voice count, for a synth editor's voice meter. -1 = the
     // instrument doesn't expose one. Message-thread read of an audio-thread snapshot.
@@ -313,8 +339,9 @@ class Instrument {
     // open/hide their editor window. Must be called on the message thread.
     virtual void openEditor() {}
     virtual void closeEditor() {}
-    // Whether the editor window is on screen (hidden by its close button counts as closed).
+    // Whether the editor window is on screen (hidden by its close button counts as closed; audio-thread safe).
     virtual bool editorOpen() const { return false; }
+    virtual void setEditorOpenForTest(bool /*open*/) {}
 
     // Opaque plugin state (M3-5), for project save/restore. Empty for built-ins.
     // Message thread only.
@@ -414,7 +441,23 @@ class Instrument {
     uint64_t uid() const { return uid_; }
     void adoptUid(const Instrument& from) { uid_ = from.uid_; }
 
+    // Per-instrument CPU telemetry (on-demand clock gating on the audio thread).
+    dsp::TelemetryMode telemetryMode() const noexcept { return telemetry_.mode(); }
+    virtual void setTelemetryMode(dsp::TelemetryMode mode) { telemetry_.setMode(mode); }
+    void observeTelemetry() const noexcept { telemetry_.observe(); }
+    float telemetryCpuLoad() const noexcept { return telemetry_.cpuLoad(); }
+
+  protected:
+    dsp::DeviceTelemetry::ScopedBlockTimer blockTimer(int32_t frames, double sampleRate, double smoothing = 0.1) noexcept {
+        return dsp::DeviceTelemetry::ScopedBlockTimer(telemetry_, frames, sampleRate, smoothing);
+    }
+    float readScopeCpuLoad() const noexcept { return telemetry_.observeAndReadCpu(); }
+    void resetTelemetry() noexcept { telemetry_.reset(); }
+
   private:
+    mutable dsp::DeviceTelemetry telemetry_;
+    std::atomic<dsp::PluginSleepMode> sleepMode_{dsp::PluginSleepMode::Auto};
+    std::atomic<bool> countedNeverSleep_{false};
     static uint64_t nextUid() {
         static std::atomic<uint64_t> next{1};
         return next.fetch_add(1, std::memory_order_relaxed);
