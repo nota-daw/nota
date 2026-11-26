@@ -1818,7 +1818,10 @@ bool Engine::rackSelfTest() {
 // through; two parallel Utility chains sum; mute silences a chain; the blob
 // round-trips chain structure.
 bool Engine::rackDeviceSelfTest() {
-    RackDevice rack;
+    // RackDevice owns large block buffers. Keep fixtures off the thread stack,
+    // including on Windows where the default stack is only 1 MiB.
+    auto rackStorage = std::make_unique<RackDevice>();
+    auto& rack = *rackStorage;
     rack.setSampleRate(44100.0, RackCore::kMaxBlock);
 
     const int32_t frames = 256;
@@ -1851,14 +1854,16 @@ bool Engine::rackDeviceSelfTest() {
 
     // Blob round-trips the two-chain structure onto a fresh rack.
     auto blob = rack.getState();
-    RackDevice rk2;
+    auto rk2Storage = std::make_unique<RackDevice>();
+    auto& rk2 = *rk2Storage;
     rk2.setSampleRate(44100.0, RackCore::kMaxBlock);
     rk2.setState(blob.data(), static_cast<int32_t>(blob.size()));
     if (rk2.chainCount() != 2 || rk2.chainDeviceCount(0) != 1 || !rk2.chainMute(1)) return false;
 
     // #1084: parallel paths and the dry branch align with a delayed wet path.
     for (bool dryMix : {false, true}) for (int block : {32, 257}) {
-        RackDevice r;
+        auto storage = std::make_unique<RackDevice>();
+        auto& r = *storage;
         r.setSampleRate(48000, 257);
         r.addChain(-1);
         if (!dryMix) r.addChain(-1);
@@ -1884,7 +1889,8 @@ bool Engine::rackDeviceSelfTest() {
         if (std::fabs(atInput) > 1e-5f || std::fabs(atDelayed - expected) > 1e-3f) return false;
     }
     {
-        RackDevice r;
+        auto storage = std::make_unique<RackDevice>();
+        auto& r = *storage;
         r.setSampleRate(48000, 257);
         r.addChain(-1); r.addChain(-1);
         r.addChainDevice(1, 1);
@@ -1900,7 +1906,8 @@ bool Engine::rackDeviceSelfTest() {
             std::fabs(impulse[128 * 2] - 0.25f) > 1e-3f) return false;
     }
     {
-        RackDevice source;
+        auto sourceStorage = std::make_unique<RackDevice>();
+        auto& source = *sourceStorage;
         source.setSampleRate(48000, 32);
         source.addChain(-1); source.addChain(-1);
         source.addChainDevice(1, 1);
@@ -1910,7 +1917,8 @@ bool Engine::rackDeviceSelfTest() {
         float buffer[64]{};
         buffer[16 * 2] = buffer[16 * 2 + 1] = 0.25f;
         source.process(buffer, 32);
-        RackDevice fork;
+        auto forkStorage = std::make_unique<RackDevice>();
+        auto& fork = *forkStorage;
         fork.forkFrom(source);
         float delayed = 0.0f;
         for (int start = 32; start <= 96; start += 32) {

@@ -17,3 +17,7 @@ The desktop render and changing settings during playback have not been exercised
 ## Recommendation
 
 Run the complete suite and benchmark the final tree; verify the outstanding desktop cases.
+
+## CI follow-up (2026-11-26)
+
+The instruction gate measured a 1.23% increase for default (sample-peak) Ceiling. The sample loop now specializes true-peak mode at block dispatch, eliminating safety-path branches from the sample-peak loop. The focused `--issue-1088` regression suite passes after this change for all 18 block/lookahead/character combinations. The complete `scripts/build.sh` also passes (native universal build, managed build, smoke suite and scanner checks). The Linux instruction gate must confirm the resulting work count in CI.
