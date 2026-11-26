@@ -178,13 +178,13 @@ inline void deliverArt(Instrument& inst, const ArtEv& e) {
 }
 
 template <class Live>
-void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn,
+bool playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn,
     const ArtEv* aev, int an, double beat, double spb, bool rolling, Live&& live) {
     const bool off = inst.bypassed();
     if (!off) inst.offSettled.store(false, std::memory_order_relaxed);
     else if (inst.offSettled.load(std::memory_order_relaxed)) {
         inst.tapSilence(frames); // the filter graph shows the silence, not the last sound
-        return;
+        return false;
     }
     if (off) n = xn = an = 0; // nothing new starts on the way out
     if (!off && n == 0 && xn == 0 && an == 0 && inst.isIdle() && !inst.needsIdleRender() &&
@@ -192,19 +192,24 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         live();
         if (inst.isIdle()) {
             inst.tapSilence(frames);
-            return;
+            return false;
         }
     }
     if (inst.takesBlockMidi()) inst.blockMidi(evs, n, frames, beat, spb, rolling); // a rack's chain MIDI effects (#329)
     int32_t cursor = 0;
     bool liveDone = false;
+    bool wroteAudio = false;
+    auto renderChunk = [&](float* out, int32_t count) {
+        inst.render(out, count);
+        if (!inst.outputAlwaysSilent()) wroteAudio = true;
+    };
     auto renderTo = [&](int32_t to) {
         if (to <= cursor) return;
         if (!liveDone) {
             live();
             liveDone = true;
         }
-        inst.render(&dst[cursor * 2], to - cursor);
+        renderChunk(&dst[cursor * 2], to - cursor);
         cursor = to;
     };
     // An instrument that takes timed events renders once: each event is stamped with its
@@ -245,7 +250,7 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
     liveAt0();
     if (timed) {
         inst.eventOffset = 0;
-        inst.render(dst, frames);
+        renderChunk(dst, frames);
         cursor = frames;
         for (; a < an; ++a) deliverArt(inst, aev[a]); // end-of-block events: offset 0 of the next render
         for (; k < n; ++k)
@@ -256,17 +261,22 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
     }
     renderTo(frames);
     if (off) {
-        const float step = frames > 0 ? 1.0f / static_cast<float>(frames) : 1.0f;
-        for (int32_t i = 0; i < frames; ++i) {
-            const float g = 1.0f - static_cast<float>(i + 1) * step;
-            dst[i * 2] *= g;
-            dst[i * 2 + 1] *= g;
+        if (wroteAudio) {
+            const float step = frames > 0 ? 1.0f / static_cast<float>(frames) : 1.0f;
+            for (int32_t i = 0; i < frames; ++i) {
+                const float g = 1.0f - static_cast<float>(i + 1) * step;
+                dst[i * 2] *= g;
+                dst[i * 2 + 1] *= g;
+            }
         }
         inst.allNotesOff();
         releaseHeldControllers(inst);
         inst.offSettled.store(true, std::memory_order_relaxed);
     }
-    inst.tapOutput(dst, frames); // the card's filter graph spectrum (#531), while one is open
+    if (wroteAudio) inst.tapOutput(dst, frames); // the card's filter graph spectrum (#531), while one is open
+    else
+        inst.tapSilence(frames);
+    return wroteAudio;
 }
 
 } // namespace
@@ -1549,95 +1559,102 @@ int Engine::gatherInstrumentNotes(
         const bool unshifted = !artTable && trackShiftS == 0.0;
         const TimelineIndex* idx = (spb > 0.0) ? t.timelineIndex.get() : nullptr;
 
-        auto processClip = [&](const MidiClip& clip, int32_t clipIdx, bool indexedNotes, double clipLocalStartB,
-                               double clipLocalEndB) {
-            const bool clipActive = clip.active;
-            const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
-            const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
-            const bool hasVel = !clip.velocityEnvelope.points.empty();
-            const auto gatherClip = [&]<bool shifted, bool isMapped>() {
-                const auto at = [&](double clipBeat) {
-                    if constexpr (isMapped) return renderSampleAtBeat(clip.startBeat + clipBeat, blockStart, spb);
-                    else return clipStart + clipBeat * spb;
+        auto gatherMode = [&]<bool Shifted, bool Mapped>() {
+            auto appendNote = [&](const MidiClip& clip, double clipStart, double clipEnd, bool clipActive, bool hasVel,
+                                  const Note& note) {
+                double shiftS = 0.0;
+                if constexpr (Shifted)
+                    shiftS = artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS
+                                      : trackShiftS;
+                if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
+                auto at = [&](double clipBeat) {
+                    if constexpr (Mapped) return renderSampleAtBeat(clip.startBeat + clipBeat, blockStart, spb);
+                    else
+                        return clipStart + clipBeat * spb;
                 };
-                auto handleNote = [&](const Note& note) {
-                    double shiftS = 0.0;
-                    if constexpr (shifted)
-                        shiftS = artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS : trackShiftS;
-                    if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
-                    const double nominalOn = at(std::max(0.0, note.startBeat));
-                    double nominalOff = at(note.startBeat + note.lengthBeats);
-                    if (nominalOff > clipEnd) nominalOff = clipEnd;
-                    const double onS = shifted ? nominalOn + shiftS : nominalOn;
-                    const double offS = shifted ? nominalOff + shiftS : nominalOff;
-                    float vel = note.velocity;
-                    if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
-                    if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
-                        evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
-                            static_cast<float>((offS - onS) / spb)};
-                    if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
-                        evs[n++] = {0, false, note.pitch, 0.0f};
-                    if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
-                        evs[n++] = {0, true, note.pitch, vel};
-                    if (offS >= blockStart && offS < blockStart + frames && n < 1024)
-                        evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
-                    if (xev && note.expr && clipActive)
-                        noteExprEvents(note, at(note.startBeat) + shiftS - blockStart,
-                            offS - blockStart, frames, spb,
-                            xev, *xn, kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS);
-                };
-                if (indexedNotes && idx) {
-                    idx->forEachNoteInClip(clipIdx, clipLocalStartB, clipLocalEndB, -1.0,
-                        [&](int32_t noteIdx) { handleNote(clip.notes[static_cast<size_t>(noteIdx)]); });
-                } else {
-                    for (const Note& note : clip.notes) handleNote(note);
-                }
+                const double nominalOn = at(std::max(0.0, note.startBeat));
+                double nominalOff = at(note.startBeat + note.lengthBeats);
+                if (nominalOff > clipEnd) nominalOff = clipEnd;
+                const double onS = Shifted ? nominalOn + shiftS : nominalOn;
+                const double offS = Shifted ? nominalOff + shiftS : nominalOff;
+                float vel = note.velocity;
+                if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
+                if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
+                    evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
+                        static_cast<float>((offS - onS) / spb)};
+                if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
+                    evs[n++] = {0, false, note.pitch, 0.0f};
+                if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
+                    evs[n++] = {0, true, note.pitch, vel};
+                if (offS >= blockStart && offS < blockStart + frames && n < 1024)
+                    evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
+                if (xev && note.expr && clipActive)
+                    noteExprEvents(note, at(note.startBeat) + shiftS - blockStart, offS - blockStart, frames, spb,
+                        xev, *xn, kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS);
             };
-            if (mapped) {
-                if (unshifted) gatherClip.template operator()<false, true>();
-                else gatherClip.template operator()<true, true>();
-            } else if (unshifted) gatherClip.template operator()<false, false>();
-            else gatherClip.template operator()<true, false>();
-            if (xev && clipActive && !clip.controllers.empty())
-                clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr,
-                    transport_.tempoMap(), transport_.sampleRate(), transport_.playheadSamples());
-        };
 
-        if (idx && !seamOffs_) {
-            const double minShiftMs = t.midiOffsetMs() + idx->minArtOffsetMs();
-            const double maxShiftMs = t.midiOffsetMs() + idx->maxArtOffsetMs();
-            const double maxBps = mapped ? (TimelineIndex::kMaxConservTempoBpm / 60.0) : (tsr / spb);
-            const double maxBeatsPerMs = std::max(maxBps, tsr / spb) / 1000.0;
-            const double padBefore = std::max(0.0, maxShiftMs) * maxBeatsPerMs + 0.05;
-            const double padAfter = std::max(0.0, -minShiftMs) * maxBeatsPerMs + 0.05;
-            const double b0 = (mapped && tmap) ? tmap->beatAt(tplay / tsr) : blockStart / spb;
-            const double b1 = (mapped && tmap) ? tmap->beatAt((tplay + frames) / tsr) : (blockStart + frames) / spb;
-            const double rawStart = std::min(b0, b1);
-            const double rawEnd = std::max(b0, b1);
-            const double qStart = rawStart - padBefore;
-            const double qEnd = rawEnd + padAfter;
+            if (idx && !seamOffs_) {
+                const double minShiftMs = t.midiOffsetMs() + idx->minArtOffsetMs();
+                const double maxShiftMs = t.midiOffsetMs() + idx->maxArtOffsetMs();
+                const double maxBps = Mapped ? (TimelineIndex::kMaxConservTempoBpm / 60.0) : (tsr / spb);
+                const double maxBeatsPerMs = std::max(maxBps, tsr / spb) / 1000.0;
+                const double padBefore = std::max(0.0, maxShiftMs) * maxBeatsPerMs + 0.05;
+                const double padAfter = std::max(0.0, -minShiftMs) * maxBeatsPerMs + 0.05;
+                const double b0 = (Mapped && tmap) ? tmap->beatAt(tplay / tsr) : blockStart / spb;
+                const double b1 = (Mapped && tmap) ? tmap->beatAt((tplay + frames) / tsr) : (blockStart + frames) / spb;
+                const double rawStart = std::min(b0, b1);
+                const double rawEnd = std::max(b0, b1);
+                const double qStart = rawStart - padBefore;
+                const double qEnd = rawEnd + padAfter;
 
-            if (xev) {
-                idx->forEachMidiClipInWindow(rawStart - 0.05, rawEnd + 0.05, -1.0, [&](int32_t ci) {
+                if (xev) {
+                    idx->forEachMidiClipInWindow(rawStart - 0.05, rawEnd + 0.05, -1.0, [&](int32_t ci) {
+                        const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
+                        if (clip.active && !clip.controllers.empty())
+                            clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb),
+                                renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart,
+                                frames, xev, *xn, kMaxBlockExpr);
+                    });
+                }
+                idx->forEachMidiClipInWindow(qStart, qEnd, -1.0, [&](int32_t ci) {
                     const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
-                    if (clip.active && !clip.controllers.empty())
-                        clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb),
-                            renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart, frames, xev, *xn, kMaxBlockExpr);
+                    const bool clipActive = clip.active;
+                    const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
+                    const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
+                    const bool hasVel = !clip.velocityEnvelope.points.empty();
+                    idx->forEachNoteInClip(ci, qStart - clip.startBeat, qEnd - clip.startBeat, -1.0,
+                        [&](int32_t noteIdx) {
+                            appendNote(clip, clipStart, clipEnd, clipActive, hasVel,
+                                clip.notes[static_cast<size_t>(noteIdx)]);
+                        });
+                    if (xev && clipActive && !clip.controllers.empty())
+                        clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn,
+                            kMaxBlockExpr, tmap, tsr, tplay);
                 });
+            } else {
+                for (const MidiClip& clip : t.midiClips.read()) {
+                    const bool clipActive = clip.active;
+                    const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
+                    const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
+                    if (xev && clipActive && !clip.controllers.empty())
+                        clipCtlEndResets(clip, clipStart, clipEnd, blockStart, frames, xev, *xn, kMaxBlockExpr);
+                    const bool hasVel = !clip.velocityEnvelope.points.empty();
+                    for (const Note& note : clip.notes)
+                        appendNote(clip, clipStart, clipEnd, clipActive, hasVel, note);
+                    if (xev && clipActive && !clip.controllers.empty())
+                        clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn,
+                            kMaxBlockExpr, tmap, tsr, tplay);
+                }
             }
-            idx->forEachMidiClipInWindow(qStart, qEnd, -1.0, [&](int32_t ci) {
-                const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
-                processClip(clip, ci, true, qStart - clip.startBeat, qEnd - clip.startBeat);
-            });
+        };
+        if (mapped) {
+            if (unshifted) gatherMode.template operator()<false, true>();
+            else
+                gatherMode.template operator()<true, true>();
+        } else if (unshifted) {
+            gatherMode.template operator()<false, false>();
         } else {
-            // Fast direct traversal for normal (<= 16 clip) / loop-seam tracks reuses the
-            // compile-time <shifted, isMapped> helper to eliminate per-note branches cleanly.
-            for (const MidiClip& clip : t.midiClips.read()) {
-                if (xev && clip.active && !clip.controllers.empty())
-                    clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb),
-                        renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart, frames, xev, *xn, kMaxBlockExpr);
-                processClip(clip, -1, false, 0.0, 0.0);
-            }
+            gatherMode.template operator()<true, false>();
         }
     }
     // Notes a loop record replace removed from this track's take: release them (once), unless
@@ -1902,11 +1919,11 @@ void Engine::feedMidiKey(Graph* g, Device& d, int32_t srcTrackId) {
     d.setMidiKeyBlock({srcTrackId});
 }
 
-void Engine::renderInstrumentRaw(
+bool Engine::renderInstrumentRaw(
     Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing, size_t trackIdx) {
     for (int32_t i = 0; i < frames * 2; ++i) dst[i] = 0.0f;
     Instrument* inst = t.instrument.get();
-    if (!inst) return;
+    if (!inst) return false;
     inst->setTransport(spb > 0.0 ? blockStart / spb : 0.0, spb, playing); // generative synths (Pendulum)
 
     MidiEv evs[1024];
@@ -2052,9 +2069,11 @@ void Engine::renderInstrumentRaw(
         ab.seamEnd = seamEndSamples_;
         an = scheduleArticulations(t.midiClips.read(), *t.articulationTable, ab, aev, kMaxBlockArt);
     }
-    playEvents(*inst, dst, frames, evs, n, xev, xn, aev, an, spb > 0.0 ? blockStart / spb : 0.0, spb, playing, [&] {
-        if (liveExprCount_ > 0) applyLiveExpression(g, t, *inst);
-    });
+    const bool wroteAudio =
+        playEvents(*inst, dst, frames, evs, n, xev, xn, aev, an, spb > 0.0 ? blockStart / spb : 0.0, spb, playing, [&] {
+            if (liveExprCount_ > 0) applyLiveExpression(g, t, *inst);
+        });
+    if (!wroteAudio) return false;
 
     // MIDI clip volume envelope (M9 follow-up): scale the instrument output per
     // sample within each clip's time window (0..1 curve in clip-local beats).
@@ -2089,6 +2108,7 @@ void Engine::renderInstrumentRaw(
             for (const MidiClip& clip : t.midiClips) applyMidiClipEnv(clip);
         }
     }
+    return true;
 }
 
 // Renders the playing Session slot's MIDI (looped) through the instrument into
@@ -3161,36 +3181,38 @@ void Engine::publishTrackTapRings(int32_t frames) {
 // pre-device) into dst. Per-track state only (plus read-only shared) —
 // bit-identical in pool tasks and inline. Session clocks (shared followRng_)
 // advance in the serial pre-pass, never here.
-void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
+bool Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
     double spb, bool playing, const TransportInfo& ti, bool arrangementActive, size_t trackIdx) {
     // 1) Render the track's dry stereo (pre-fader).
     switch (w.path) {
-    case LeafPath::Frozen: fillFrozen(t, dst, frames, blockStart, spb); break;
-    case LeafPath::Monitor: renderMonitorInput(g, t, dst, frames); break;
+    case LeafPath::Frozen: fillFrozen(t, dst, frames, blockStart, spb); return true;
+    case LeafPath::Monitor: renderMonitorInput(g, t, dst, frames); return true;
     case LeafPath::SessionInst:
         feedInstrumentKeys(g, t, frames); // a Session clip plays the same instrument: its keys too
         feedPartTaps(t); // a Session clip plays the same pads: their keys too (specs/050)
         renderSessionSlotRaw(t, dst, frames, spb);
         if (t.instrument) t.instrument->setPartTaps(nullptr, 0);
         sessionPostRender(t, frames / spb);
-        break;
+        return true;
     case LeafPath::SessionAudio:
         renderSessionAudioSlotRaw(t, dst, frames, spb);
         sessionPostRender(t, frames / spb);
-        break;
-    case LeafPath::Instrument:
+        return true;
+    case LeafPath::Instrument: {
         if (t.instrument) {
             t.instrument->setTransportInfo(ti); // hosted-plugin sync
             feedInstrumentKeys(g, t, frames);
         }
         feedPartTaps(t);
-        renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing, trackIdx);
+        const bool wroteAudio = renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing, trackIdx);
         if (t.instrument) t.instrument->setPartTaps(nullptr, 0);
-        break;
-    case LeafPath::AudioClips: renderTrackAudioClipsRaw(t, dst, frames, blockStart, spb); break;
-    case LeafPath::Tail: std::fill_n(dst, frames * 2, 0.0f); break; // the chain alone rings on
-    case LeafPath::Skip: break; // unreachable (pre-pass filters Skip out)
+        return wroteAudio;
     }
+    case LeafPath::AudioClips: renderTrackAudioClipsRaw(t, dst, frames, blockStart, spb); return true;
+    case LeafPath::Tail: std::fill_n(dst, frames * 2, 0.0f); return false; // the chain alone rings on
+    case LeafPath::Skip: return false; // unreachable (pre-pass filters Skip out)
+    }
+    return true;
 }
 
 // Parts of a track's instrument that keys listen to (specs/050): hand it where each one's Pre /

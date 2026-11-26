@@ -597,6 +597,8 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
         w.preRendered = false;
         w.tapsDone = false;
         w.copyPost = true;
+        w.drySilent = false;
+        w.postSilent = false;
         w.hybridEligible = false;
         w.hybridServed = false;
         w.hybridDropTick = false;
@@ -737,12 +739,13 @@ void RenderGraphExecutor::writeLeafTaps(MixContext& ctx, size_t leafIndex, const
     Engine::LeafWork& w = eng.rs_->leafWork[leafIndex];
     Track& t = *w.t;
     const int32_t preSlot = eng.routeSlotForTrack(t.id());
-    if (preSlot >= 0) simd_audio::addStereoScaled(eng.routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, ctx.frames);
+    if (preSlot >= 0 && !w.drySilent)
+        simd_audio::addStereoScaled(eng.routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, ctx.frames);
     w.vol = t.volume();
     w.pan = std::clamp(t.pan(), -1.0f, 1.0f);
     w.tapsDone = true;
     float* route = w.route;
-    if (!route || w.postTapMuted || w.cueOnly) return;
+    if (!route || w.postTapMuted || w.cueOnly || w.postSilent) return;
     const render_detail::PanStage ps(w.pan, w.vol, eng.panLawTo_, eng.panLawFrom_, eng.panLawPos_, ctx.panLawStep);
     if (!ps.cross) {
         simd_audio::scaleStereo(eng.mixTmp_.data(), post, ps.to.ll, ps.to.rr, ctx.frames);
@@ -823,8 +826,10 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
         float* base = eng.leafBase(i, stride);
         const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc);
         w.copyPost = hasFxOrPdc;
-        eng.renderLeafDry(
+        const bool dryAudio = eng.renderLeafDry(
             *w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti, ctx.arrangementActive, i);
+        w.drySilent = !dryAudio;
+        w.postSilent = !dryAudio && !hasFxOrPdc;
         if (hasFxOrPdc) {
             std::copy_n(base, stride, base + stride);
             RenderGraphExecutor::processDeviceChain(eng, ctx.g, *w.t, base + stride, wid, ctx.frames, ctx.blockStart,
@@ -843,8 +848,10 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
             if (!w.eligible && !w.preRendered) {
                 const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc);
                 w.copyPost = hasFxOrPdc;
-                eng.renderLeafDry(*w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti,
-                    ctx.arrangementActive, li);
+                const bool dryAudio = eng.renderLeafDry(*w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb,
+                    ctx.playing, ctx.ti, ctx.arrangementActive, li);
+                w.drySilent = !dryAudio;
+                w.postSilent = !dryAudio && !hasFxOrPdc;
                 if (hasFxOrPdc) {
                     std::copy_n(base, stride, base + stride);
                     RenderGraphExecutor::processDeviceChain(eng, ctx.g, *w.t, base + stride, eng.pool_->workerCount(),
@@ -935,26 +942,33 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
         float* pre = nullptr;
         float* post = nullptr;
         bool parallelDsp = false;
+        bool drySilent = false;
+        bool postSilent = false;
+        const bool hasFxOrPdc = !t.devices.empty() || (!w.frozenActive && t.pdc);
         if ((w.eligible && ctx.parallelOk) || w.preRendered) {
             float* base = eng.leafBase(li, stride);
             pre = base;
             post = w.copyPost ? (base + stride) : base;
             parallelDsp = true;
+            drySilent = w.drySilent;
+            postSilent = w.postSilent;
         } else {
             const bool allowSub = (ctx.offline || eng.rtParallel_) && eng.pool_->workerCount() > 0;
             const dsp::RenderExecutor::ScopedHost execScope(&ctx.execHost, allowSub);
-            eng.renderLeafDry(
+            const bool dryAudio = eng.renderLeafDry(
                 t, eng.scratch_.data(), w, g, ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti,
                 ctx.arrangementActive, li);
             pre = post = eng.scratch_.data();
+            drySilent = !dryAudio;
+            postSilent = !dryAudio && !hasFxOrPdc;
         }
 
-        if (!w.tapsDone) {
+        if (!w.tapsDone && !drySilent) {
             const int32_t preSlot = ctx.cachedRouteSlot(li, t.id());
             if (preSlot >= 0)
                 simd_audio::addStereoScaled(eng.routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, ctx.frames);
         }
-        if (!parallelDsp && (!t.devices.empty() || (!w.frozenActive && t.pdc))) {
+        if (!parallelDsp && hasFxOrPdc) {
             const bool allowSub = (ctx.offline || eng.rtParallel_) && eng.pool_->workerCount() > 0;
             const dsp::RenderExecutor::ScopedHost execScope(&ctx.execHost, allowSub);
             RenderGraphExecutor::processDeviceChain(eng, g, t, eng.scratch_.data(), callerWid, ctx.frames,
@@ -991,8 +1005,8 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
             eng.freezeCursor_ = c;
         }
 
-        if (w.cue) simd_audio::addStereoScaled(eng.cueSeg_, post, 1.0f, 1.0f, ctx.frames);
-        if (w.cueOnly) {
+        if (w.cue && !postSilent) simd_audio::addStereoScaled(eng.cueSeg_, post, 1.0f, 1.0f, ctx.frames);
+        if (w.cueOnly || (postSilent && !w.tapRec)) {
             t.setMeter(0, 0, 0, 0);
             t.stereoFold(0.0, 0.0, 0.0, ctx.frames, ctx.stereoA);
             continue;

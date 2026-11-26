@@ -271,6 +271,9 @@ class Instrument {
     virtual bool isIdle() const { return false; }
     // True when a sleeping instrument still needs render() called for cheap phase/clock continuity.
     virtual bool needsIdleRender() const { return false; }
+    // True when render() is guaranteed to emit only silence in its current state (e.g. an idle
+    // instrument or an unpopulated sample player with no sounding voices).
+    virtual bool outputAlwaysSilent() const { return isIdle(); }
     virtual bool requiresActiveProcessing() const {
         return sleepMode() == dsp::PluginSleepMode::Never || editorOpen();
     }

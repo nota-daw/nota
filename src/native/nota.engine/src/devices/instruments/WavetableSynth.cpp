@@ -661,7 +661,7 @@ NOTA_ALWAYS_INLINE float WavetableSynth::foldOut(float s, double amt) {
     return fast_math::sin(g * s * 0.25f); // == sin(π/2·g·s)
 }
 
-float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt,
+NOTA_ALWAYS_INLINE float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt,
     int uniN, const double* detF, const float* panL, const float* panR, float norm, float& sideOut) const {
     const float posF = pos * (kFrames - 1);
     const int f0 = std::clamp((int)posF, 0, kFrames - 1), f1 = std::min(f0 + 1, kFrames - 1);

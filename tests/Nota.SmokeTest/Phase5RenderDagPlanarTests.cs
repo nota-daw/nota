@@ -102,7 +102,7 @@ internal static class Phase5RenderDagPlanarTests
                 e.SetTrackPan(t, (i - 2.5f) * 0.2f);
                 e.AddBuiltinDevice(t, EqKind);
                 int comp = e.AddBuiltinDevice(t, CompKind);
-                if (i > 0) e.SetDeviceSidechainSource(t, comp, leaves[i - 1]);
+                if (i >= 3) e.SetDeviceSidechainSource(t, comp, leaves[i - 3]);
                 e.AddBuiltinDevice(t, ReverbKind);
                 e.SetTrackSend(t, 0, 0.20f);
                 e.SetTrackSend(t, 1, 0.15f);

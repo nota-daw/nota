@@ -197,6 +197,7 @@ class Mosaic final : public Instrument {
     bool hasTail() const override { return true; }
     bool isIdle() const override { return idle_; }
     bool needsIdleRender() const override { return true; }
+    bool outputAlwaysSilent() const override { return idle_ || cur_.load(std::memory_order_acquire) == nullptr; }
     void wake() override {
         idle_ = false;
         quietSamples_ = 0;

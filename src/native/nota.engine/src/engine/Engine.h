@@ -1671,7 +1671,8 @@ class Engine {
     // Is `t` inside group `groupId` (at any depth)? Walks the parent ids; no allocation.
     static bool isUnderGroup(const Graph& g, const Track& t, int32_t groupId);
     void drainLiveMidi(double blockStartBeat, bool playing);
-    void renderInstrumentRaw(
+    // Renders raw MIDI + expression into dst and returns true if non-silent output may have been produced.
+    bool renderInstrumentRaw(
         Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing,
         size_t trackIdx = SIZE_MAX);
     // Append a track's own note events (its MIDI clips while playing + live input when armed/
@@ -2941,6 +2942,7 @@ class Engine {
         uint32_t keyNeeds = 0;
         int level = 0;
         bool preRendered = false, tapsDone = false, copyPost = true;
+        bool drySilent = false, postSilent = false;
         bool hybridEligible = false, hybridServed = false, hybridDropTick = false;
         float vol = 1.0f, pan = 0.0f;
     };
@@ -3050,7 +3052,8 @@ class Engine {
     // in place on half 1; the serial fallback renders dry into scratch_,
     // taps, then runs devices in place. Both orders yield identical values
     // (dry/devices are pure per-track functions of the same inputs).
-    void renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart, double spb,
+    // Returns true when dst may contain non-zero dry audio; false guarantees all samples are zeros.
+    bool renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart, double spb,
         bool playing, const TransportInfo& ti, bool arrangementActive, size_t trackIdx = SIZE_MAX);
     void processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
         double spb, bool playing, const TransportInfo& ti);
