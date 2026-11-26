@@ -5,9 +5,11 @@
 
 #include "RackInstrument.h"
 
+#include "dsp/core/RenderExecutor.h"
 #include "engine/NoteExpression.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 
@@ -192,6 +194,7 @@ void RackInstrument::fanOn(int32_t pitch, float velocity, int32_t glideFrom) {
         if (pitch < z->keyLo.load(std::memory_order_relaxed) || pitch > z->keyHi.load(std::memory_order_relaxed) ||
             v < z->velLo.load(std::memory_order_relaxed) || v > z->velHi.load(std::memory_order_relaxed))
             continue;
+        c.instrument->wake();
         c.instrument->noteOn(pitch, velocity);
         // Right after the note-on a bend lands without smoothing: the note starts at the old pitch.
         if (bend != 0.0f && c.instrument->supportsMpe())
@@ -208,6 +211,7 @@ void RackInstrument::fanOff(int32_t pitch) {
     const int32_t n = static_cast<int32_t>(st->chains.size());
     for (int32_t ci = 0; ci < n; ++ci)
         if (st->chains[ci].instrument && !midiChainAt(ci)) {
+            st->chains[ci].instrument->wake();
             if (relVel_ > 0.0f) st->chains[ci].instrument->noteOffVelocity(pitch, relVel_);
             else
                 st->chains[ci].instrument->noteOff(pitch);
@@ -391,13 +395,38 @@ bool RackInstrument::supportsMpe() const {
     return false;
 }
 
+bool RackInstrument::isIdle() const {
+    if (requiresActiveProcessing()) return false;
+    RackState* st = live();
+    if (!st || st->chains.empty()) return !hasPendingRetire();
+    const auto& m = *mono_;
+    if (m.heldN > 0 || m.glideLeft > 0) return false;
+    for (int32_t c = 0; c < kMaxMidiChains; ++c) {
+        if (chainCount_[c] > 0) return false;
+        for (int p = 0; p < 128; ++p)
+            if (m.outHeld[c][p] > 0) return false;
+    }
+    if (!allChainMidiDevicesIdle()) return false;
+    return chainsIdle(true);
+}
+
 void RackInstrument::render(float* out, int32_t frames) {
     const auto done = renderScope();
     const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
-    if (!st || frames <= 0 || frames > kMaxBlock) return;
+    if (!st || frames <= 0 || frames > kMaxBlock || isIdle()) return;
+    const int32_t cap = std::max(1, arena_.capacityFrames());
+    for (int32_t off = 0; off < frames;) {
+        const int32_t sub = std::min(frames - off, cap);
+        renderChunk(*st, out + off * 2, sub, tapAt + off * 2);
+        off += sub;
+    }
+}
+
+void RackInstrument::renderChunk(RackState& st, float* out, int32_t frames, int32_t tapAt) {
+    float* const scratch = arena_.buffer(0);
     bool anySolo = false;
-    for (auto& c : st->chains)
+    for (auto& c : st.chains)
         if (c.ctl->solo.load(std::memory_order_relaxed)) {
             anySolo = true;
             break;
@@ -410,50 +439,16 @@ void RackInstrument::render(float* out, int32_t frames) {
     if (m.glideLeft > 0 && m.sounding >= 0) {
         m.glideLeft = std::max<int64_t>(0, m.glideLeft - frames);
         const float bend = m.glideBend * static_cast<float>(m.glideLeft) / static_cast<float>(m.glideTotal);
-        const int32_t n = static_cast<int32_t>(st->chains.size());
+        const int32_t n = static_cast<int32_t>(st.chains.size());
         for (int32_t ci = 0; ci < n; ++ci) {
-            auto& c = st->chains[ci];
+            auto& c = st.chains[ci];
             if (c.instrument && !midiChainAt(ci) && c.instrument->supportsMpe())
                 c.instrument->noteExpression(m.sounding, ExprBend, bend);
         }
     }
-    for (auto& c : st->chains) {
-        if (!c.instrument) continue;
-        const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
-        const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
-        // A chain a sidechain key listens to (specs/050) renders even when muted or solo-gated
-        // — the "ghost" chain feeds its key without being heard.
-        const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
-        const bool silent = mute || (anySolo && !solo);
-        if (silent && !tap) {
-            c.ctl->meter.store(0.0f, std::memory_order_relaxed);
-            // A silent chain still takes its notes, so a note held across an unmute ends, and plays
-            // them into nothing at their own samples, as the audible path does: a note it took
-            // while silent isn't held at its start and heard all at once on unmute (#650).
-            const int32_t ci = static_cast<int32_t>(&c - st->chains.data());
-            std::memset(scratch_, 0, sizeof(float) * frames * 2);
-            if (midiChainAt(ci)) {
-                int32_t cursor = 0;
-                int32_t& k = chainCursor_[ci];
-                const MidiEv* evs = chainEvs_ + ci * kChainEvents;
-                for (; k < chainCount_[ci] && evs[k].off < blockPos_ + frames; ++k) {
-                    const int32_t at = std::clamp(evs[k].off - blockPos_, 0, frames);
-                    if (at > cursor) {
-                        c.instrument->render(&scratch_[cursor * 2], at - cursor);
-                        cursor = at;
-                    }
-                    deliver(ci, *c.instrument, evs[k]);
-                }
-                if (cursor < frames) c.instrument->render(&scratch_[cursor * 2], frames - cursor);
-            } else if (!c.instrument->isIdle()) {
-                c.instrument->render(scratch_, frames);
-            }
-            continue;
-        }
-        std::memset(scratch_, 0, sizeof(float) * frames * 2);
-        const int32_t ci = static_cast<int32_t>(&c - st->chains.data());
+    auto renderChainAudio = [&](int32_t ci, RackChain& c, float* dst, const PartTap* tap, bool silent) {
+        std::memset(dst, 0, sizeof(float) * frames * 2);
         if (midiChainAt(ci)) {
-            // Play this chain's MIDI-effect output into its instrument at the exact samples.
             int32_t cursor = 0;
             const int32_t end = blockPos_ + frames;
             int32_t& k = chainCursor_[ci];
@@ -463,42 +458,110 @@ void RackInstrument::render(float* out, int32_t frames) {
                 if (ev.off >= end) break;
                 const int32_t at = std::clamp(ev.off - blockPos_, 0, frames);
                 if (at > cursor) {
-                    c.instrument->render(&scratch_[cursor * 2], at - cursor);
+                    c.instrument->render(&dst[cursor * 2], at - cursor);
                     cursor = at;
                 }
                 deliver(ci, *c.instrument, ev);
                 ++k;
             }
-            if (cursor < frames) c.instrument->render(&scratch_[cursor * 2], frames - cursor);
+            if (cursor < frames) c.instrument->render(&dst[cursor * 2], frames - cursor);
         } else {
-            c.instrument->render(scratch_, frames);
+            c.instrument->render(dst, frames);
         }
-        if (tap) addTap(tap->pre + tapAt, scratch_, frames); // Pre: the chain before its inserts
+        if (silent && !tap) return;
+        if (tap) addTap(tap->pre + tapAt, dst, frames); // Pre: the chain before its inserts
         for (auto& d : c.devices)
-            if (d && !d->bypassed()) d->process(scratch_, frames);
+            if (d && !d->bypassed()) d->process(dst, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
         const float pan = c.ctl->pan.load(std::memory_order_relaxed);
-        const float pl = g * (pan > 0.0f ? 1.0f - pan : 1.0f); // the chain's own gain / pan
+        const float pl = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
         const float pr = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
         if (tap) // Post: after its inserts and gain / pan, before the rack volume and the sum
             for (int32_t i = 0; i < frames; ++i) {
-                tap->post[tapAt + i * 2] += scratch_[i * 2] * pl;
-                tap->post[tapAt + i * 2 + 1] += scratch_[i * 2 + 1] * pr;
+                tap->post[tapAt + i * 2] += dst[i * 2] * pl;
+                tap->post[tapAt + i * 2 + 1] += dst[i * 2 + 1] * pr;
             }
-        if (silent) {
-            c.ctl->meter.store(0.0f, std::memory_order_relaxed);
-            continue;
-        }
-        const float lg = pl * rv, rg = pr * rv;
+    };
+
+    auto accumulateChain = [&](RackChain& c, const float* src) {
+        const float g = c.ctl->gain.load(std::memory_order_relaxed);
+        const float pan = c.ctl->pan.load(std::memory_order_relaxed);
+        const float lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f) * rv;
+        const float rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f) * rv;
         float peak = 0.0f;
         for (int32_t i = 0; i < frames; ++i) {
-            const float l = scratch_[i * 2], r = scratch_[i * 2 + 1];
+            const float l = src[i * 2], r = src[i * 2 + 1];
             out[i * 2] += l * lg;
             out[i * 2 + 1] += r * rg;
             const float a = std::max(std::fabs(l), std::fabs(r));
             if (a > peak) peak = a;
         }
         c.ctl->meter.store(peak * g, std::memory_order_relaxed);
+    };
+
+    struct ChainWork {
+        int32_t ci = 0;
+        RackChain* chain = nullptr;
+        const PartTap* tap = nullptr;
+        bool silent = false;
+    };
+    std::array<ChainWork, dsp::ChainScratchBank::kMaxSlots> work;
+    int32_t nWork = 0;
+    int32_t nChainDevs = 0;
+    bool allParallel = true;
+    bool overflow = false;
+
+    for (auto& c : st.chains) {
+        if (!c.instrument) continue;
+        const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
+        const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
+        // A chain a sidechain key listens to (specs/050) renders even when muted or solo-gated
+        // — the "ghost" chain feeds its key without being heard.
+        const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
+        const bool silent = mute || (anySolo && !solo);
+        const int32_t ci = static_cast<int32_t>(&c - st.chains.data());
+        if (silent && !tap && !midiChainAt(ci) && chainIdle(c, true)) {
+            c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+            continue;
+        }
+        if (silent) c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+        if (nWork < dsp::ChainScratchBank::kMaxSlots) {
+            work[static_cast<size_t>(nWork++)] = {ci, &c, tap, silent};
+            for (const auto& d : c.devices)
+                if (d && !d->bypassed()) ++nChainDevs;
+            if (!chainSupportsParallel(c)) allParallel = false;
+        } else {
+            overflow = true;
+        }
+    }
+
+    const bool fanOut = !overflow && (nWork >= 5 || (nWork >= 3 && nChainDevs >= 3)) && allParallel &&
+                        parallelArena_.slotCount() >= nWork && parallelArena_.capacityFrames() >= frames;
+    if (fanOut) {
+        dsp::RenderExecutor::parallelFor(nWork, true, [&](int32_t w) {
+            const ChainWork& cw = work[static_cast<size_t>(w)];
+            renderChainAudio(cw.ci, *cw.chain, parallelArena_.buffer(w), cw.tap, cw.silent);
+        });
+        for (int32_t w = 0; w < nWork; ++w) {
+            const ChainWork& cw = work[static_cast<size_t>(w)];
+            if (!cw.silent) accumulateChain(*cw.chain, parallelArena_.buffer(w));
+        }
+    } else {
+        for (auto& c : st.chains) {
+            if (!c.instrument) continue;
+            const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
+            const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
+            const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
+            const bool silent = mute || (anySolo && !solo);
+            const int32_t ci = static_cast<int32_t>(&c - st.chains.data());
+            if (silent && !tap && !midiChainAt(ci) && chainIdle(c, true)) {
+                c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+                continue;
+            }
+            if (silent) c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+            renderChainAudio(ci, c, scratch, tap, silent);
+            if (!silent) accumulateChain(c, scratch);
+        }
     }
     blockPos_ += frames; // the next segment of this block starts here
 }
@@ -529,6 +592,7 @@ std::shared_ptr<Instrument> RackInstrument::clone() const {
     r->setSampleRate(sampleRate_);
     auto blob = serialize();
     r->setState(blob.data(), static_cast<int32_t>(blob.size()));
+    r->ensureBlockCapacity(arena_.capacityFrames());
     return r;
 }
 

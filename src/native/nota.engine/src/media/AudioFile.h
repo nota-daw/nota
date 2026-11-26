@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "AudioSource.h"
 #include "SampleBuffer.h"
 #include <memory>
 #include <string>
@@ -16,6 +17,7 @@ namespace nota {
 // Decodes `path` into a SampleBuffer. Returns nullptr on failure or unsupported
 // format. Format is chosen by file extension.
 std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path);
+std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path, const AudioDecodeOptions& opts);
 
 #ifdef _WIN32
 // A UTF-8 path as Windows wide characters, for the dr_libs *_w opens: their char* opens read

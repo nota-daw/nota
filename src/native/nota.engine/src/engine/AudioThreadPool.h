@@ -44,6 +44,7 @@
 
 #pragma once
 
+#include "dsp/core/RenderExecutor.h"
 #include "dsp/core/RtAttributes.h"
 
 #include <algorithm>
@@ -71,6 +72,21 @@ class AudioThreadPool {
 
     // Dedicated threads (excludes the caller-helper slot).
     int workerCount() const noexcept { return (int)workers_.size(); }
+
+    dsp::RenderExecutorHost executorHost() noexcept {
+        return {
+            this,
+            [](void* p) noexcept -> bool { return tTopDispatchPool_ == p; },
+            [](void* p, int32_t count, dsp::RenderExecutorHost::RunFn fn, void* ctx, int32_t helpers) {
+                static_cast<AudioThreadPool*>(p)->dispatch(
+                    count, [fn, ctx](int, int idx) { fn(ctx, idx); }, helpers);
+            },
+            [](void* p, int32_t count, dsp::RenderExecutorHost::RunFn fn, void* ctx) noexcept -> bool {
+                return static_cast<AudioThreadPool*>(p)->tryRunSub(count, fn, ctx);
+            },
+            [](void* p) noexcept -> int32_t { return static_cast<AudioThreadPool*>(p)->workerCount(); },
+        };
+    }
 
     // The audio device's IO workgroup (an os_workgroup_t, macOS 11+) and its buffer period.
     // Each worker, the next time it wakes, becomes a real-time thread for that period and
@@ -100,7 +116,7 @@ class AudioThreadPool {
     // a context switch, so wake only as many as the job's work pays for.
     template <typename F> void dispatch(int n, F&& fn, int helpers = -1) {
         if (n <= 0) return;
-        if (workers_.empty()) {
+        if (workers_.empty() || (n == 1 && (helpers == 0 || !dsp::RenderExecutor::isParallelAllowed()))) {
             for (int i = 0; i < n; ++i) fn(workerCount(), i);
             return;
         }
@@ -126,6 +142,7 @@ class AudioThreadPool {
         s.call.store(&callTrampoline<F>, std::memory_order_release);
         s.ctx.store((void*)&fn, std::memory_order_release);
         s.n.store(n, std::memory_order_release);
+        s.allowSub.store(dsp::RenderExecutor::isParallelAllowed(), std::memory_order_release);
         s.base.store(claimed_.load(std::memory_order_relaxed), std::memory_order_release);
         doneBase_ = done_.load(std::memory_order_relaxed);
         epoch_.store(g, std::memory_order_seq_cst); // publish (seq_cst: pairs with park())
@@ -139,8 +156,8 @@ class AudioThreadPool {
             if (const int asleep = sleepers_.load(std::memory_order_seq_cst); asleep > 0) {
                 const int want = std::min(helpers < 0 ? workerCount() : helpers, n - 1);
                 wake_.fetch_add(1, std::memory_order_release);
-                if (helpers < 0 || want >= asleep)
-                    wake_.notify_all(); // one non-blocking futex wake for everyone
+                if (want >= asleep)
+                    wake_.notify_all(); // one non-blocking futex wake when every sleeper is needed
                 else
                     for (int i = 0; i < want; ++i) wake_.notify_one();
             }
@@ -148,6 +165,8 @@ class AudioThreadPool {
         // Claim loop: validate against the live slot, claim by CAS, run.
         // The caller needs no stop checks (single audio thread: no
         // concurrent publish can invalidate its own job mid-flight).
+        const AudioThreadPool* const prevPool = tTopDispatchPool_;
+        tTopDispatchPool_ = this;
         const int self = workerCount();
         for (;;) {
             uint64_t t = claimed_.load(std::memory_order_relaxed);
@@ -166,14 +185,21 @@ class AudioThreadPool {
         // Acquire pairs with every task's release increment (a release sequence through
         // the RMWs), so all workers' buffer writes are visible once the count is reached.
         const uint64_t need = doneBase_ + (uint64_t)n;
-        while (done_.load(std::memory_order_acquire) < need) NOTA_CPU_PAUSE();
+        while (done_.load(std::memory_order_acquire) < need) {
+            if (!(hasSubTask() && tryHelpSubTask())) NOTA_CPU_PAUSE();
+        }
+        tTopDispatchPool_ = prevPool;
         lastEnd_ = std::chrono::steady_clock::now();
     }
 
   private:
     static constexpr uint64_t kSlots = 8;
     static constexpr int64_t kLingerGapNs = 200'000; // gaps below this count as back-to-back
-    static constexpr int64_t kMaxLingerNs = 100'000;
+    static constexpr int64_t kMaxLingerNs = 40'000;
+
+    bool hasSubTask() const noexcept {
+        return (subState_.load(std::memory_order_relaxed) & kSubActiveBit) != 0;
+    }
 
     template <typename F> static void callTrampoline(void* ctx, int worker, int index) {
         (*static_cast<F*>(ctx))(worker, index);
@@ -181,25 +207,47 @@ class AudioThreadPool {
 
     using JobCall = void (*)(void*, int, int);
     // Fields are atomics because a lagging worker may still read a slot while the
-    // caller rewrites it kSlots jobs later. Workers read them seqlock-style: all four,
+    // caller rewrites it kSlots jobs later. Workers read them seqlock-style: all fields,
     // then an acquire fence, then epoch_ again; a changed epoch discards the read, so
     // fields from two generations are never combined (release stores on the writer
-    // side; on x86 these are plain moves).
-    struct JobSlot {
+    // side; on x86 these are plain moves). Cache-line aligned to prevent false sharing.
+    struct NOTA_CACHE_ALIGNED JobSlot {
         std::atomic<JobCall> call{nullptr};
         std::atomic<void*> ctx{nullptr};
         std::atomic<int> n{0};
+        std::atomic<bool> allowSub{false};
         std::atomic<uint64_t> base{0};
     };
 
+    // Single lock-free cooperative sub-task slot for intra-track racks & poly synths.
+    // Packing: [gen:32][publishing:1][active:1][refCount:30].
+    static constexpr uint64_t kSubRefMask = (uint64_t{1} << 29) - 1;
+    static constexpr uint64_t kSubActiveBit = uint64_t{1} << 29;
+    static constexpr uint64_t kSubPublishBit = uint64_t{1} << 30;
+    static constexpr int kSubGenShift = 32;
+    struct NOTA_CACHE_ALIGNED SubSlot {
+        dsp::RenderExecutorHost::RunFn fn = nullptr;
+        void* ctx = nullptr;
+        int32_t total = 0;
+        std::atomic<int32_t> nextIdx{0};
+        std::atomic<int32_t> done{0};
+    };
+
+    bool tryRunSub(int32_t count, dsp::RenderExecutorHost::RunFn fn, void* ctx) noexcept;
+    bool tryHelpSubTask() noexcept;
+
     void workerLoop(int id);
     void park(uint64_t seen);
+
+    inline static thread_local const AudioThreadPool* tTopDispatchPool_ = nullptr;
 
     std::vector<std::thread> workers_;
 
     NOTA_CACHE_ALIGNED std::atomic<uint64_t> epoch_{0};
     NOTA_CACHE_ALIGNED std::atomic<uint64_t> claimed_{0};
     NOTA_CACHE_ALIGNED std::atomic<uint64_t> done_{0};
+    NOTA_CACHE_ALIGNED std::atomic<uint64_t> subState_{0};
+    SubSlot subSlot_;
     std::atomic<bool> stop_{false};
     NOTA_CACHE_ALIGNED std::atomic<int> sleepers_{0}; // workers inside park()
     // Futex word, in the width libc++ waits on natively: int32 on Linux, int64 elsewhere

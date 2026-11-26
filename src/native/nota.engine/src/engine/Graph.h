@@ -20,6 +20,8 @@
 
 namespace nota {
 
+class RenderRoutingPlan;
+
 // How a track's / return's pan is applied to a stereo signal (specs/006). Balance drops
 // the far channel as the pan moves; Stereo folds it into the near side. Identical for
 // mono material and at centre. Groups, clip pan envelopes and rack chains ignore it.
@@ -64,6 +66,12 @@ struct Graph {
     // Arrangement sections (specs/016), sorted by start. In the snapshot so undo/redo
     // restore them and the project saves them.
     std::vector<Section> sections;
+    // Precompiled routing, bus ancestry, and compiled param endpoints built in publishRaw().
+    std::shared_ptr<const RenderRoutingPlan> routingPlan;
+    // Precomputed presence flags set in Engine::publishRaw() to skip empty passes cleanly.
+    bool hasAutomation = false;
+    bool hasModulators = false;
+    bool hasCvLinks = false;
 };
 
 // Graph-level fields (everything except `tracks`). A fresh graph built from scratch must

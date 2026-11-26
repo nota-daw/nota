@@ -369,7 +369,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             if (Synced()) { mid = "2"; end = "bar"; }
             else { double sec = cycles / hz; mid = NotaNum.Time(sec / 2); end = NotaNum.Time(sec); }
             string title = "LFO → " + TargetName();
-            double phase = scN > S_LfoPhase && On(LfoOn) && Sc(S_Cpu) > 0 ? Sc(S_LfoPhase) : double.NaN;
+            double phase = scN > S_LfoPhase && On(LfoOn) && Sc(S_SampleRate) > 0 ? Sc(S_LfoPhase) : double.NaN;
             lfoView.Set(On(LfoOn), Sel(LfoWave, 5), P(LfoMorph), P(LfoAmt), P(LfoOffset), P(LfoPhase) * 0.5, smoothCycles, cycles, phase,
                 title, NotaNum.F($"±{Pct(P(LfoAmt))}"), P(LfoMorph) > 0.004 ? NotaNum.F($"morph {Pct(P(LfoMorph))}") : "", mid, end);
         }

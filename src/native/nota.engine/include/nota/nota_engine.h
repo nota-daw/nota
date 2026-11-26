@@ -224,6 +224,20 @@ typedef struct NotaMeter {
     float rms_r;
 } NotaMeter;
 
+/* Single track's post-fader level meter entry returned by nota_engine_read_track_meters. */
+typedef struct NotaTrackMeterEntry {
+    int32_t   track_id;
+    NotaMeter meter;
+} NotaTrackMeterEntry;
+
+/* Controls how built-in devices measure per-block CPU usage on the audio thread.
+ * On-demand (default) skips OS clock reads whenever no device card or scope is observing. */
+typedef enum NotaTelemetryMode {
+    NOTA_TELEMETRY_ON_DEMAND = 0,
+    NOTA_TELEMETRY_ALWAYS_OFF = 1,
+    NOTA_TELEMETRY_ALWAYS_ON = 2
+} NotaTelemetryMode;
+
 /* Library version string, e.g. "0.2.5" (from nota.engine/VERSION). Never NULL. */
 NOTA_API const char* nota_engine_version(void);
 
@@ -541,6 +555,11 @@ NOTA_API int32_t nota_engine_automation_overridden(const NotaEngine* engine);
  * 0 when no live device is running. */
 NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
 
+/* Controls per-device CPU telemetry on the audio thread (NotaTelemetryMode).
+ * Safe to call while running; updates are lock-free (AR-6). */
+NOTA_API NotaResult nota_engine_set_device_telemetry(NotaEngine* engine, int32_t mode);
+NOTA_API int32_t    nota_engine_device_telemetry(const NotaEngine* engine);
+
 /* ---- Render threads -------------------------------------------------------
  * Dedicated threads that render tracks in parallel (the audio thread helps too).
  * set: count < 0 = the default (hardware threads - 1, capped), 0 = render on the audio
@@ -550,6 +569,53 @@ NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
 NOTA_API NotaResult nota_engine_set_render_threads(NotaEngine* engine, int32_t count);
 NOTA_API int32_t    nota_engine_render_threads(const NotaEngine* engine);
 NOTA_API double     nota_engine_render_threads_cpu_seconds(const NotaEngine* engine);
+
+/* ---- Audio streaming & hybrid buffering (Phase 6, #1050) ---------------- */
+typedef enum NotaSampleLoadPolicy {
+    NOTA_SAMPLE_LOAD_AUTO = 0,   /* Stream if decoded float32 PCM > threshold, else RAM */
+    NOTA_SAMPLE_LOAD_MEMORY = 1, /* Decode full PCM into RAM regardless of size */
+    NOTA_SAMPLE_LOAD_STREAM = 2  /* Stream all seekable WAV/FLAC/MP3 files from disk */
+} NotaSampleLoadPolicy;
+
+typedef struct NotaStreamingStats {
+    int32_t active_streams;
+    int64_t stream_threshold_bytes;
+    int64_t stream_cache_bytes;
+    int64_t resident_sample_bytes;
+    int64_t pages_faulted;
+    int64_t pages_served_async;
+    int64_t pages_served_sync;
+    int64_t rt_underruns;
+} NotaStreamingStats;
+
+typedef enum NotaHybridBufferMode {
+    NOTA_HYBRID_OFF = 0,  /* Every track renders inside the audio callback / pool */
+    NOTA_HYBRID_AUTO = 1  /* Live tracks run low-latency; non-live arrangement tracks look ahead */
+} NotaHybridBufferMode;
+
+typedef struct NotaHybridBufferStats {
+    int32_t active;
+    int32_t live_tracks;
+    int32_t anticipative_tracks;
+    int32_t lookahead_frames;
+    int32_t chunk_frames;
+    int64_t cache_hits;
+    int64_t cache_misses;
+    int64_t invalidations;
+} NotaHybridBufferStats;
+
+/* Byte threshold (decoded float32 PCM) above which Auto policy streams from disk (default 16 MiB). */
+NOTA_API NotaResult nota_engine_set_stream_threshold_bytes(NotaEngine* engine, int64_t bytes);
+NOTA_API int64_t    nota_engine_stream_threshold_bytes(const NotaEngine* engine);
+NOTA_API NotaResult nota_engine_set_sample_load_policy(NotaEngine* engine, int32_t policy);
+NOTA_API int32_t    nota_engine_sample_load_policy(const NotaEngine* engine);
+NOTA_API int32_t    nota_sample_is_streaming(const NotaEngine* engine, int64_t sample_id);
+NOTA_API NotaResult nota_engine_streaming_stats(const NotaEngine* engine, NotaStreamingStats* out);
+
+/* Hybrid low-latency + anticipative lookahead engine mode. */
+NOTA_API NotaResult nota_engine_set_hybrid_buffering(NotaEngine* engine, int32_t mode);
+NOTA_API int32_t    nota_engine_hybrid_buffering(const NotaEngine* engine);
+NOTA_API NotaResult nota_engine_hybrid_stats(const NotaEngine* engine, NotaHybridBufferStats* out);
 
 /* ---- Transport (M1) ------------------------------------------------------ */
 NOTA_API NotaResult nota_transport_play(NotaEngine* engine);
@@ -2738,6 +2804,22 @@ NOTA_API int32_t    nota_plugin_preview_serial(const NotaEngine* engine, int32_t
 NOTA_API NotaResult nota_track_set_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t bypassed);
 NOTA_API int32_t    nota_track_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
+/* Auto-sleep policy for hosted plugins and instruments (Phase 2).
+ * AUTO wakes automatically on MIDI, audio, sidechain, or parameter changes and
+ * sleeps once silent past the declared tail length + hangover. NEVER keeps the
+ * device rendering every block (e.g. free-running generators or noise units). */
+typedef enum NotaPluginSleepMode {
+    NOTA_PLUGIN_SLEEP_AUTO  = 0,
+    NOTA_PLUGIN_SLEEP_NEVER = 1
+} NotaPluginSleepMode;
+
+/* Controls auto-sleep policy for a device or instrument (device_index == -1 targets the
+ * track's instrument; >= 0 targets an insert device). Lock-free across the audio thread. */
+NOTA_API NotaResult nota_plugin_set_sleep_mode(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t mode);
+NOTA_API int32_t    nota_plugin_sleep_mode(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* Device-free selftest verifying open editors hold SilenceGate and audio/rack paths active. 0 = pass. */
+NOTA_API int32_t    nota_engine_plugin_editor_sleep_selftest(int32_t catalog_index);
+
 /* Device fold (specs/022): a view flag the Devices panel draws as a narrow strip. Saved with
  * the project, never read by the audio thread. Kept on the device, so it follows moves and
  * undo/redo. device_index -1 = the track's instrument. Out of range: set is a no-op, get
@@ -2757,6 +2839,7 @@ NOTA_API int32_t    nota_pdc_selftest(void);
  * peak + RMS over the last processed block. track_meter returns 0 for an unknown
  * track id, else 1; master_meter always succeeds. Poll from the UI (~30 Hz). */
 NOTA_API int32_t    nota_engine_track_meter(const NotaEngine* engine, int32_t track_id, NotaMeter* out);
+NOTA_API int32_t    nota_engine_read_track_meters(const NotaEngine* engine, NotaTrackMeterEntry* out_entries, int32_t capacity);
 NOTA_API NotaResult nota_engine_master_meter(const NotaEngine* engine, NotaMeter* out);
 
 /* Cue (specs/089): a private mix for the performer on its own output pair (see

@@ -112,6 +112,7 @@ class Arpeggiator final : public MidiDevice {
     // ---- the arpeggiator -------------------------------------------------
     void process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int maxOut, int32_t frames, double beatStart,
         double spb, bool playing) override;
+    bool isIdle() const override { return held_ == 0 && nOns_ == 0 && nOffs_ == 0; }
 
   private:
     // --- held notes ---

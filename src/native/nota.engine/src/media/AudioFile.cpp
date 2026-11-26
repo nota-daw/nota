@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 #include "AudioFile.h"
+#include "StreamingAudioSource.h"
 
 #define DR_WAV_IMPLEMENTATION
 #define DR_FLAC_IMPLEMENTATION
@@ -134,7 +135,30 @@ std::wstring widePath(const std::string& utf8) {
 }
 #endif
 
-std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path) {
+std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path, const AudioDecodeOptions& opts) {
+    if (opts.policy != SampleLoadPolicy::MemoryOnly) {
+        int32_t ch = 0;
+        int64_t frames = 0;
+        double sr = 0.0;
+        if (StreamingAudioSource::probeHeader(path, ch, frames, sr)) {
+            const int64_t threshold = std::max<int64_t>(0, opts.streamThresholdBytes);
+            const int64_t estimatedBytes = frames * static_cast<int64_t>(ch) * static_cast<int64_t>(sizeof(float));
+            const bool wantStream = (opts.policy == SampleLoadPolicy::StreamAlways) ||
+                                    (opts.policy == SampleLoadPolicy::Auto && threshold > 0 && estimatedBytes > threshold);
+            if (wantStream) {
+                auto buf = std::make_shared<SampleBuffer>();
+                auto src = StreamingAudioSource::open(path, &buf->peakTable, &buf->rmsTable);
+                if (src) {
+                    buf->channels = src->channels();
+                    buf->frames = src->frames();
+                    buf->sourceSampleRate = src->sampleRate();
+                    buf->source = std::move(src);
+                    return buf;
+                }
+            }
+        }
+    }
+
     const std::string ext = extLower(path);
     std::shared_ptr<SampleBuffer> buf;
     if (ext == "wav") buf = decodeWav(path);
@@ -145,6 +169,10 @@ std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path) {
     // aiff and others: deferred
     if (buf) buf->buildPeakTable(); // one pass now; every later waveform query reads blocks
     return buf;
+}
+
+std::shared_ptr<SampleBuffer> decodeAudioFile(const std::string& path) {
+    return decodeAudioFile(path, AudioDecodeOptions{SampleLoadPolicy::MemoryOnly, kDefaultStreamThresholdBytes});
 }
 
 } // namespace nota

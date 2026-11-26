@@ -94,8 +94,8 @@ void Eq3::splitOne(int ch, float x, int nSec, const Coeffs* c1, const Coeffs* c2
 }
 
 void Eq3::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
     if (frames <= 0) return;
+    const auto cpuTimer = blockTimer(frames, sr_);
     // Idle skip: silent input on a settled crossover leaves the buffer untouched.
     const bool inSilent = simd_audio::isSilent(buf, frames * 2);
     uint32_t w0 = ringW_.load(std::memory_order_relaxed);
@@ -201,11 +201,6 @@ void Eq3::process(float* buf, int32_t frames) {
     gA_[0].store(gLcur_, std::memory_order_relaxed);
     gA_[1].store(gMcur_, std::memory_order_relaxed);
     gA_[2].store(gHcur_, std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / blockS) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 const char* Eq3::paramName(int32_t i) const {
@@ -245,7 +240,7 @@ int32_t Eq3::scopeRead(float* out, int32_t maxSamples) const {
         t[S_Gain + b] = gA_[b].load(std::memory_order_relaxed);
     }
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Latency] = 0.0f;
     t[S_F1] = f1A_.load(std::memory_order_relaxed);
     t[S_F2] = f2A_.load(std::memory_order_relaxed);

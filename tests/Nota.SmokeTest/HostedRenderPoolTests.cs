@@ -51,6 +51,33 @@ internal static class HostedRenderPoolTests
         Console.Write(stdout.GetAwaiter().GetResult());
         if (child.ExitCode != 0) Console.Write(stderr.GetAwaiter().GetResult());
         yield return (child.ExitCode == 0, "isolated real VST3 render-pool regressions");
+
+        if (OperatingSystem.IsMacOS())
+        {
+            var auStart = new ProcessStartInfo("dotnet")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            auStart.ArgumentList.Add(typeof(HostedRenderPoolTests).Assembly.Location);
+            auStart.ArgumentList.Add("--hosted-au-pool");
+            using var auChild = Process.Start(auStart)!;
+            var auOut = auChild.StandardOutput.ReadToEndAsync();
+            var auErr = auChild.StandardError.ReadToEndAsync();
+            if (!auChild.WaitForExit(TimeSpan.FromMinutes(3)))
+            {
+                try { auChild.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                auOut.GetAwaiter().GetResult();
+                auErr.GetAwaiter().GetResult();
+                yield return (false, "isolated macOS AU render-pool regressions (timed out, killed)");
+                yield break;
+            }
+            Console.Write(auOut.GetAwaiter().GetResult());
+            if (auChild.ExitCode != 0) Console.Write(auErr.GetAwaiter().GetResult());
+            yield return (auChild.ExitCode == 0, "isolated macOS real AudioUnit planar + parallel regressions");
+        }
     }
 
     private static int Param(NotaEngine e, int track, int device, string name)
@@ -256,6 +283,10 @@ internal static class HostedRenderPoolTests
                     "hosted instrument rack retains serial fallback and audible output");
             }
 
+            foreach (var result in SleepGateChecks(catalog)) yield return result;
+
+            foreach (var result in PlanarPluginChainChecks(catalog)) yield return result;
+
             using (var live = Session(catalog, 4, 32))
             {
                 bool stop = false, finite = true;
@@ -295,12 +326,112 @@ internal static class HostedRenderPoolTests
         finally { NotaEngine.SetDataDir(null); }
     }
 
+    private static IEnumerable<(bool Ok, string Label)> SleepGateChecks(int catalog)
+    {
+        NotaEngine MakeIdleInstEngine(PluginSleepMode mode, int helpers = 0)
+        {
+            var e = new NotaEngine { RenderThreads = helpers };
+            e.RenderOffline(new float[Block * 2], Block, Rate);
+            e.SetBpm(120);
+            int t = e.AddPluginInstrumentTrack(catalog);
+            e.WaitPluginLoads(60000);
+            e.SetTrackVolume(t, 0.5f);
+            e.PluginParamSet(t, -1, Param(e, t, -1, "Work"), 1.0f);
+            e.PluginParamSet(t, -1, Param(e, t, -1, "Gain"), 1.0f);
+            e.SetPluginSleepMode(t, -1, mode);
+            int c1 = e.AddMidiClip(t, 0.0, 0.15);
+            e.SetClipNotes(t, c1, [new NotaNote(60, 0.0, 0.05, 0.9f)]);
+            int c2 = e.AddMidiClip(t, 2.0, 0.5);
+            e.SetClipNotes(t, c2, [new NotaNote(67, 0.0, 0.4, 0.9f)]);
+            e.Seek(0);
+            e.Play();
+            return e;
+        }
+
+        // Measure Auto vs Never while silent past the 250 ms hangover (beat 0.2..1.9 = ~640 blocks @ 128 frames).
+        static double MeasureQuietRegionMs(int cat, PluginSleepMode mode)
+        {
+            using var e = new NotaEngine { RenderThreads = 0 };
+            e.RenderOffline(new float[Block * 2], Block, Rate);
+            e.SetBpm(120);
+            int t = e.AddPluginInstrumentTrack(cat);
+            e.WaitPluginLoads(60000);
+            e.PluginParamSet(t, -1, Param(e, t, -1, "Work"), 0.5f); // 2048 trig ops/sample
+            e.SetPluginSleepMode(t, -1, mode);
+            var buf = new float[Block * 2];
+            for (int i = 0; i < 120; i++) e.RenderOffline(buf, Block); // settle past 250 ms
+            long t0 = Stopwatch.GetTimestamp();
+            for (int i = 0; i < 120; i++) e.RenderOffline(buf, Block);
+            return Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
+        }
+
+        double autoMs = MeasureQuietRegionMs(catalog, PluginSleepMode.Auto);
+        double neverMs = MeasureQuietRegionMs(catalog, PluginSleepMode.Never);
+        yield return (autoMs < neverMs * 0.2,
+            $"VST3 PluginInstrument sleeps on silence vs Never ({autoMs:0.00} ms vs {neverMs:0.00} ms)");
+
+        using (var a0 = MakeIdleInstEngine(PluginSleepMode.Auto, 0))
+        using (var a4 = MakeIdleInstEngine(PluginSleepMode.Auto, 4))
+        {
+            const int blocks = 550; // > 1.46 s @ 128 frames: beat 0 hit -> >0.9s silence -> beat 2..2.5 wake (blocks 375..469)
+            var r0 = Render(a0, blocks);
+            var r4 = Render(a4, blocks);
+            float quietPeak = r0.Skip(200 * Block * 2).Take(160 * Block * 2).Select(Math.Abs).Max();
+            float wakePeak = r0.Skip(375 * Block * 2).Take(94 * Block * 2).Select(Math.Abs).Max();
+            yield return (quietPeak == 0f && wakePeak > 0.005f && r0.SequenceEqual(r4) && r0.All(float.IsFinite),
+                $"VST3 PluginInstrument sleeps on quiet gap (quiet={quietPeak:0.0000}) and wakes cleanly (wakePeak={wakePeak:0.000})");
+        }
+
+        // VST3 PluginEffect: settles on silence, wakes cleanly on sidechain and main audio input.
+        using (var fxAuto = new NotaEngine { RenderThreads = 0 })
+        using (var fxAutoMt = new NotaEngine { RenderThreads = 4 })
+        {
+            static float[] RenderFx(NotaEngine e, int cat)
+            {
+                e.RenderOffline(new float[Block * 2], Block, Rate);
+                e.SetBpm(120);
+                int src = e.AddBassSynthTrack();
+                int main = e.AddInstrumentTrack();
+                int eff = e.AddTrackEffectPlugin(main, cat);
+                e.WaitPluginLoads(60000);
+                e.PluginParamSet(main, eff, Param(e, main, eff, "Work"), 0.0f);
+                e.PluginParamSet(main, eff, Param(e, main, eff, "Gain"), 1.0f);
+                e.SetDeviceSidechainSource(main, eff, src);
+                e.SetDeviceSidechainMix(main, eff, 1.0f);
+                int cSrc = e.AddMidiClip(src, 1.5, 0.5); // sidechain wakes sleeping PluginEffect at beat 1.5 (blocks 281..375)
+                e.SetClipNotes(src, cSrc, [new NotaNote(48, 0.0, 0.4, 0.9f)]);
+                e.Seek(0);
+                e.Play();
+                return Render(e, 450);
+            }
+            var f0 = RenderFx(fxAuto, catalog);
+            var f4 = RenderFx(fxAutoMt, catalog);
+            float quietPeak = f0.Skip(150 * Block * 2).Take(120 * Block * 2).Select(Math.Abs).Max();
+            float scWakePeak = f0.Skip(281 * Block * 2).Take(94 * Block * 2).Select(Math.Abs).Max();
+            yield return (quietPeak == 0f && scWakePeak > 0.001f && f0.SequenceEqual(f4) && f0.All(float.IsFinite),
+                $"VST3 PluginEffect sleeps past hangover (quiet={quietPeak:0.0000}) and wakes on sidechain audio (peak={scWakePeak:0.000})");
+        }
+
+        int edCode = NotaEngine.PluginEditorSleepSelfTest(catalog);
+        yield return (edCode == 0,
+            $"VST3 open editor keeps PluginInstrument, Audio/Muted/Group PluginEffect, Hybrid Auto, and Racks awake (code={edCode})");
+    }
+
     private static IEnumerable<(bool Ok, string Label)> BufferChecks(int catalog)
     {
         foreach (bool inserts in new[] { false, true })
         {
             using var smallEngine = Session(catalog, 0, 0, inserts);
             using var largeEngine = Session(catalog, 0, 0, inserts);
+            foreach (var eng in new[] { smallEngine, largeEngine })
+            {
+                for (int i = 0; i < eng.TrackCount; i++)
+                {
+                    if (!eng.TryGetTrackInfo(i, out var tr)) continue;
+                    eng.SetPluginSleepMode(tr.Id, -1, PluginSleepMode.Never);
+                    if (inserts) eng.SetPluginSleepMode(tr.Id, 0, PluginSleepMode.Never);
+                }
+            }
             smallEngine.StopTransport(); largeEngine.StopTransport();
             bool clean = true;
             foreach (int frames in new[] { 128, 16, 8192, 64, 1024, 16384, 128 })
@@ -316,6 +447,130 @@ internal static class HostedRenderPoolTests
             yield return TimingBudget.Check(true, small.MedianMs * 32 < large.MedianMs,
                 $"56-channel VST3 {adapter}: 128-frame cost {small.MedianMs:0.0000} ms scales below 1/32 of 8192-frame cost {large.MedianMs:0.0000} ms");
             Console.WriteLine("HOSTED_BUFFER " + JsonSerializer.Serialize(new { adapter, channels = 56, small, large }));
+        }
+    }
+
+    private static IEnumerable<(bool Ok, string Label)> PlanarPluginChainChecks(int catalog)
+    {
+        static (float[] Pcm, double WorkerMs) RenderPlanarChain(int cat, int threads)
+        {
+            using var e = new NotaEngine { RenderThreads = threads };
+            e.RenderOffline(new float[Block * 2], Block, Rate);
+            e.SetBpm(120);
+            for (int t = 0; t < 4; t++)
+            {
+                int tr = e.AddVoltSynthTrack();
+                e.SetTrackVolume(tr, 0.2f);
+                for (int k = 0; k < 4; k++)
+                {
+                    int fx = e.AddTrackEffectPlugin(tr, cat);
+                    e.WaitPluginLoads(60000);
+                    e.PluginParamSet(tr, fx, Param(e, tr, fx, "Work"), 0.02f);
+                    e.PluginParamSet(tr, fx, Param(e, tr, fx, "Gain"), 1.0f);
+                }
+                int clip = e.AddMidiClip(tr, 0, 8);
+                e.SetClipNotes(tr, clip, [new NotaNote(48 + t * 2, 0, 2, 0.8f), new NotaNote(60 + t, 0.5, 2, 0.7f)]);
+            }
+            e.Seek(0);
+            e.Play();
+            double cpu0 = e.RenderThreadsCpuSeconds;
+            var pcm = Render(e, 48);
+            return (pcm, (e.RenderThreadsCpuSeconds - cpu0) * 1000.0);
+        }
+
+        var c0 = RenderPlanarChain(catalog, 0);
+        var c4 = RenderPlanarChain(catalog, 4);
+        bool ok = c0.Pcm.Any(v => Math.Abs(v) > 0.001f) && c0.Pcm.All(float.IsFinite) && c0.Pcm.SequenceEqual(c4.Pcm) && c4.WorkerMs > 0.0;
+        yield return (ok, $"VST3 contiguous 4-plugin planar chain: 0 vs 4 threads sample-identical (worker={c4.WorkerMs:0.0} ms)");
+    }
+
+    public static IEnumerable<(bool Ok, string Label)> RunAuMacOs()
+    {
+        if (!OperatingSystem.IsMacOS()) yield break;
+
+        string scratch = Directory.CreateTempSubdirectory("nota-hosted-au-").FullName;
+        try
+        {
+            string auBundle = Path.Combine(NativeDir, "nota-render-probe_artefacts", "Release", "AU", "Nota Render Probe.component");
+            yield return (Directory.Exists(auBundle), $"macOS AU fixture bundle built at {auBundle}");
+
+            string worker = Path.Combine(NativeDir, "nota-scanworker");
+            string ProbeAuXml(string identifier)
+            {
+                var psi = new ProcessStartInfo(worker)
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                psi.ArgumentList.Add("AudioUnit");
+                psi.ArgumentList.Add(identifier);
+                using var p = Process.Start(psi)!;
+                string stdout = p.StandardOutput.ReadToEnd();
+                p.WaitForExit();
+                int s = stdout.IndexOf("<PLUGIN", StringComparison.Ordinal);
+                int e = stdout.LastIndexOf("</plugins>", StringComparison.Ordinal);
+                if (s < 0 || e < s) throw new InvalidOperationException($"Failed to probe macOS AU '{identifier}'");
+                return stdout[s..e].Trim();
+            }
+
+            string delyXml = ProbeAuXml("AudioUnit:Effects/aufx,dely,appl");
+            string bpasXml = ProbeAuXml("AudioUnit:Effects/aufx,bpas,appl");
+            File.WriteAllText(Path.Combine(scratch, "plugins.xml"),
+                $"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<KNOWNPLUGINS>\n{delyXml}\n{bpasXml}\n</KNOWNPLUGINS>\n");
+            NotaEngine.SetDataDir(scratch);
+
+            int delyIdx = -1, bpasIdx = -1;
+            for (int i = 0; i < NotaEngine.PluginCount; i++)
+            {
+                string desc = NotaEngine.PluginDescription(i) ?? "";
+                if (desc.Contains("AUDelay | AudioUnit", StringComparison.Ordinal)) delyIdx = i;
+                else if (desc.Contains("AUBandpass | AudioUnit", StringComparison.Ordinal)) bpasIdx = i;
+            }
+            yield return (delyIdx >= 0 && bpasIdx >= 0, $"Apple system AudioUnits registered into isolated catalog (dely={delyIdx}, bpas={bpasIdx})");
+
+            static (float[] Pcm, double WorkerMs) RenderAuSession(int fxA, int fxB, int threads)
+            {
+                using var e = new NotaEngine { RenderThreads = threads };
+                e.RenderOffline(new float[512 * 2], 512, Rate);
+                e.SetBpm(120);
+                for (int t = 0; t < 4; t++)
+                {
+                    int tr = e.AddVoltSynthTrack();
+                    e.SetTrackVolume(tr, 0.25f);
+                    e.AddTrackEffectPlugin(tr, fxA);
+                    e.AddTrackEffectPlugin(tr, fxB);
+                    int clip = e.AddMidiClip(tr, 0, 8);
+                    e.SetClipNotes(tr, clip, [new NotaNote(48 + t * 3, 0, 2, 0.8f), new NotaNote(60 + t, 0.25, 2, 0.7f)]);
+                }
+                e.WaitPluginLoads(60000);
+                e.Seek(0);
+                e.Play();
+                double cpu0 = e.RenderThreadsCpuSeconds;
+                var all = new float[32 * 512 * 2];
+                var buf = new float[512 * 2];
+                for (int b = 0; b < 32; b++)
+                {
+                    e.RenderOffline(buf, 512, Rate);
+                    buf.CopyTo(all, b * 512 * 2);
+                }
+                return (all, (e.RenderThreadsCpuSeconds - cpu0) * 1000.0);
+            }
+
+            var au0 = RenderAuSession(delyIdx, bpasIdx, 0);
+            var au4 = RenderAuSession(delyIdx, bpasIdx, 4);
+            double maxDiff = 0.0;
+            for (int i = 0; i < au0.Pcm.Length; i++) maxDiff = Math.Max(maxDiff, Math.Abs(au0.Pcm[i] - au4.Pcm[i]));
+            bool ok = au0.Pcm.Any(v => Math.Abs(v) > 0.001f) && au0.Pcm.All(float.IsFinite) && maxDiff < 1e-5 && au4.WorkerMs > 0.0;
+            yield return (ok, $"macOS real AUDelay+AUBandpass planar+parallel 4-track parity (maxDiff={maxDiff:0.0e0}, worker={au4.WorkerMs:0.0} ms)");
+
+            int auEdCode = NotaEngine.PluginEditorSleepSelfTest(bpasIdx);
+            yield return (auEdCode == 0, $"macOS real AudioUnit open editor keeps Audio/Muted/Group/Rack chains active past hangover (code={auEdCode})");
+        }
+        finally
+        {
+            if (Directory.Exists(scratch)) Directory.Delete(scratch, true);
         }
     }
 }

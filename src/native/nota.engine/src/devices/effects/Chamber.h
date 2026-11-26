@@ -335,7 +335,6 @@ class Chamber final : public Device {
     bool convActive_ = true, algoActive_ = true;
     float convG_ = 0.0f, algoG_ = 0.0f, feedG_ = 1.0f, wetS_ = 0.0f, dryS_ = 1.0f, outS_ = 1.0f, widthS_ = 1.0f;
     float duckEnv_ = 0.0f, duckGain_ = 1.0f, msLp1_[2] = {};
-    double cpuS_ = 0.0;
     int algoQuiet_ = 0;
     float dL_[kChunk] = {}, dR_[kChunk] = {}, fL_[kChunk] = {}, fR_[kChunk] = {}, cL_[kChunk] = {}, cR_[kChunk] = {};
     float aL_[kChunk] = {}, aR_[kChunk] = {}, tL_[kChunk] = {}, tR_[kChunk] = {}, wL_[kChunk] = {}, wR_[kChunk] = {};
@@ -380,7 +379,7 @@ class Chamber final : public Device {
     std::atomic<uint32_t> userGen_{0};
 
     // meters
-    std::atomic<float> mWet_{0.0f}, mOutL_{0.0f}, mOutR_{0.0f}, mIn_{0.0f}, mDuck_{0.0f}, cpuA_{0.0f}, kernSecA_{0.0f},
+    std::atomic<float> mWet_{0.0f}, mOutL_{0.0f}, mOutR_{0.0f}, mIn_{0.0f}, mDuck_{0.0f}, kernSecA_{0.0f},
         bpmA_{120.0f};
     std::atomic<int> latA_{0}, kernA_{0};
 };

@@ -90,7 +90,7 @@ void Vintage::wake() {
 }
 
 void Vintage::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetReq_.exchange(false, std::memory_order_relaxed)) {
         wowPh_ = 0.0;
         flutPh_ = 0.0;
@@ -336,11 +336,6 @@ void Vintage::process(float* buf, int32_t frames) {
     delayA_.store(modOn ? (float)baseDelay : 0.0f, std::memory_order_relaxed);
     bpmA_.store(spb_ > 0.0 ? (float)(60.0 * sr_ / spb_) : 0.0f, std::memory_order_relaxed);
     srA_.store((float)sr_, std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 // Telemetry block, the transfer curve, then the pitch histories (see the header note).
@@ -352,7 +347,7 @@ int32_t Vintage::scopeRead(float* out, int32_t maxSamples) const {
     float t[kTele] = {};
     t[S_InPk] = inPkA_.load(std::memory_order_relaxed);
     t[S_OutPk] = outPkA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
     t[S_Bpm] = bpmA_.load(std::memory_order_relaxed);
     t[S_Delay] = delayA_.load(std::memory_order_relaxed);

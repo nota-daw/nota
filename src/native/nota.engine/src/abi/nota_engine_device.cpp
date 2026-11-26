@@ -11,6 +11,10 @@
 #include "engine/EditorKeys.h"
 #include "bridge/PluginHostBridge.h"
 
+#include "dsp/math/Simd.h"
+#include "dsp/math/SimdAudio.h"
+#include "dsp/math/FastMath.h"
+#include "dsp/primitives/Convolution.h"
 #include "dsp/primitives/CompensationDelay.h"
 #include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
@@ -600,7 +604,159 @@ int32_t nota_fx_selftest(void) {
     const double aliasDrop = alias1 > 1e-9 ? 20.0 * std::log10(alias8 / alias1) : 0.0;
     std::fprintf(stderr, "  Forge oversampling: alias 1x=%.5f  8x=%.5f  (%.1f dB)\n", alias1, alias8, aliasDrop);
 
-    const bool ok = flat > in * 0.7 && flat < in * 1.3 && cut < in * 0.7 && cut > in * 0.02 && comp > in * 0.1 &&
+    // Verify Simd (complexMulAdd, maxAbs, peakAndSumSquares, dot), SimdAudio delegates,
+    // and Convolution::accumulatePackedSpectrum against scalar references.
+    bool p4Ok = [&]() -> bool {
+        for (int bins : {17, 513}) {
+            std::vector<float> ar0(static_cast<size_t>(bins), 0.125f), ai0(static_cast<size_t>(bins), -0.25f);
+            std::vector<float> ar1 = ar0, ai1 = ai0, arRef = ar0, aiRef = ai0;
+            std::vector<float> arRaw = ar0, aiRaw = ai0, arRawRef = ar0, aiRawRef = ai0;
+            std::vector<float> xr(static_cast<size_t>(bins)), xi(static_cast<size_t>(bins));
+            std::vector<float> hr(static_cast<size_t>(bins)), hi(static_cast<size_t>(bins));
+            for (int i = 0; i < bins; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                xr[k] = static_cast<float>((i % 53) - 26) * 0.02f;
+                xi[k] = static_cast<float>(31 - (i % 61)) * 0.015f;
+                hr[k] = static_cast<float>((i % 37) - 18) * 0.01f;
+                hi[k] = static_cast<float>((i % 43) - 21) * 0.012f;
+            }
+            arRef[0] += xr[0] * hr[0];
+            aiRef[0] += xi[0] * hi[0];
+            for (int i = 1; i < bins; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                arRef[k] += xr[k] * hr[k] - xi[k] * hi[k];
+                aiRef[k] += xr[k] * hi[k] + xi[k] * hr[k];
+            }
+            for (int i = 0; i < bins; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                arRawRef[k] += xr[k] * hr[k] - xi[k] * hi[k];
+                aiRawRef[k] += xr[k] * hi[k] + xi[k] * hr[k];
+            }
+            nota::dsp::accumulatePackedSpectrum(
+                ar1.data(), ai1.data(), xr.data(), xi.data(), hr.data(), hi.data(), bins);
+            nota::simd::complexMulAdd(
+                arRaw.data(), aiRaw.data(), xr.data(), xi.data(), hr.data(), hi.data(), bins);
+            for (size_t k = 0; k < static_cast<size_t>(bins); ++k) {
+                if (std::fabs(ar1[k] - arRef[k]) > 1e-5f || std::fabs(ai1[k] - aiRef[k]) > 1e-5f ||
+                    std::fabs(arRaw[k] - arRawRef[k]) > 1e-5f || std::fabs(aiRaw[k] - aiRawRef[k]) > 1e-5f)
+                    return false;
+            }
+        }
+
+        for (int count : {17, 64, 4096}) {
+            std::vector<float> a(static_cast<size_t>(count)), b(static_cast<size_t>(count));
+            float pkRef = 0.0f;
+            double sqRef = 0.0, dotRef = 0.0;
+            for (int i = 0; i < count; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                a[k] = static_cast<float>((i % 97) - 48) * 0.015f;
+                b[k] = static_cast<float>(97 - (i % 97)) * 0.01f;
+                pkRef = std::max(pkRef, std::fabs(a[k]));
+                sqRef += static_cast<double>(a[k]) * static_cast<double>(a[k]);
+                dotRef += static_cast<double>(a[k]) * static_cast<double>(b[k]);
+            }
+            const float pkSimd = nota::simd::maxAbs(a.data(), count);
+            const float pkAudio = nota::simd_audio::peakAbs(a.data(), count);
+            float p0 = 0.0f, p1 = 0.0f;
+            double s0 = 0.0, s1 = 0.0;
+            nota::simd::peakAndSumSquares(a.data(), count, p0, s0);
+            nota::simd_audio::peakAndSumSquares(a.data(), count, p1, s1);
+            const float dotGot = nota::simd::dot(a.data(), b.data(), count);
+            const double sqTol = std::max(1e-3, sqRef * 1e-5);
+            if (std::fabs(pkSimd - pkRef) > 1e-6f || std::fabs(pkAudio - pkRef) > 1e-6f ||
+                std::fabs(p0 - pkRef) > 1e-6f || std::fabs(p1 - pkRef) > 1e-6f ||
+                std::fabs(s0 - sqRef) > sqTol || std::fabs(s1 - sqRef) > sqTol ||
+                std::fabs(static_cast<double>(dotGot) - dotRef) > std::max(1e-4, std::fabs(dotRef) * 1e-5))
+                return false;
+        }
+        return true;
+    }();
+    {
+        nota::Eq eqP4;
+        eqP4.setSampleRate(sr, 512);
+        auto cfgBand = [&](int b, float on, int ty, float freq, float gain, float q, int slope) {
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::On, on);
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Type, static_cast<float>(ty));
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Freq, freq);
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Gain, gain);
+            eqP4.setParam(b * nota::Eq::kPerBand + nota::Eq::Q, q);
+            eqP4.setParam(nota::Eq::SlopeBase + b, static_cast<float>(slope));
+            eqP4.setParam(nota::Eq::ChannelBase + b, static_cast<float>(nota::Eq::ChStereo));
+        };
+        cfgBand(0, 1.0f, nota::Eq::LowCut, 120.0f, 0.0f, 1.0f, 1);
+        cfgBand(1, 1.0f, nota::Eq::LowShelf, 250.0f, -3.5f, 0.7f, 0);
+        cfgBand(2, 1.0f, nota::Eq::Bell, 1200.0f, 5.5f, 1.4f, 0);
+        cfgBand(3, 1.0f, nota::Eq::Notch, 3500.0f, 0.0f, 3.0f, 0);
+        cfgBand(4, 1.0f, nota::Eq::HighShelf, 7500.0f, 2.5f, 0.7f, 0);
+        cfgBand(5, 1.0f, nota::Eq::HighCut, 14000.0f, 0.0f, 0.707f, 1);
+        cfgBand(6, 0.0f, nota::Eq::Bell, 800.0f, 0.0f, 0.7f, 0);
+        cfgBand(7, 0.0f, nota::Eq::Bell, 5000.0f, 0.0f, 0.7f, 0);
+
+        // Build independent scalar reference using Eq's FastMath-quantized f0/q + RBJ calculators.
+        std::vector<nota::dsp::BiquadSection> refL, refR;
+        auto pushBandRef = [&](int ty, double f, double g, double q, int slope) {
+            const float f0 = nota::fast_math::exp2f(nota::fast_math::log2f(static_cast<float>(f)));
+            const float q0 = nota::fast_math::exp2f(nota::fast_math::log2f(static_cast<float>(q)));
+            if ((ty == nota::Eq::LowCut || ty == nota::Eq::HighCut) && slope > 0) {
+                double bq[4];
+                const int n = nota::dsp::BiquadCascade::butterworthQs(bq, slope);
+                const double res = q0 / 0.70710678;
+                for (int k = 0; k < n; ++k) {
+                    const double qk = std::clamp(k == n - 1 ? bq[k] * res : bq[k], 0.1, 40.0);
+                    nota::dsp::BiquadSection s;
+                    s.c = ty == nota::Eq::LowCut ? nota::dsp::BiquadCascade::highpass(sr, f0, qk)
+                                                 : nota::dsp::BiquadCascade::lowpass(sr, f0, qk);
+                    refL.push_back(s);
+                    refR.push_back(s);
+                }
+            } else {
+                nota::dsp::BiquadSection s;
+                switch (ty) {
+                case nota::Eq::LowCut: s.c = nota::dsp::BiquadCascade::highpass(sr, f0, q0); break;
+                case nota::Eq::LowShelf: s.c = nota::dsp::BiquadCascade::lowShelf(sr, f0, g); break;
+                case nota::Eq::Notch: s.c = nota::dsp::BiquadCascade::notch(sr, f0, q0); break;
+                case nota::Eq::HighShelf: s.c = nota::dsp::BiquadCascade::highShelf(sr, f0, g); break;
+                case nota::Eq::HighCut: s.c = nota::dsp::BiquadCascade::lowpass(sr, f0, q0); break;
+                default: s.c = nota::dsp::BiquadCascade::bell(sr, f0, g, q0); break;
+                }
+                refL.push_back(s);
+                refR.push_back(s);
+            }
+        };
+        pushBandRef(nota::Eq::LowCut, 120.0, 0.0, 1.0, 1);
+        pushBandRef(nota::Eq::LowShelf, 250.0, -3.5, 0.7, 0);
+        pushBandRef(nota::Eq::Bell, 1200.0, 5.5, 1.4, 0);
+        pushBandRef(nota::Eq::Notch, 3500.0, 0.0, 3.0, 0);
+        pushBandRef(nota::Eq::HighShelf, 7500.0, 2.5, 0.7, 0);
+        pushBandRef(nota::Eq::HighCut, 14000.0, 0.0, 0.707, 1);
+
+        double maxDiff = 0.0;
+        for (int blk = 0; blk < 4; ++blk) { // 4 blocks: exercises cold compute + BandCache hit blocks
+            std::vector<float> test(static_cast<size_t>(512) * 2), ref(static_cast<size_t>(512) * 2);
+            for (int i = 0; i < 512; ++i) {
+                const int idx = blk * 512 + i;
+                const float sl = 0.25f * std::sin(2.0 * kPi * 1100.0 * idx / sr) +
+                                 0.15f * std::sin(2.0 * kPi * 240.0 * idx / sr);
+                const float rr = 0.20f * std::cos(2.0 * kPi * 6000.0 * idx / sr) +
+                                 0.10f * std::sin(2.0 * kPi * 3500.0 * idx / sr);
+                test[static_cast<size_t>(i) * 2] = sl;
+                test[static_cast<size_t>(i) * 2 + 1] = rr;
+                double l = sl, r = rr;
+                for (auto& sec : refL) l = sec.run(l);
+                for (auto& sec : refR) r = sec.run(r);
+                ref[static_cast<size_t>(i) * 2] = static_cast<float>(l);
+                ref[static_cast<size_t>(i) * 2 + 1] = static_cast<float>(r);
+            }
+            eqP4.process(test.data(), 512);
+            for (size_t k = 0; k < test.size(); ++k) {
+                if (!std::isfinite(test[k])) p4Ok = false;
+                maxDiff = std::max(maxDiff, static_cast<double>(std::fabs(test[k] - ref[k])));
+            }
+        }
+        p4Ok = p4Ok && maxDiff < 1.0e-6; // < -120 dBFS
+    }
+
+    const bool ok = p4Ok && flat > in * 0.7 && flat < in * 1.3 && cut < in * 0.7 && cut > in * 0.02 && comp > in * 0.1 &&
                     compGr > 0.5f // compressor reports gain reduction
                     && rev > in * 0.02 && del > in * 0.3 && util > in * 1.5 && forgeRms > 0.05 &&
                     std::isfinite(forgeRms)   // Forge emits sane audio
@@ -665,6 +821,16 @@ NotaResult nota_track_set_device_bypassed(NotaEngine* e, int32_t track_id, int32
 }
 int32_t nota_track_device_bypassed(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return (e && CENG(e)->trackDeviceBypassed(track_id, device_index)) ? 1 : 0;
+}
+NotaResult nota_plugin_set_sleep_mode(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t mode) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setPluginSleepMode(track_id, device_index, mode) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_plugin_sleep_mode(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? CENG(e)->pluginSleepMode(track_id, device_index) : NOTA_PLUGIN_SLEEP_AUTO;
+}
+int32_t nota_engine_plugin_editor_sleep_selftest(int32_t catalog_index) {
+    return nota::Engine::pluginEditorSleepSelftest(catalog_index);
 }
 void nota_track_set_device_folded(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t folded) {
     if (e) ENG(e)->setTrackDeviceFolded(track_id, device_index, folded != 0);

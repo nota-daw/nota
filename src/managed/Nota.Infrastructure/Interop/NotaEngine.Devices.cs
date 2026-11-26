@@ -517,6 +517,20 @@ public sealed partial class NotaEngine
         return NativeMethods.DeviceBypassed(_handle, trackId, deviceIndex) != 0;
     }
 
+    /// <summary>Configures auto-sleep policy for an instrument (-1) or insert device (>= 0).</summary>
+    public void SetPluginSleepMode(int trackId, int deviceIndex, PluginSleepMode mode)
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.PluginSetSleepMode(_handle, trackId, deviceIndex, (int)mode));
+    }
+
+    /// <summary>Returns the current auto-sleep policy for an instrument (-1) or insert device (>= 0).</summary>
+    public PluginSleepMode GetPluginSleepMode(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        return (PluginSleepMode)NativeMethods.PluginSleepMode(_handle, trackId, deviceIndex);
+    }
+
     /// <summary>Folds (or unfolds) the device at deviceIndex in the Devices panel (specs/022);
     /// -1 = the instrument. A view flag, saved with the project.</summary>
     public void SetDeviceFolded(int trackId, int deviceIndex, bool folded)
@@ -541,6 +555,9 @@ public sealed partial class NotaEngine
 
     /// <summary>Deterministic self-test of the delay-compensation line. True if correct.</summary>
     public static bool PdcSelfTest() => NativeMethods.PdcSelfTest() != 0;
+
+    /// <summary>Verifies open plugin editors keep VST3/AU processing active without mutating SleepMode (0 = pass).</summary>
+    public static int PluginEditorSleepSelfTest(int catalogIndex) => NativeMethods.PluginEditorSleepSelfTest(catalogIndex);
 
     /// <summary>Instrument identity: 0=Synth, 1=Sampler, -1=plugin/unknown, -2=no instrument.</summary>
     public int TrackInstrumentKind(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentKind(_handle, trackId); }

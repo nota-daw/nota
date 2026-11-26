@@ -32,6 +32,7 @@ public sealed partial class SessionView
     /// <summary>Master fader plumbing (the master level lives on the transport view-model).</summary>
     public Func<float>? GetMasterVolume { get; set; }
     public Action<float>? SetMasterVolume { get; set; }
+    private readonly TrackMeterBatch _meterBatch = new();
 
     private sealed class MixerParts
     {
@@ -204,7 +205,7 @@ public sealed partial class SessionView
             meter = () =>
             {
                 NotaMeter m = default;
-                if (hasTrack) { if (!_engine.TryGetTrackMeter(c.TrackId, out m)) m = default; }
+                if (hasTrack) { if (!_meterBatch.TryGet(c.TrackId, out m)) m = default; }
                 else m = _engine.MasterMeter();
                 mL.Level = m.PeakL; mR.Level = m.PeakR;
             };

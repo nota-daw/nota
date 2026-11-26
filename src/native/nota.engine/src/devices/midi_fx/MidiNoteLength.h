@@ -82,6 +82,7 @@ class MidiNoteLength final : public MidiDevice {
 
     void process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int maxOut, int32_t frames, double beatStart,
         double spb, bool playing) override;
+    bool isIdle() const override { return nPending_ == 0 && nSound_ == 0 && nHeld_ == 0; }
 
   private:
     // Length in beats for one note, with the velocity / key / random modifiers (mirrors the card's model).

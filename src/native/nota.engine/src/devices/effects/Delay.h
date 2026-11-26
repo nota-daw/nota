@@ -154,7 +154,6 @@ class Delay : public Device {
     dsp::DelayLine bufL_, bufR_;
     AllPass ap_[4];
     float hpL_ = 0, hpR_ = 0, lpL_ = 0, lpR_ = 0, tapeL_ = 0, tapeR_ = 0, monoL_ = 0, monoR_ = 0;
-    double cpuS_ = 0.0;
     dsp::LevelHistory hist_; // the card's live echo graph
 
     // Auto-sleep hangover.
@@ -163,7 +162,7 @@ class Delay : public Device {
     float loopPk_ = 0.0f; // peak loop-feed push (blocks sleep while the tail rings)
 
     std::atomic<bool> clear_{false}, reset_{false};
-    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0};
+    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0};
     std::atomic<float> p_[kNumParams] = {};
 };
 

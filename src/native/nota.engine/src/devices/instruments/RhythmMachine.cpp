@@ -66,6 +66,14 @@ void RhythmMachine::setSampleRate(double sr) {
     wake();
 }
 
+void RhythmMachine::setTelemetryMode(dsp::TelemetryMode mode) {
+    Instrument::setTelemetryMode(mode);
+    if (fxAuthoring_)
+        for (auto& ch : fxAuthoring_->chain)
+            for (auto& d : ch)
+                if (d) d->setTelemetryMode(mode);
+}
+
 void RhythmMachine::setTransport(double beatStart, double spb, bool playing) {
     // A transport start wakes the machine: a stopped kit with a pattern must not sleep
     // through the downbeat.
@@ -918,6 +926,12 @@ void RhythmMachine::applyMacro(int m, float value) {
 }
 
 void RhythmMachine::commitFx(std::shared_ptr<FxState> ns) {
+    if (ns) {
+        const dsp::TelemetryMode mode = telemetryMode();
+        for (auto& ch : ns->chain)
+            for (auto& d : ch)
+                if (d) d->setTelemetryMode(mode);
+    }
     fxAuthoring_ = ns;
     fxStates_.publish(std::move(ns));
 }

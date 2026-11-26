@@ -274,8 +274,7 @@ class Vintage : public Device {
     std::atomic<uint32_t> histW_{0};
     int histCount_ = 0;
     std::atomic<uint32_t> crackles_{0};
-    double cpuS_ = 0.0;
-    std::atomic<float> inPkA_{0}, outPkA_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, compA_{1}, wowPhA_{0}, delayA_{0};
+    std::atomic<float> inPkA_{0}, outPkA_{0}, srA_{44100.0f}, bpmA_{0}, compA_{1}, wowPhA_{0}, delayA_{0};
 
     // Auto-sleep hangover.
     uint64_t quietSamples_ = 0;

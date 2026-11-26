@@ -82,6 +82,11 @@ if (args.Contains("--hosted-render-pool"))
     foreach (var (ok, label) in HostedRenderPoolTests.Run()) Check(ok, label);
     return failures == 0 ? 0 : 1;
 }
+if (args.Contains("--hosted-au-pool"))
+{
+    foreach (var (ok, label) in HostedRenderPoolTests.RunAuMacOs()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
 
 // --- architecture boundary checks (Phase 0.7) --------------------------------
 // Enforce the DDD dependency direction at test time: the compiler drops unused
@@ -459,6 +464,10 @@ if (args.Length >= 1 && args[0] == "--perf")
 {
     Console.WriteLine("-- render pool --");
     foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
+    Console.WriteLine("-- parallel DAG, racks, synth voice batches & planar chains --");
+    foreach (var (ok, label) in RenderDagParallelTests.Run()) Check(ok, label);
+    Console.WriteLine("-- disk audio streaming & hybrid buffering --");
+    foreach (var (ok, label) in DiskStreamingAndHybridBufferTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PERF PASSED" : $"PERF FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -16411,6 +16420,18 @@ Console.WriteLine("-- dsp optimization --");
 foreach (var (ok, label) in DspOptimizationTests.Run()) Check(ok, label);
 Console.WriteLine("-- dsp silence bypass --");
 foreach (var (ok, label) in DspSilenceBypassTests.Run()) Check(ok, label);
+Console.WriteLine("-- batch track meters & device telemetry --");
+foreach (var (ok, label) in TrackMeterAndTelemetryTests.Run()) Check(ok, label);
+Console.WriteLine("-- silence gate & active submix buses --");
+foreach (var (ok, label) in SilenceGateAndBusMaskTests.Run()) Check(ok, label);
+Console.WriteLine("-- timeline index & compiled routing --");
+foreach (var (ok, label) in TimelineIndexAndRoutingTests.Run()) Check(ok, label);
+Console.WriteLine("-- track snapshots, scratch arena & EQ SIMD --");
+foreach (var (ok, label) in TrackSnapshotArenaSimdTests.Run()) Check(ok, label);
+Console.WriteLine("-- parallel DAG, racks, synth voice batches & planar chains --");
+foreach (var (ok, label) in RenderDagParallelTests.Run()) Check(ok, label);
+Console.WriteLine("-- disk audio streaming & hybrid buffering --");
+foreach (var (ok, label) in DiskStreamingAndHybridBufferTests.Run()) Check(ok, label);
 Console.WriteLine("-- render pool --");
 foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 

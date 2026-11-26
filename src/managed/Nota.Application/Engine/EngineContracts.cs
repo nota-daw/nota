@@ -379,6 +379,94 @@ public struct NotaSceneProps
     public double FollowBeats;
 }
 
+/// <summary>Built-in device CPU telemetry mode (matches native NotaTelemetryMode).</summary>
+public enum DeviceTelemetryMode
+{
+    OnDemand = 0,
+    AlwaysOff = 1,
+    AlwaysOn = 2,
+}
+
+/// <summary>Policy for decoding vs disk streaming of long audio files (matches native NotaSampleLoadPolicy).</summary>
+public enum SampleLoadPolicy
+{
+    Auto = 0,
+    MemoryOnly = 1,
+    StreamAlways = 2,
+}
+
+/// <summary>Native disk-streaming statistics returned by <see cref="IAudioEngine.GetStreamingStats"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaStreamingStats
+{
+    public int ActiveStreams;
+    public long StreamThresholdBytes;
+    public long StreamCacheBytes;
+    public long ResidentSampleBytes;
+    public long PagesFaulted;
+    public long PagesServedAsync;
+    public long PagesServedSync;
+    public long RtUnderruns;
+}
+
+/// <summary>Hybrid low-latency live + background anticipative buffering mode (matches native NotaHybridBufferMode).</summary>
+public enum HybridBufferMode
+{
+    Off = 0,
+    Auto = 1,
+}
+
+/// <summary>Native hybrid lookahead buffer statistics returned by <see cref="IAudioEngine.GetHybridStats"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaHybridBufferStats
+{
+    public int Active;
+    public int LiveTracks;
+    public int AnticipativeTracks;
+    public int LookaheadFrames;
+    public int ChunkFrames;
+    public long CacheHits;
+    public long CacheMisses;
+    public long Invalidations;
+}
+
+/// <summary>Auto-sleep policy for hosted plugins and instruments (matches native NotaPluginSleepMode).</summary>
+public enum PluginSleepMode
+{
+    Auto = 0,
+    Never = 1,
+}
+
+/// <summary>Single track's post-fader meter reading returned by <see cref="IAudioEngine.ReadTrackMeters"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct TrackMeterReading(int TrackId, NotaMeter Meter);
+
+/// <summary>Reusable per-view scratch cache for single-call batch track meter polling.</summary>
+public sealed class TrackMeterBatch
+{
+    private TrackMeterReading[] _buffer = [];
+    private readonly System.Collections.Generic.Dictionary<int, NotaMeter> _byTrack = new();
+
+    public void Refresh(IAudioEngine engine)
+    {
+        _byTrack.Clear();
+        int total = engine.ReadTrackMeters(_buffer);
+        if (total > _buffer.Length)
+        {
+            _buffer = new TrackMeterReading[total];
+            total = engine.ReadTrackMeters(_buffer);
+        }
+        int count = System.Math.Min(total, _buffer.Length);
+        for (int i = 0; i < count; i++)
+        {
+            ref readonly var entry = ref _buffer[i];
+            if (entry.TrackId >= 0) _byTrack[entry.TrackId] = entry.Meter;
+        }
+    }
+
+    public bool TryGet(int trackId, out NotaMeter meter) => _byTrack.TryGetValue(trackId, out meter);
+}
+
 /// <summary>Post-fader level meter (linear 0..1). Matches native NotaMeter (M6-2).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaMeter

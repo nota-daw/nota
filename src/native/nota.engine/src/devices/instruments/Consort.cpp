@@ -124,6 +124,7 @@ void Consort::controller(int32_t ctl, float value) {
 int32_t Consort::scopeRead(float* out, int32_t maxN) const {
     const int n = std::min<int>(maxN, kScopeN);
     for (int i = 0; i < n; ++i) out[i] = tele_[i].load(std::memory_order_relaxed);
+    if (n > ScCpu) out[ScCpu] = readScopeCpuLoad();
     return n;
 }
 
@@ -217,6 +218,7 @@ void Consort::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> Consort::clone() const {
@@ -280,9 +282,12 @@ void Consort::noteOff(int32_t pitch) {
 }
 
 void Consort::render(float* out, int32_t frames) {
-    dsp::ScopedNoDenormals noDenormals;
-    const auto t0 = std::chrono::steady_clock::now();
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
     const double pr = pendingRate_.load(std::memory_order_relaxed);
+    if (skip && pr == sampleRate_) return;
+    dsp::ScopedNoDenormals noDenormals;
+    const auto cpuTimer = blockTimer(frames, pr, 0.05);
     if (pr != sampleRate_) { // voices keep playing; only rate-derived state restarts
         sampleRate_ = pr;
         fadeLen_ = std::max(1, static_cast<int>(0.004 * sampleRate_));
@@ -304,22 +309,14 @@ void Consort::render(float* out, int32_t frames) {
     // A running sequencer (latched) blocks sleep — render advances its clock.
     const double flight = std::max(
         dlyTimeCur_[0] > 0.0f ? (double)dlyTimeCur_[0] : 0.0, dlyTimeCur_[1] > 0.0f ? (double)dlyTimeCur_[1] : 0.0);
-    if (!seqRun_ && activeCount_ == 0 && chunkOutPeak_ <= 1.0e-5f) quietSamples_ += (uint64_t)frames;
-    else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
-    if (quietSamples_ > (uint64_t)flight + kIdleSamples) idle_ = true;
+    gate_.setHangoverSamples(static_cast<uint64_t>(std::max(0.0, flight)) + kIdleSamples);
+    gate_.observe(seqRun_ || activeCount_ > 0 || chunkOutPeak_ > 1.0e-5f, frames, gateEpoch);
     chunkOutPeak_ = 0.0f;
-    const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    const double avail = frames / sampleRate_;
-    if (avail > 0.0) cpu_ += 0.05 * (el / avail - cpu_);
     publishTelemetry();
 }
 
 void Consort::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 void Consort::setOscTarget(Voice& V, int k, int note, bool glide) {
@@ -982,6 +979,9 @@ void Consort::renderSpan(float* out, int n) {
     const int S = slotsOf(structMode());
     c.voiceGain = poly ? 0.5f : 1.0f; // a poly voice stacks four oscillators on one note
     int active = 0;
+    Voice* act[kMaxVoices];
+    int actN = 0;
+    bool anyStealPend = false;
     for (int v = 0; v < (poly ? kMaxVoices : 1); ++v) {
         Voice& V = voices_[v];
         if (!V.active) {
@@ -1004,8 +1004,32 @@ void Consort::renderSpan(float* out, int n) {
                 if (cnt > 1) V.det[k] = (2.0f * idx / static_cast<float>(cnt - 1) - 1.0f) * c.uniSpread;
             }
         }
-        renderVoice(V, n, c);
-        if (V.active) ++active;
+        act[actN++] = &V;
+        if (V.fade > 0 && V.pendNote >= 0) anyStealPend = true;
+    }
+
+    if (poly && !anyStealPend && actN >= 6 && n >= 16 && voiceScratch_.capacityFrames() >= n * os) {
+        std::array<dsp::PolyVoiceBatchRange, dsp::PolyVoiceScheduler::kMaxBatches> batches{};
+        const int32_t batchesN = dsp::PolyVoiceScheduler::planBatches(actN, 8, batches);
+        dsp::RenderExecutor::parallelFor(batchesN, true, [&](int32_t b) {
+            voiceScratch_.clearBatch(b, n * os);
+            float* bL = voiceScratch_.left(b);
+            float* bR = voiceScratch_.right(b);
+            const auto range = batches[static_cast<size_t>(b)];
+            for (int32_t vi = range.start; vi < range.start + range.count; ++vi)
+                renderVoice(*act[vi], n, c, bL, bR);
+        });
+        for (int32_t b = 0; b < batchesN; ++b) {
+            dsp::PolyVoiceScheduler::accumulateMonoAdd(osL_, voiceScratch_.left(b), n * os);
+            dsp::PolyVoiceScheduler::accumulateMonoAdd(osR_, voiceScratch_.right(b), n * os);
+        }
+        for (int vi = 0; vi < actN; ++vi)
+            if (act[vi]->active) ++active;
+    } else {
+        for (int vi = 0; vi < actN; ++vi) {
+            renderVoice(*act[vi], n, c, osL_, osR_);
+            if (act[vi]->active) ++active;
+        }
     }
     if (poly) activeCount_ = active;
     else {
@@ -1078,7 +1102,7 @@ void Consort::fillVoiceSources(float* sv, const Voice& V, const VoiceCtl& c, flo
     sv[SrcSum] = V.uIn[2];
 }
 
-void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
+void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c, float* outL, float* outR) {
     using namespace consort;
     const double sr = c.sr;
     const float fA = coefOf(c.fA, sr), fD = coefOf(c.fD, sr), fR = coefOf(c.fR, sr);
@@ -1093,8 +1117,8 @@ void Consort::renderVoice(Voice& V, int n, const VoiceCtl& c) {
     const bool g1p = c.patched[DstGate1], g2p = c.patched[DstGate2];
     const bool filtInP = c.patched[DstFiltIn], vcaInP = c.patched[DstVcaIn], extInP = c.patched[DstExtIn];
     const bool anyCab = c.nCab > 0;
-    float* L = osL_;
-    float* R = osR_;
+    float* L = outL;
+    float* R = outR;
     const float keyOct = (V.note - 60) * (1.0f / 12.0f);
 
     for (int i = 0; i < n; ++i) {
@@ -1417,7 +1441,7 @@ void Consort::publishTelemetry() {
     tele_[ScActive].store(static_cast<float>(activeCount_), std::memory_order_relaxed);
     tele_[ScPeakL].store(peakL_, std::memory_order_relaxed);
     tele_[ScPeakR].store(peakR_, std::memory_order_relaxed);
-    tele_[ScCpu].store(static_cast<float>(cpu_), std::memory_order_relaxed);
+    tele_[ScCpu].store(telemetryCpuLoad(), std::memory_order_relaxed);
     tele_[ScOs].store(static_cast<float>(osCur_), std::memory_order_relaxed);
     tele_[ScRate].store(static_cast<float>(sampleRate_), std::memory_order_relaxed);
     tele_[ScStep].store(seqRun_ ? static_cast<float>(curIdx_) : -1.0f, std::memory_order_relaxed);

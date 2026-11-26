@@ -15,8 +15,12 @@
 #include "audio_io/AudioConfig.h"
 #include "audio_io/AudioInput.h"
 #include "CommandQueue.h"
+#include "dsp/core/AudioBufferView.h"
+#include "dsp/core/DeviceTelemetry.h"
+#include "dsp/core/RtAttributes.h"
 #include "engine/AudioThreadPool.h"
 #include "engine/CaptureRing.h"
+#include "engine/RenderBusState.h"
 #include "engine/SessionPass.h"
 #include "engine/SnapshotHistory.h"
 #include "EngineTypes.h" // queue payloads, undo model, control events (from this header)
@@ -29,6 +33,7 @@
 #include "engine/MidiSurface.h"
 #include "audio_io/GamepadInput.h"
 #include "media/SampleBuffer.h"
+#include "engine/HybridBufferController.h"
 #include "Transport.h"
 #include "nota/nota_engine.h" // NotaNoteData
 #include "devices/instruments/AuroraTable.h"
@@ -55,8 +60,12 @@ class WavetableSynth;
 // Live MIDI event (UI/CoreMIDI -> audio), lock-free down-queue.
 class RackCore;       // shared rack guts (RackInstrument / RackDevice; see RackCore.h)
 class ClipWarpStream; // offline warp-cache builder (WarpStream.h); held by unique_ptr in wb_
+class RenderGraphExecutor;
+class HybridBufferController;
 
 class Engine {
+    friend class RenderGraphExecutor;
+    friend class HybridBufferController;
   public:
     Engine();
     ~Engine();
@@ -201,11 +210,36 @@ class Engine {
 
     // --- DSP load (Phase 11): RT render time / block budget, smoothed 0..1 ---
     float cpuLoad() const { return cpuLoad_.load(std::memory_order_relaxed); }
+
+    // --- built-in device CPU telemetry mode (message thread writes, RT reads atomically) ---
+    void setTelemetryMode(dsp::TelemetryMode mode);
+    dsp::TelemetryMode telemetryMode() const { return telemetryMode_.load(std::memory_order_relaxed); }
     // Parallel render threads (the audio thread helps too): n < 0 = default, 0 = none.
     // Device stopped only (message thread); false while it runs.
     bool setRenderThreads(int n);
     int renderThreads() const { return pool_->workerCount(); }
     double renderThreadsCpuSeconds() const { return pool_->workersCpuSeconds(); }
+
+    // --- Streaming disk audio sources & hybrid anticipative buffering (Phase 6, #1050) ---
+    void setStreamThresholdBytes(int64_t bytes);
+    int64_t streamThresholdBytes() const { return streamThresholdBytes_.load(std::memory_order_acquire); }
+    void setSampleLoadPolicy(SampleLoadPolicy policy);
+    SampleLoadPolicy sampleLoadPolicy() const {
+        return static_cast<SampleLoadPolicy>(sampleLoadPolicy_.load(std::memory_order_acquire));
+    }
+    AudioDecodeOptions decodeOptions() const noexcept {
+        return {sampleLoadPolicy(), streamThresholdBytes()};
+    }
+    bool isSampleStreaming(int64_t sampleId) const;
+    void streamingStats(NotaStreamingStats& out) const;
+
+    void setHybridBufferingMode(HybridBufferMode mode);
+    HybridBufferMode hybridBufferingMode() const {
+        return hybrid_ ? hybrid_->mode() : HybridBufferMode::Off;
+    }
+    HybridBufferStats hybridStats() const {
+        return hybrid_ ? hybrid_->stats() : HybridBufferStats{};
+    }
 
     // --- parameter automation (M9) ---
     // Device-free: interpolation + block-rate apply write the target atomic.
@@ -1068,6 +1102,10 @@ class Engine {
     // deviceIndex -1 is the instrument's on/off switch (#148).
     void setTrackDeviceBypassed(int32_t trackId, int32_t deviceIndex, bool bypassed);
     bool trackDeviceBypassed(int32_t trackId, int32_t deviceIndex) const;
+    // Auto-sleep policy (Phase 2): deviceIndex == -1 targets the instrument; >= 0 an insert.
+    bool setPluginSleepMode(int32_t trackId, int32_t deviceIndex, int32_t mode);
+    int32_t pluginSleepMode(int32_t trackId, int32_t deviceIndex) const;
+    static int32_t pluginEditorSleepSelftest(int32_t catalogIndex);
     // Device fold (specs/022): a view flag on the device; deviceIndex -1 = the instrument.
     void setTrackDeviceFolded(int32_t trackId, int32_t deviceIndex, bool folded);
     bool trackDeviceFolded(int32_t trackId, int32_t deviceIndex) const;
@@ -1366,6 +1404,7 @@ class Engine {
     // Level metering (M6-2). Post-fader block peak/RMS per channel, updated on
     // the audio thread. Reads the live graph (== authoring graph between edits).
     bool trackMeter(int32_t trackId, float& peakL, float& peakR, float& rmsL, float& rmsR) const;
+    int32_t readTrackMeters(NotaTrackMeterEntry* out, int32_t capacity) const;
     void masterMeter(float& peakL, float& peakR, float& rmsL, float& rmsR) const;
     int32_t addMidiClip(int32_t trackId, double startBeat, double lengthBeats);
     bool setClipNotes(int32_t trackId, int32_t clipIndex, const NotaNoteData* notes, int32_t count);
@@ -1632,8 +1671,10 @@ class Engine {
     // Is `t` inside group `groupId` (at any depth)? Walks the parent ids; no allocation.
     static bool isUnderGroup(const Graph& g, const Track& t, int32_t groupId);
     void drainLiveMidi(double blockStartBeat, bool playing);
-    void renderInstrumentRaw(
-        Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing);
+    // Renders raw MIDI + expression into dst and returns true if non-silent output may have been produced.
+    bool renderInstrumentRaw(
+        Graph* g, Track& t, float* dst, int32_t frames, double blockStart, double spb, bool playing,
+        size_t trackIdx = SIZE_MAX);
     // Append a track's own note events (its MIDI clips while playing + live input when armed/
     // auditioned) to evs; returns the new count. Shared by a track's own render and by MIDI
     // routing (a destination gathers its sources' notes the same way).
@@ -1641,7 +1682,8 @@ class Engine {
         ExprEv* xev = nullptr, int* xn = nullptr);
     // A track's own post-MIDI-FX events (gather + drum swing + its MIDI FX chain), run once.
     int computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double blockStart, double spb, bool playing,
-        bool arrangementActive, ExprEv* xev = nullptr, int* xn = nullptr);
+        bool arrangementActive, ExprEv* xev = nullptr, int* xn = nullptr, const Graph* g = nullptr,
+        size_t trackIdx = SIZE_MAX);
     // Pre-pass: fill rs_->blockMidi/blockMidiN for every non-session instrument track.
     void computeBlockMidi(
         Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive);
@@ -1660,10 +1702,15 @@ class Engine {
     uint32_t followRng_ = 0x9E3779B9u; // audio-thread RNG for follow-action chance / Any / Other
     int applyMidiEffects(
         Track& t, MidiEv* evs, int n, MidiEv* scratch, int32_t frames, double beatStart, double spb, bool playing);
-    void applyMidiCcRouting(Track& t);
+    void applyMidiCcRouting(Track& t, const Graph* g = nullptr, size_t trackIdx = SIZE_MAX);
     void renderSessionAudioSlotRaw(Track& t, float* dst, int32_t frames, double spb); // M5-4
     void renderAudioClipsRaw(
         const std::vector<AudioClip>& clips, float* dst, int32_t frames, double blockStart, double spb);
+    void renderTrackAudioClipsRaw(const Track& t, float* dst, int32_t frames, double blockStart, double spb);
+    void renderTrackAudioClipsUnmapped(
+        const Track& t, float* dst, int32_t frames, double blockStart, double spb, double sr);
+    void renderAnticipativeInstrumentBlock(Graph* g, Track& t, size_t trackIdx, float* dst, int32_t frames,
+        double blockStart, double spb, double sr, MidiEv* midiScratch, ExprEv* exprScratch, ArtEv* artScratch);
     void renderAudioClipsAt(const std::vector<AudioClip>& clips, float* dst, int32_t frames,
         const Transport& clock);
     // Consolidate (audio): bounce the clips covering [start,end) into one new clip.
@@ -1704,7 +1751,7 @@ class Engine {
     bool cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const;
     int32_t addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId, int32_t srcDev, int32_t srcParam,
         int32_t targetKind, int32_t targetTrack, int32_t targetDevice, int32_t targetParam);
-    Modulator* modulatorPtr(Track& t, int32_t modId);
+    const Modulator* modulatorPtr(const Track& t, int32_t modId);
     // Keep CV-link targetDevice indices valid after a device on `track` was removed
     // (removedIndex>=0) or moved (from/to). Clones the affected owner tracks + republishes.
     // midi: the edit was on the MIDI-effect chain — fix up MidiFx-target links (param sources
@@ -1739,6 +1786,7 @@ class Engine {
     // before (undo, redo, a take retry) that a render may still be reading, so a track whose
     // take-join fades must change is cloned rather than written in place.
     void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
+    static void applyTelemetryMode(const Graph& g, dsp::TelemetryMode mode);
     // Releases the clip notes an edit took away while they sounded (#649); see Engine.cpp.
     void releaseVanishedClipNotes(const Graph& before, const Graph& after);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
@@ -2109,6 +2157,7 @@ class Engine {
     std::atomic<bool> recording_{false};
     std::atomic<int32_t> xruns_{0};    // device dropouts since launch (M7-8)
     std::atomic<float> cpuLoad_{0.0f}; // smoothed RT DSP load 0..1 (Phase 11)
+    std::atomic<dsp::TelemetryMode> telemetryMode_{dsp::TelemetryMode::OnDemand};
     // Set by start() before the device opens, cleared (release) once every node is re-prepared
     // at the negotiated rate: while set, render() outputs silence and never touches the graph.
     std::atomic<bool> renderSuspended_{false};
@@ -2270,7 +2319,7 @@ class Engine {
     template <bool Mapped = false>
     void mixAudioClip(
         const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
-        const Transport& clock);
+        const Transport& clock, bool forceSyncFill = false);
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
     std::atomic<int32_t> recordTrackRt_{-1}; // recordTrackId_ for the audio thread
@@ -2474,6 +2523,18 @@ class Engine {
     // Set by the message thread when the law comes from a load / reset / the new-project
     // baseline rather than a user switch: the audio thread then takes it at once, no fade.
     std::atomic<bool> panLawSnap_{false};
+    int32_t cachedStereoFrames_ = 0;
+    double cachedStereoSr_ = 0.0;
+    float cachedStereoStepA_ = 0.0f;
+    float cachedStereoBlockStep(int32_t frames, double sr) noexcept {
+        const double rate = sr > 0.0 ? sr : 44100.0;
+        if (frames != cachedStereoFrames_ || rate != cachedStereoSr_) {
+            cachedStereoFrames_ = frames;
+            cachedStereoSr_ = rate;
+            cachedStereoStepA_ = static_cast<float>(1.0 - std::exp(-frames / (0.3 * rate)));
+        }
+        return cachedStereoStepA_;
+    }
     bool seekedThisBlock_ = false;    // a Seek command was drained this block (audio thread)
     bool seekedWhileRolling_ = false; // ...and it arrived while the transport was rolling
     bool chaseNotes_ = false;         // this segment starts at a discontinuity: re-trigger held clip notes
@@ -2858,7 +2919,7 @@ class Engine {
     static constexpr double kTailQuietSeconds = 3.0;
     static constexpr double kTailMaxQuietSeconds = 30.0;
     static constexpr float kTailFloor = 1.0e-5f;
-    struct LeafWork {
+    struct NOTA_CACHE_ALIGNED LeafWork {
         Track* t = nullptr;
         bool audible = false, capturing = false, feeding = false, toMix = false;
         bool monitoring = false, frozenActive = false, sessionActive = false;
@@ -2869,6 +2930,7 @@ class Engine {
         int wid = -1;           // pool worker that rendered this track (diagnostic)
         int64_t workNs = 0;     // time its parallel DSP took (sizes the next block's helpers)
         float* dest = nullptr;  // group bus or master out (stable during block)
+        int8_t destSlot = -1;   // parent group slot >= 0 when writing into groupBus_
         float* route = nullptr; // post-fader route tap or nullptr
         float sends[kMaxReturns] = {};
         bool anySend = false;
@@ -2879,8 +2941,25 @@ class Engine {
         // its pre-FX and post-fader taps are already written (at that fader: vol / pan).
         uint32_t keyNeeds = 0;
         int level = 0;
-        bool preRendered = false, tapsDone = false;
+        bool preRendered = false, tapsDone = false, copyPost = true;
+        bool drySilent = false, postSilent = false;
+        bool hybridEligible = false, hybridServed = false, hybridDropTick = false;
         float vol = 1.0f, pan = 0.0f;
+    };
+    struct NOTA_CACHE_ALIGNED BusWork {
+        Track* track = nullptr;
+        int32_t trackIndex = -1;
+        int32_t busIndex = -1;
+        int32_t parentGroupSlot = -1;
+        bool busActive = false;
+        bool mute = false;
+        bool feedMute = false;
+        bool solo = false;
+        bool cue = false;
+        bool eligible = false;
+        bool parallelRan = false;
+        uint32_t keyNeeds = 0;
+        int32_t level = 0;
     };
     // Per-block render scratch, by position in the live graph's track list: Pass 1 leaf
     // work + render storage and the MIDI/expression pre-pass buffers. The audio thread
@@ -2891,12 +2970,20 @@ class Engine {
     // render can still hold it (AR-6).
     struct RenderScratch {
         size_t tracks = 0; // capacity in tracks (every vector below is sized for it)
+        int32_t frameCapacity = 0; // allocated frame capacity of leafBuf
+        size_t workerPlanarCount = 0;
         std::vector<LeafWork> leafWork;
         // Pass 1 render storage (two halves per track: dry pre-device + post).
         // NOTE: pool worker slots can NOT back per-track renders — tracks outnumber
         // workers, so a shared slot would hold only the last writer's signal (measured
         // cross-talk). Each task owns leafBase(li) exclusively for the block.
         std::vector<float> leafBuf;
+        // Exclusive Pass 1.5 / Pass 2 bus scratch for parallel Group and Return waves.
+        std::vector<float> groupScratch;
+        std::vector<float> returnScratch;
+        // Per-thread planar L/R buffers indexed cleanly by pool worker id (caller = workerCount).
+        std::vector<dsp::PlanarStereoBuffer> workerPlanar;
+        std::array<BusWork, 16> groupWork{};
         // Per-block MIDI output of each instrument track (post its own MIDI FX). Filled
         // once per block by computeBlockMidi; the render pass feeds each instrument its
         // own buffer plus the buffers of any tracks routing MIDI to it, so a source's
@@ -2911,6 +2998,10 @@ class Engine {
         // Pass 1: indices of the leaves rendered on the pool this block (dispatched alone,
         // so the job's ticket count is its real work).
         std::vector<int> parIdx;
+        // Pre-resolved route slot per track index, rebuilt only when routingEpoch_ or Graph changes.
+        const Graph* cachedRouteGraph = nullptr;
+        uint64_t cachedRoutingEpoch = 0;
+        std::vector<int32_t> trackRouteSlot;
     };
     // Pass 1 with a device (audio thread state). Measured: spreading a block that fits the
     // buffer over parked render threads costs 2-3x the CPU (cores wake from idle at low
@@ -2943,14 +3034,17 @@ class Engine {
     // attacks and scheduler jitter. Near-deadline sizing leaves four large
     // plug-in jobs in two serial waves despite useful cores being available.
     static constexpr double kRtSizeLoad = 0.50;
+    static constexpr double kRtExitHysteresis = 0.72;
     static constexpr double kRtHoldSeconds = 2.0;
     static constexpr double kRtMaxHoldSeconds = 32.0;
     static constexpr double kRtProbeSeconds = 0.5;
     double rtHoldNs_ = kRtHoldSeconds * 1e9;
+    int32_t rtOverBudgetStreak_ = 0;
     SnapshotHistory<RenderScratch> scratchHist_;
     RenderScratch* rs_ = nullptr; // audio thread: this block's scratch (set in processBlock)
     float* leafBase(size_t li, size_t stride) { return rs_->leafBuf.data() + li * stride * 2; }
-    void ensureRenderScratch(size_t tracks); // message thread: publish scratch for `tracks` (AR-6)
+    void ensureRenderScratch(size_t tracks, int32_t minFrames = 0); // message thread: publish scratch for tracks/frames (AR-6)
+    void ensureBlockCapacity(int32_t frames);                       // message/offline thread: grow scratch & rack arenas before large blocks
     // Per-leaf DSP (Pass 1 steps 1/2/2b): render dry + device chain + PDC.
     // Split in two so the serial accumulate can tap the pre-device signal
     // (Phase D) while the fader reads the post-device one: parallel tasks
@@ -2958,8 +3052,9 @@ class Engine {
     // in place on half 1; the serial fallback renders dry into scratch_,
     // taps, then runs devices in place. Both orders yield identical values
     // (dry/devices are pure per-track functions of the same inputs).
-    void renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart, double spb,
-        bool playing, const TransportInfo& ti, bool arrangementActive);
+    // Returns true when dst may contain non-zero dry audio; false guarantees all samples are zeros.
+    bool renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, int32_t frames, double blockStart, double spb,
+        bool playing, const TransportInfo& ti, bool arrangementActive, size_t trackIdx = SIZE_MAX);
     void processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* g, int32_t frames, double blockStart,
         double spb, bool playing, const TransportInfo& ti);
     // Fork-join pool for parallel Pass 1 leaf renders (constructed on the
@@ -2967,6 +3062,11 @@ class Engine {
     // Replaced only while the device is stopped (setRenderThreads), so the audio
     // thread never sees it change.
     std::unique_ptr<AudioThreadPool> pool_ = std::make_unique<AudioThreadPool>();
+    std::unique_ptr<HybridBufferController> hybrid_;
+    std::atomic<int64_t> streamThresholdBytes_{kDefaultStreamThresholdBytes};
+    std::atomic<int32_t> sampleLoadPolicy_{static_cast<int32_t>(SampleLoadPolicy::Auto)};
+    double pendingSeekBeat_ = -1.0;
+    void syncStreamingPlaybackState(bool playing, double beatHint = -1.0) const;
     // Freeze capture (M7): while armed, mixGraph stashes the target track's post-device
     // pre-fader signal into freezeCaptureBuf_. Filled sequentially from a seek(0) render;
     // only touched on the render thread, which is the message thread while capturing (the
@@ -2980,6 +3080,7 @@ class Engine {
     // Sample rate every node was last prepared at (propagateSampleRate). The offline render
     // re-prepares only when it changes, so a chunked export doesn't reset DSP state per block.
     double preparedSR_ = 0.0;
+    int32_t preparedBlockCap_ = 2048;
     // Warp-cache build deferral (project load): when set, configureClipWarp skips the heavy
     // stretch so Apply stays fast; warpBuildStep then fills caches incrementally with a bar.
     bool deferWarpBuild_ = false;
@@ -3038,6 +3139,7 @@ class Engine {
     // slot (nested) or the master. Fixed pool → no RT allocation.
     static constexpr int32_t kMaxGroups = 16;
     std::array<std::vector<float>, kMaxGroups> groupBus_;
+    mutable RenderBusState<kMaxGroups, kMaxReturns> busState_;
 
     // Signal routing (Phase B): a pool of route buses that source tracks tap their
     // post-fader signal into, for sidechain / inter-track routing. Double-buffered:
@@ -3064,6 +3166,7 @@ class Engine {
     // track per block. A reroute racing a block can mis-key that one block (as it always could:
     // the table is cleared and refilled in place), never touch a buffer out of range.
     std::atomic<int32_t> routeSlotCount_{0};
+    std::atomic<uint64_t> routingEpoch_{1};
     std::vector<float> silentKey_; // kMaxBlock stereo zeros: the key of a part that is gone
     // Monitoring a track (#563): a detector can live with routeBus_'s "previous segment" view,
     // an ear can't — segments vary in length (a device that converts the rate, a loop seam), and
@@ -3077,6 +3180,7 @@ class Engine {
     static constexpr int32_t kTrackTapRingFrames = 2 * kMaxBlock; // power of two, > the largest lag
     std::array<std::vector<float>, kMaxRoutes> trackTapRing_;      // stereo interleaved
     int32_t trackTapRingTrack_[kMaxRoutes];                        // whose tap each ring holds (-1: none)
+    int32_t trackTapRingHighWater_ = 0;                            // active prefix of trackTapRingTrack_
     int64_t trackTapRingPos_ = 0;                                  // frames appended (same for every slot)
     int32_t monitorLag_ = 0;                                       // read lag in frames
     int32_t monitorLagPeak_ = 0;                                   // longest segment in the current window

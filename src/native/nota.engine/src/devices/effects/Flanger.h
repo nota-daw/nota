@@ -39,6 +39,7 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/core/RtAttributes.h"
 #include "engine/TransportInfo.h"
 
 #include <algorithm>
@@ -152,6 +153,8 @@ class Flanger : public Device {
     static constexpr int kMask = kBuf - 1;
     static constexpr uint64_t kIdleSamples = 16384; // hangover before sleep
 
+    NOTA_NOINLINE void processDsp(float* buf, int32_t frames);
+
     struct Comb {
         double notchTheta, nullDb, peakDb;
     };
@@ -190,10 +193,9 @@ class Flanger : public Device {
     double beatStart_ = 0.0, spb_ = 0.0, barBeats_ = 4.0;
     bool playing_ = false;
     float inPkM_ = 0.0f, outPkLM_ = 0.0f, outPkRM_ = 0.0f;
-    double cpuS_ = 0.0;
     std::atomic<bool> restartReq_{false}, clearReq_{false}, resetReq_{false};
     std::atomic<float> srA_{44100.0f}, inPkA_{-120.0f}, outPkLA_{-120.0f}, outPkRA_{-120.0f};
-    std::atomic<float> tauLA_{0.0f}, tauRA_{0.0f}, fracA_{0.0f}, rateA_{0.2f}, bpmA_{120.0f}, barA_{4.0f}, cpuA_{0.0f};
+    std::atomic<float> tauLA_{0.0f}, tauRA_{0.0f}, fracA_{0.0f}, rateA_{0.2f}, bpmA_{120.0f}, barA_{4.0f};
     std::atomic<int64_t> cycleA_{0};
     std::atomic<int> playingA_{0}, lockedA_{0};
     bool idle_ = false;
