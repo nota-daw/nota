@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="440" viewBox="0 0 960 440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="960" height="440" fill="#fcfcfb"/>
+<text x="64" y="34" font-size="18" font-weight="600" fill="#0b0b0b">32-band Nota Vocoder offline render</text>
+<text x="64" y="56" font-size="13" fill="#52514e">Apple M2 · 48 kHz · median wall time in ms per 3 s of audio</text>
+<rect x="64" y="70" width="12" height="12" rx="3" fill="#2a78d6"/>
+<text x="82" y="80" font-size="13" fill="#52514e">Last green base</text>
+<rect x="206.5" y="70" width="12" height="12" rx="3" fill="#eb6834"/>
+<text x="224.5" y="80" font-size="13" fill="#52514e">Develop before fix</text>
+<rect x="371.5" y="70" width="12" height="12" rx="3" fill="#1baf7a"/>
+<text x="389.5" y="80" font-size="13" fill="#52514e">This PR</text>
+<line x1="64" x2="936" y1="384.0" y2="384.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="56" y="388.0" font-size="12" fill="#898781" text-anchor="end">0</text>
+<line x1="64" x2="936" y1="312.0" y2="312.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="316.0" font-size="12" fill="#898781" text-anchor="end">25</text>
+<line x1="64" x2="936" y1="240.0" y2="240.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="244.0" font-size="12" fill="#898781" text-anchor="end">50</text>
+<line x1="64" x2="936" y1="168.0" y2="168.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="172.0" font-size="12" fill="#898781" text-anchor="end">75</text>
+<line x1="64" x2="936" y1="96.0" y2="96.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="100.0" font-size="12" fill="#898781" text-anchor="end">100</text>
+<text x="14" y="240" font-size="12" fill="#898781" transform="rotate(-90 14 240)" text-anchor="middle">ms / 3 s audio</text>
+<path d="M220.0,384.0 V286.6 Q220.0,282.6 224.0,282.6 H256.0 Q260.0,282.6 260.0,286.6 V384.0 Z" fill="#2a78d6"/>
+<text x="240.0" y="277.6" font-size="11" fill="#52514e" text-anchor="middle">35.2</text>
+<path d="M262.0,384.0 V286.1 Q262.0,282.1 266.0,282.1 H298.0 Q302.0,282.1 302.0,286.1 V384.0 Z" fill="#eb6834"/>
+<text x="282.0" y="277.1" font-size="11" fill="#52514e" text-anchor="middle">35.4</text>
+<path d="M304.0,384.0 V299.4 Q304.0,295.4 308.0,295.4 H340.0 Q344.0,295.4 344.0,299.4 V384.0 Z" fill="#1baf7a"/>
+<text x="324.0" y="290.4" font-size="11" fill="#52514e" text-anchor="middle">30.8</text>
+<text x="282.0" y="406" font-size="13" fill="#52514e" text-anchor="middle">ARM64 native</text>
+<path d="M656.0,384.0 V132.4 Q656.0,128.4 660.0,128.4 H692.0 Q696.0,128.4 696.0,132.4 V384.0 Z" fill="#2a78d6"/>
+<text x="676.0" y="123.4" font-size="11" fill="#52514e" text-anchor="middle">88.8</text>
+<path d="M698.0,384.0 V132.8 Q698.0,128.8 702.0,128.8 H734.0 Q738.0,128.8 738.0,132.8 V384.0 Z" fill="#eb6834"/>
+<text x="718.0" y="123.8" font-size="11" fill="#52514e" text-anchor="middle">88.6</text>
+<path d="M740.0,384.0 V165.4 Q740.0,161.4 744.0,161.4 H776.0 Q780.0,161.4 780.0,165.4 V384.0 Z" fill="#1baf7a"/>
+<text x="760.0" y="156.4" font-size="11" fill="#52514e" text-anchor="middle">77.3</text>
+<text x="718.0" y="406" font-size="13" fill="#52514e" text-anchor="middle">x86-64 via Rosetta</text>
+</svg>
