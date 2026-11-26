@@ -25,6 +25,7 @@ int bend14(float v) { return std::clamp(static_cast<int>(std::lround((v + 1.0f) 
 
 ExternalMidi::ExternalMidi(std::string outputUid, int32_t channel, std::string outputName, std::string roleId)
     : uid_(std::move(outputUid)), name_(std::move(outputName)), role_(std::move(roleId)) {
+    sLive.fetch_add(1, std::memory_order_relaxed);
     channel_ = channel >= 0 && channel <= 16 ? channel : 1;
     for (uint8_t i = 0; i < 15; ++i) lru_[i] = static_cast<uint8_t>(i + 1); // member channels 2..16 (0-based 1..15)
 }

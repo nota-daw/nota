@@ -1886,6 +1886,7 @@ class Engine {
     MidiRenderClock midiClock_;
     uint64_t offlineFrames_ = 0;
     MidiOutService midiOut_;
+    bool externalMidiRouted_ = false; // the last publish handed the MIDI out thread a route (message thread)
     void syncExternalMidi(const Graph& g);
     std::vector<MidiInput::PortInfo> midiPortRows_;
     std::vector<MidiOutput::Destination> midiOutputRows_;

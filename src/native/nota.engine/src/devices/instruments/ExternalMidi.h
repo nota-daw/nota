@@ -53,6 +53,11 @@ class ExternalMidi final : public Instrument {
     static constexpr float kMpeBendRange = 48.0f; // MPE's default per-note pitch-bend range, semitones
 
     explicit ExternalMidi(std::string outputUid = {}, int32_t channel = 1, std::string outputName = {}, std::string roleId = {});
+    ~ExternalMidi() override { sLive.fetch_sub(1, std::memory_order_relaxed); }
+
+    // Instances alive anywhere (graph, undo history, the MIDI out thread): while there are none, a
+    // graph publish has nothing to wire (Engine::syncExternalMidi). Message thread reads it.
+    static int32_t liveCount() { return sLive.load(std::memory_order_relaxed); }
 
     int32_t kind() const override { return kKind; }
     const char* displayName() const override { return "External MIDI"; }
@@ -92,6 +97,7 @@ class ExternalMidi final : public Instrument {
     std::atomic<uint32_t> dropped{0}; // messages lost to a full ring (audio thread writes)
 
   private:
+    static inline std::atomic<int32_t> sLive{0};
     uint8_t chanFor(int32_t pitch) const; // the channel (0..15) a note's messages go on
     uint8_t master() const;               // the channel for instrument-wide messages
     void push(uint8_t s, uint8_t d1, uint8_t d2, uint8_t len);

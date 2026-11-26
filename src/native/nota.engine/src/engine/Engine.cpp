@@ -314,6 +314,10 @@ bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t
 // Before a graph goes live: its External MIDI instances learn the block clock. After: the MIDI out
 // thread gets the list, and lets go (releasing their notes) of the ones that left.
 void Engine::syncExternalMidi(const Graph& g) {
+    // Every edit publishes a graph: while no External MIDI instance exists anywhere (live, in undo
+    // history or in the MIDI out thread's hands), there is nothing to wire — skip the walk (perf
+    // gate edit-warp-split).
+    if (ExternalMidi::liveCount() == 0 && !externalMidiRouted_) return;
     std::vector<MidiOutService::Route> routes;
     for (const auto& t : g.tracks)
         if (t && t->instrument && t->instrument->kind() == ExternalMidi::kKind) {
@@ -321,6 +325,7 @@ void Engine::syncExternalMidi(const Graph& g) {
             em->attachClock(&midiClock_);
             routes.push_back({t->id(), std::move(em)});
         }
+    externalMidiRouted_ = !routes.empty();
     midiOut_.setRoutes(std::move(routes));
 }
 
