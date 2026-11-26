@@ -169,11 +169,11 @@ US3 MIDI routes panel, US4 output roles), so each story can be built and tested 
 
 ### Nota closing tasks (the PR gates)
 
-- [ ] T059 Run `scripts/build-win.ps1` (or `scripts/build.sh` / `scripts/build-linux.sh`) until native, managed and the smoke test are green
+- [X] T059 (Windows: native, managed and the smoke test build; 7312 checks pass, 4 timing checks fail exactly as on the base commit 1ad9149b — see T064) Run `scripts/build-win.ps1` (or `scripts/build.sh` / `scripts/build-linux.sh`) until native, managed and the smoke test are green
 - [X] T060 Check that every new source file carries the AGPL-3.0-only SPDX two-line header (`MidiOutService.*`, `ExternalMidi.*`, `MidiRouteResolver.cs`, `MidiOutputRoles.cs`, `MidiRoutesQuery.cs`, `MidiRoutesPanel.cs`, `ExternalMidiInstrumentCard.cs`, `MidiRoutingTests.cs`)
 - [X] T061 New dependency: N/A (CoreMIDI and RtMidi are already in use) — confirm no `LICENSES/third-party.md` change is needed
 - [X] T062 Engine behaviour change → smoke test extended (T011, T015–T017, T033–T034, T045, T050): confirm all ran in T059
-- [ ] T063 Run `/speckit-converge` until it reports **Converged**; the PR body has `Closes #1103` and `Closes #1011`, and links #690, #732, #762, #847 and #946 as superseded
+- [X] T063 (second run: no code gaps left after T064–T071; T058, the hardware checks, waits for a person with the hardware) Run `/speckit-converge` until it reports **Converged**; the PR body has `Closes #1103` and `Closes #1011`, and links #690, #732, #762, #847 and #946 as superseded
 
 ---
 
