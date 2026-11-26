@@ -37,7 +37,7 @@ When a VST3 or AudioUnit plugin's native editor window is open, the plugin inter
 
 ## Root Cause Hypothesis
 
-**High confidence.** Auto-sleep (`specs/115-instrument-plugin-sleep-gate`, commit `7bdc3472`) introduced `SilenceGate` auto-sleep to `PluginInstrument` and `PluginEffect`, and graph skipping (`specs/115`, `specs/118`) omits idle tracks, muted/solo-gated tracks, inactive audio tails, buses, and rack chains when `isIdle()` or `tailQuiet() < 0`. `EditorHost` did not track an audio-thread-safe atomic open state or hold `SilenceGate` awake while visible, and the render graph / rack propagation only checked `PluginSleepMode::Never` (not even reliably for stopped audio tracks with settled `tailQuiet < 0`), starving `plugin_->processBlock()` whenever the editor remained open during silence.
+**High confidence.** Auto-sleep (`specs/115-engine-large-project-optimizations`, commit `7bdc3472`) introduced `SilenceGate` auto-sleep to `PluginInstrument` and `PluginEffect`, and graph skipping (`specs/115`) omits idle tracks, muted/solo-gated tracks, inactive audio tails, buses, and rack chains when `isIdle()` or `tailQuiet() < 0`. `EditorHost` did not track an audio-thread-safe atomic open state or hold `SilenceGate` awake while visible, and the render graph / rack propagation only checked `PluginSleepMode::Never` (not even reliably for stopped audio tracks with settled `tailQuiet < 0`), starving `plugin_->processBlock()` whenever the editor remained open during silence.
 
 ## Proposed Remediation
 
