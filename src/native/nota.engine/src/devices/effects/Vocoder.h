@@ -156,6 +156,11 @@ class Vocoder : public Device {
         double fa = 1000.0, env = 0.0, lvl = 0.0;
         bool live = true;
     };
+    struct BandLayout {
+        int bands = 0;
+        double low = 0, high = 0, q = 0, formantSemitones = 0;
+        bool operator==(const BandLayout&) const = default;
+    };
     // One-pole high-pass (two in series make the 12 dB/oct unvoiced filters).
     struct Hp1 {
         double z = 0, x1 = 0;
@@ -181,7 +186,7 @@ class Vocoder : public Device {
     void reset();
     double sawTick(double hz);
     double noise();
-    void tiltTick(double& l, double& r, double db);
+    void tiltTick(double& l, double& r, double highGain, double lowGain);
     void flushDenormals();
 
     std::atomic<float> p_[kNumParams];
@@ -194,6 +199,7 @@ class Vocoder : public Device {
 
     double sr_ = 44100.0;
     std::array<Band, kMaxBands> band_{};
+    BandLayout layout_{};
     int n_ = 16, ctrl_ = 0, carCur_ = 0, carPrev_ = 0;
     bool snap_ = true, ducking_ = false;
     double duck_ = 1.0, xf_ = 1.0, norm_ = 1.0, agc_ = 0.0, passS_ = 1.0;
