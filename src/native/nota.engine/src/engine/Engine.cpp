@@ -1196,6 +1196,18 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         } else if (!restored || !g->routingPlan) {
             g->routingPlan = RenderRoutingPlan::build(*g);
         }
+        bool anyAuto = !g->masterVolume.points.empty() || (g->masterTrack && !g->masterTrack->automation.empty());
+        bool anyMod = false;
+        bool anyCv = false;
+        for (const auto& t : g->tracks) {
+            if (!t) continue;
+            anyAuto |= !t->automation.empty();
+            anyMod |= !t->modulators.empty();
+            anyCv |= !t->cvLinks.empty();
+        }
+        g->hasAutomation = anyAuto;
+        g->hasModulators = anyMod;
+        g->hasCvLinks = anyCv;
     }
     graphHist_.publish(g); // frees the graphs no render can still be walking
     if (hybrid_ && hybrid_->mode() != HybridBufferMode::Off) hybrid_->onGraphChanged(g);

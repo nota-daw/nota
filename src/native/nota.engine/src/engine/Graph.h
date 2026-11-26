@@ -68,6 +68,10 @@ struct Graph {
     std::vector<Section> sections;
     // Precompiled routing, bus ancestry, and compiled param endpoints built in publishRaw().
     std::shared_ptr<const RenderRoutingPlan> routingPlan;
+    // Precomputed presence flags set in Engine::publishRaw() to skip empty passes cleanly.
+    bool hasAutomation = false;
+    bool hasModulators = false;
+    bool hasCvLinks = false;
 };
 
 // Graph-level fields (everything except `tracks`). A fresh graph built from scratch must

@@ -1598,7 +1598,7 @@ int Engine::gatherInstrumentNotes(
                 else gatherClip.template operator()<true, true>();
             } else if (unshifted) gatherClip.template operator()<false, false>();
             else gatherClip.template operator()<true, false>();
-            if (xev && clipActive)
+            if (xev && clipActive && !clip.controllers.empty())
                 clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn, kMaxBlockExpr,
                     transport_.tempoMap(), transport_.sampleRate(), transport_.playheadSamples());
         };
@@ -1620,7 +1620,7 @@ int Engine::gatherInstrumentNotes(
             if (xev) {
                 idx->forEachMidiClipInWindow(rawStart - 0.05, rawEnd + 0.05, -1.0, [&](int32_t ci) {
                     const MidiClip& clip = t.midiClips[static_cast<size_t>(ci)];
-                    if (clip.active)
+                    if (clip.active && !clip.controllers.empty())
                         clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb),
                             renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart, frames, xev, *xn, kMaxBlockExpr);
                 });
@@ -1630,51 +1630,13 @@ int Engine::gatherInstrumentNotes(
                 processClip(clip, ci, true, qStart - clip.startBeat, qEnd - clip.startBeat);
             });
         } else {
-            // Fast direct traversal for normal (<= 16 clip) / loop-seam tracks without per-clip lambda overhead.
-            const auto& clips = t.midiClips.read();
-            for (const MidiClip& clip : clips) {
-                const bool clipActive = clip.active;
-                const double clipStart = renderSampleAtBeat(clip.startBeat, blockStart, spb);
-                const double clipEnd = renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb);
-                if (xev && clipActive)
-                    clipCtlEndResets(clip, clipStart, clipEnd, blockStart, frames, xev, *xn, kMaxBlockExpr);
-                const bool hasVel = !clip.velocityEnvelope.points.empty();
-                for (const Note& note : clip.notes) {
-                    if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
-                    const double shiftS = unshifted
-                        ? 0.0
-                        : (artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS
-                                    : trackShiftS);
-                    const double nominalOn = mapped
-                        ? renderSampleAtBeat(clip.startBeat + std::max(0.0, note.startBeat), blockStart, spb)
-                        : clipStart + std::max(0.0, note.startBeat) * spb;
-                    double nominalOff = mapped
-                        ? renderSampleAtBeat(clip.startBeat + note.startBeat + note.lengthBeats, blockStart, spb)
-                        : clipStart + (note.startBeat + note.lengthBeats) * spb;
-                    if (nominalOff > clipEnd) nominalOff = clipEnd;
-                    const double onS = nominalOn + shiftS;
-                    const double offS = nominalOff + shiftS;
-                    float vel = note.velocity;
-                    if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
-                    if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
-                        evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
-                            static_cast<float>((offS - onS) / spb)};
-                    if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
-                        evs[n++] = {0, false, note.pitch, 0.0f};
-                    if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
-                        evs[n++] = {0, true, note.pitch, vel};
-                    if (offS >= blockStart && offS < blockStart + frames && n < 1024)
-                        evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
-                    if (xev && note.expr && clipActive) {
-                        const double noteAt = mapped ? renderSampleAtBeat(clip.startBeat + note.startBeat, blockStart, spb)
-                                                     : clipStart + note.startBeat * spb;
-                        noteExprEvents(note, noteAt + shiftS - blockStart, offS - blockStart, frames, spb, xev, *xn,
-                            kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS);
-                    }
-                }
-                if (xev && clipActive)
-                    clipCtlEvents(clip, clipStart, clipEnd, blockStart, frames, spb, chaseNotes_, xev, *xn,
-                        kMaxBlockExpr, transport_.tempoMap(), transport_.sampleRate(), transport_.playheadSamples());
+            // Fast direct traversal for normal (<= 16 clip) / loop-seam tracks reuses the
+            // compile-time <shifted, isMapped> helper to eliminate per-note branches cleanly.
+            for (const MidiClip& clip : t.midiClips.read()) {
+                if (xev && clip.active && !clip.controllers.empty())
+                    clipCtlEndResets(clip, renderSampleAtBeat(clip.startBeat, blockStart, spb),
+                        renderSampleAtBeat(clip.startBeat + clip.lengthBeats, blockStart, spb), blockStart, frames, xev, *xn, kMaxBlockExpr);
+                processClip(clip, -1, false, 0.0, 0.0);
             }
         }
     }
@@ -3160,30 +3122,36 @@ void Engine::advanceMonitorLag(int32_t frames) {
 // Append this segment's post-fader taps to the monitoring rings (#563). A slot that now mirrors
 // another source starts from silence rather than the old source's frames.
 void Engine::publishTrackTapRings(int32_t frames) {
-    constexpr int64_t mask = kTrackTapRingFrames - 1;
     const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
-    for (int32_t s = 0; s < kMaxRoutes; ++s) {
-        const int32_t id = s < n ? routeSlotTrackId_[s].load(std::memory_order_relaxed) : -1;
-        if (id < 0) {
-            trackTapRingTrack_[s] = -1;
-            continue;
+    const int32_t limit = std::max(n, trackTapRingHighWater_);
+    if (limit > 0) {
+        constexpr int64_t mask = kTrackTapRingFrames - 1;
+        int32_t newHigh = 0;
+        for (int32_t s = 0; s < limit; ++s) {
+            const int32_t id = s < n ? routeSlotTrackId_[s].load(std::memory_order_relaxed) : -1;
+            if (id < 0) {
+                trackTapRingTrack_[s] = -1;
+                continue;
+            }
+            const uint64_t part = routeSlotPart_[s].load(std::memory_order_relaxed);
+            if (part != 0) { // monitoring hears whole tracks only
+                trackTapRingTrack_[s] = -1;
+                continue;
+            }
+            newHigh = s + 1;
+            float* ring = trackTapRing_[s].data();
+            if (trackTapRingTrack_[s] != id) {
+                std::fill_n(ring, static_cast<size_t>(kTrackTapRingFrames) * 2, 0.0f);
+                trackTapRingTrack_[s] = id;
+            }
+            const float* tap = routeBusNext_[s].data();
+            for (int32_t i = 0; i < frames; ++i) {
+                const size_t k = static_cast<size_t>((trackTapRingPos_ + i) & mask) * 2;
+                ring[k] = tap[i * 2];
+                ring[k + 1] = tap[i * 2 + 1];
+            }
         }
-        const uint64_t part = routeSlotPart_[s].load(std::memory_order_relaxed);
-        if (part != 0) { // monitoring hears whole tracks only
-            trackTapRingTrack_[s] = -1;
-            continue;
-        }
-        float* ring = trackTapRing_[s].data();
-        if (trackTapRingTrack_[s] != id) {
-            std::fill_n(ring, static_cast<size_t>(kTrackTapRingFrames) * 2, 0.0f);
-            trackTapRingTrack_[s] = id;
-        }
-        const float* tap = routeBusNext_[s].data();
-        for (int32_t i = 0; i < frames; ++i) {
-            const size_t k = static_cast<size_t>((trackTapRingPos_ + i) & mask) * 2;
-            ring[k] = tap[i * 2];
-            ring[k + 1] = tap[i * 2 + 1];
-        }
+        trackTapRingHighWater_ = newHigh;
     }
     trackTapRingPos_ += frames;
     if (monitorFadePos_ < monitorFadeLen_) monitorFadePos_ = std::min(monitorFadeLen_, monitorFadePos_ + frames);

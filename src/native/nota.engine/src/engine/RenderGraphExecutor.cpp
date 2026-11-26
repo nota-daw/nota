@@ -372,12 +372,14 @@ void RenderGraphExecutor::initGroupsAndBuses(MixContext& ctx) {
         [&](size_t b) { std::fill_n(eng.returnBus_[b].data(), ctx.frames * 2, 0.0f); });
 
     ctx.nRoutes = eng.routeSlotCount_.load(std::memory_order_acquire);
-    std::fill_n(eng.routeFresh_, Engine::kMaxRoutes, false);
-    for (int s = 0; s < ctx.nRoutes; ++s)
-        if (eng.routeSlotTrackId_[s].load(std::memory_order_relaxed) >= 0) {
-            std::fill_n(eng.routeBusNext_[s].data(), ctx.frames * 2, 0.0f);
-            std::fill_n(eng.routeBusPreNext_[s].data(), ctx.frames * 2, 0.0f);
-        }
+    if (ctx.nRoutes > 0) {
+        std::fill_n(eng.routeFresh_, ctx.nRoutes, false);
+        for (int s = 0; s < ctx.nRoutes; ++s)
+            if (eng.routeSlotTrackId_[s].load(std::memory_order_relaxed) >= 0) {
+                std::fill_n(eng.routeBusNext_[s].data(), ctx.frames * 2, 0.0f);
+                std::fill_n(eng.routeBusPreNext_[s].data(), ctx.frames * 2, 0.0f);
+            }
+    }
 
     auto& gw = eng.rs_->groupWork;
     if (plan) {
@@ -480,9 +482,20 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
     for (size_t li = 0; li < ntracks; ++li) {
         Track& t = *g->tracks[li];
         Engine::LeafWork& w = eng.rs_->leafWork[li];
-        w = Engine::LeafWork{};
-        if (t.type() == TrackType::Return || t.type() == TrackType::Group) continue;
-        w.t = &t;
+        auto markSkipped = [&] {
+            w.t = nullptr;
+            w.path = Engine::LeafPath::Skip;
+            w.level = 0;
+            w.keyNeeds = 0;
+            w.preRendered = false;
+            w.hybridEligible = false;
+            w.hybridServed = false;
+            w.hybridDropTick = false;
+        };
+        if (t.type() == TrackType::Return || t.type() == TrackType::Group) {
+            markSkipped();
+            continue;
+        }
 
         const bool frozenActive = t.frozen() && t.frozenBuf;
         const bool capturing = (t.id() == ctx.capTrackId);
@@ -522,54 +535,73 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
             if (!frozenActive) feedSilentMidiKeys(t);
             t.setMeter(0, 0, 0, 0);
             t.stereoFold(0, 0, 0, ctx.frames, ctx.stereoA);
+            markSkipped();
             continue;
         }
 
         t.sessionSilentReleased = false;
-        w.audible = audible;
-        w.capturing = capturing;
-        w.feeding = feeding;
-        w.toMix = audible || capturing;
-        w.postTapMuted = postTapMuted;
-        w.monitoring = monitoring;
-        w.cue = cueing;
-        w.cueOnly = cueing && !audible && !capturing && !feeding && !keying;
-        w.frozenActive = frozenActive;
-        w.sessionActive = sessionActive;
-
+        Engine::LeafPath path = Engine::LeafPath::Skip;
         if (frozenActive) {
             if (!ctx.playing) {
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, ctx.frames, ctx.stereoA);
+                markSkipped();
                 continue;
             }
-            w.path = Engine::LeafPath::Frozen;
-        } else if (w.monitoring) {
-            w.path = Engine::LeafPath::Monitor;
+            path = Engine::LeafPath::Frozen;
+        } else if (monitoring) {
+            path = Engine::LeafPath::Monitor;
         } else if (sessionActive && t.type() == TrackType::Instrument) {
-            w.path = Engine::LeafPath::SessionInst;
+            path = Engine::LeafPath::SessionInst;
         } else if (sessionActive && t.type() == TrackType::Audio) {
-            w.path = Engine::LeafPath::SessionAudio;
+            path = Engine::LeafPath::SessionAudio;
         } else if (t.type() == TrackType::Instrument) {
             if (instrumentLeafCanSkip(ctx, t, li, capturing)) {
                 t.tailQuiet() = -1;
                 feedSilentMidiKeys(t);
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, ctx.frames, ctx.stereoA);
+                markSkipped();
                 continue;
             }
-            w.path = Engine::LeafPath::Instrument;
+            path = Engine::LeafPath::Instrument;
         } else if (ctx.playing && ctx.arrangementActive) {
-            w.path = Engine::LeafPath::AudioClips;
+            path = Engine::LeafPath::AudioClips;
         } else if (trackRequiresActiveProcessing(t) || (t.tailQuiet() >= 0 && hasLiveDevice(t))) {
-            w.path = Engine::LeafPath::Tail;
+            path = Engine::LeafPath::Tail;
         } else {
             t.tailQuiet() = -1;
             feedSilentMidiKeys(t);
             t.setMeter(0, 0, 0, 0);
             t.stereoFold(0, 0, 0, ctx.frames, ctx.stereoA);
+            markSkipped();
             continue;
         }
+
+        w.t = &t;
+        w.path = path;
+        w.audible = audible;
+        w.capturing = capturing;
+        w.feeding = feeding;
+        w.toMix = audible || capturing;
+        w.monitoring = monitoring;
+        w.frozenActive = frozenActive;
+        w.sessionActive = sessionActive;
+        w.cue = cueing;
+        w.cueOnly = cueing && !audible && !capturing && !feeding && !keying;
+        w.postTapMuted = postTapMuted;
+        w.wid = -1;
+        w.workNs = 0;
+        w.keyNeeds = 0;
+        w.level = 0;
+        w.preRendered = false;
+        w.tapsDone = false;
+        w.copyPost = true;
+        w.hybridEligible = false;
+        w.hybridServed = false;
+        w.hybridDropTick = false;
+        w.vol = 1.0f;
+        w.pan = 0.0f;
 
         const int destSlot = ctx.plan ? ctx.plan->leafParentGroupSlot(li) : ctx.groupSlotOf(t.groupId());
         w.destSlot = static_cast<int8_t>(destSlot);
@@ -1424,10 +1456,14 @@ void RenderGraphExecutor::mixGraph(Engine& eng, Graph* g, float* out, int32_t fr
             playing && eng.arrangementActive_.load(std::memory_order_relaxed) && !eng.countInActive_,
             eng.transport_.isLooping(), eng.transport_.loopStartSamples(), eng.transport_.loopEndSamples(), hybridPool);
     }
-    if (spb > 0.0) eng.applyAutomation(g, blockStart / spb, (blockStart + frames) / spb);
     if (spb > 0.0) {
-        eng.updateModulators(g, blockStart / spb, elapsedStart / srLaw, frames / srLaw);
-        eng.applyModulation(g, blockStart / spb, elapsedStart / srLaw);
+        if (g->hasAutomation) eng.applyAutomation(g, blockStart / spb, (blockStart + frames) / spb);
+        if (g->hasModulators || g->hasCvLinks) {
+            const double beat = blockStart / spb;
+            const double tSec = elapsedStart / srLaw;
+            if (g->hasModulators) eng.updateModulators(g, beat, tSec, frames / srLaw);
+            if (g->hasCvLinks) eng.applyModulation(g, beat, tSec);
+        }
     }
 
     MixContext ctx{eng};
@@ -1451,7 +1487,7 @@ void RenderGraphExecutor::mixGraph(Engine& eng, Graph* g, float* out, int32_t fr
     initGroupsAndBuses(ctx);
     eng.computeBlockMidi(g, frames, blockStart, spb, playing, ctx.arrangementActive);
 
-    int32_t slotLeaf[Engine::kMaxRoutes] = {};
+    int32_t slotLeaf[Engine::kMaxRoutes];
     int32_t maxLevel = 0;
     classifyLeaves(ctx, slotLeaf, maxLevel);
     // A lone offline leaf has no sibling tracks to parallelize against; skipping the

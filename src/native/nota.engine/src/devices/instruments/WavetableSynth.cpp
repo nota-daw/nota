@@ -621,7 +621,7 @@ NOTA_ALWAYS_INLINE double WavetableSynth::svf(const SvfCoef& c, double& ic1, dou
     }
 }
 
-NOTA_ALWAYS_INLINE double WavetableSynth::filterPair(const SvfCoef* f, double* ic1a, double* ic2a, double* ic1b,
+double WavetableSynth::filterPair(const SvfCoef* f, double* ic1a, double* ic2a, double* ic1b,
     double* ic2b, double in1, double in2, bool series, int t1, int t2, bool slope1, bool slope2) {
     if (series) {
         double a = svf(f[0], ic1a[0], ic2a[0], in1 + in2, t1);
@@ -661,7 +661,7 @@ NOTA_ALWAYS_INLINE float WavetableSynth::foldOut(float s, double amt) {
     return fast_math::sin(g * s * 0.25f); // == sin(π/2·g·s)
 }
 
-NOTA_ALWAYS_INLINE float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt,
+float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt,
     int uniN, const double* detF, const float* panL, const float* panR, float norm, float& sideOut) const {
     const float posF = pos * (kFrames - 1);
     const int f0 = std::clamp((int)posF, 0, kFrames - 1), f1 = std::min(f0 + 1, kFrames - 1);
@@ -685,7 +685,7 @@ NOTA_ALWAYS_INLINE float WavetableSynth::oscStack(double* ph, double inc, int ba
     return (accL + accR) * 0.5f;
 }
 
-NOTA_ALWAYS_INLINE float WavetableSynth::oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode,
+float WavetableSynth::oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode,
     double warpAmt, int uniN, const double* detF, double maxDet, const float* panL, const float* panR, float norm,
     float& sideOut) const {
     // Mip pick (research R4): the smallest level k whose top harmonic (below 1024 >> k)
@@ -753,7 +753,7 @@ NOTA_ALWAYS_INLINE float WavetableSynth::tone(float& z, float x, float coef) {
 }
 
 NOTA_ALWAYS_INLINE void WavetableSynth::stepFilterSmoothing(
-    BlockScalars s, double& f1base, double& f2base, double& reso1, double& reso2) noexcept {
+    const BlockScalars& s, double& f1base, double& f2base, double& reso1, double& reso2) noexcept {
     f1Sm_ += (s.f1tgt - f1Sm_) * s.fSm;
     f2Sm_ += (s.f2tgt - f2Sm_) * s.fSm;
     r1Sm_ += (s.r1tgt - r1Sm_) * s.fSm;
@@ -764,7 +764,7 @@ NOTA_ALWAYS_INLINE void WavetableSynth::stepFilterSmoothing(
     reso2 = r2Sm_;
 }
 
-NOTA_ALWAYS_INLINE void WavetableSynth::stepLfos(BlockScalars s, double& lfo1, double& lfo2) noexcept {
+NOTA_ALWAYS_INLINE void WavetableSynth::stepLfos(const BlockScalars& s, double& lfo1, double& lfo2) noexcept {
     if (lfoPhase1_ >= 1.0) {
         lfoPhase1_ -= 1.0;
         lfoSh1_ = frand() * 2.0f - 1.0f;
@@ -779,7 +779,7 @@ NOTA_ALWAYS_INLINE void WavetableSynth::stepLfos(BlockScalars s, double& lfo1, d
     lfoPhase2_ += s.lfo2Inc;
 }
 
-NOTA_ALWAYS_INLINE bool WavetableSynth::renderVoiceSample(BlockScalars s, const BlockArrays& a, Voice& v, double lfo1,
+NOTA_ALWAYS_INLINE bool WavetableSynth::renderVoiceSample(const BlockScalars& s, const BlockArrays& a, Voice& v, double lfo1,
     double lfo2, const BatchWork* bw, int32_t bwIdx, double scalarF1, double scalarF2, double scalarR1, double scalarR2,
     float& outL, float& outR) const noexcept {
     stepEnv(v.env, v.stage, v.shape, s.atk, s.dec, s.sus, s.rel, s.bend1);
@@ -875,7 +875,7 @@ NOTA_ALWAYS_INLINE bool WavetableSynth::renderVoiceSample(BlockScalars s, const 
 }
 
 NOTA_ALWAYS_INLINE float WavetableSynth::processFxAndMixSample(
-    BlockScalars s, float mixL, float mixR, float* dstSample) noexcept {
+    const BlockScalars& s, float mixL, float mixR, float* dstSample) noexcept {
     float l = mixL * 0.4f, r = mixR * 0.4f;
     if (s.driveOn && s.drive > 1e-4f) {
         l = driveSample(s.driveMode, l, s.drive, s.driveInvNorm);
@@ -906,7 +906,7 @@ NOTA_ALWAYS_INLINE float WavetableSynth::processFxAndMixSample(
 
 void WavetableSynth::renderVoiceBatch(const BatchParams& bp, const BatchWork& bw, int32_t chunk, Voice* const* vList,
     int vCount, float* dstL, float* dstR) const {
-    const BlockScalars s = bp.s;
+    const BlockScalars& s = bp.s;
     for (int vi = 0; vi < vCount; ++vi) {
         Voice& v = *vList[vi];
         for (int32_t i = 0; i < chunk; ++i) {
@@ -966,7 +966,7 @@ bool WavetableSynth::renderLinear(float* out, int32_t frames) {
 bool WavetableSynth::renderBatched(float* out, int32_t frames) {
     BatchParams bp;
     bp.s = snapshotBlockParams(frames, bp.a);
-    const BlockScalars s = bp.s;
+    const BlockScalars& s = bp.s;
     BatchWork& bw = *batchWork_;
     Voice* act[kVoices];
     int batchedActN = 0;
@@ -1192,7 +1192,7 @@ WavetableSynth::BlockScalars WavetableSynth::snapshotBlockParams(int32_t frames,
     return s;
 }
 
-bool WavetableSynth::publishBlockTelemetry(BlockScalars s, const BlockArrays& a) noexcept {
+bool WavetableSynth::publishBlockTelemetry(const BlockScalars& s, const BlockArrays& a) noexcept {
     int live = 0;
     const Voice* newest = nullptr;
     for (const auto& v : voices_)

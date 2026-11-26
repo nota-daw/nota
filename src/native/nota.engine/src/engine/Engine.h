@@ -3177,6 +3177,7 @@ class Engine {
     static constexpr int32_t kTrackTapRingFrames = 2 * kMaxBlock; // power of two, > the largest lag
     std::array<std::vector<float>, kMaxRoutes> trackTapRing_;      // stereo interleaved
     int32_t trackTapRingTrack_[kMaxRoutes];                        // whose tap each ring holds (-1: none)
+    int32_t trackTapRingHighWater_ = 0;                            // active prefix of trackTapRingTrack_
     int64_t trackTapRingPos_ = 0;                                  // frames appended (same for every slot)
     int32_t monitorLag_ = 0;                                       // read lag in frames
     int32_t monitorLagPeak_ = 0;                                   // longest segment in the current window
