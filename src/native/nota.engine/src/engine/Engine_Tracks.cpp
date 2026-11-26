@@ -3919,10 +3919,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setInput(src.inputFirst(), src.inputWidth());
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
-    nt->setMidiInput(src.midiInput());                                  // MIDI input filter (specs/086, specs/115)
-    nt->midiInputAll = src.midiInputAll;
-    nt->midiInputAllChannels = src.midiInputAllChannels;
-    nt->midiInputRoutes = src.midiInputRoutes;
+    nt->copyMidiInputFrom(src);                                       // MIDI input filter (specs/086, specs/115)
     nt->setMidiOffsetMs(src.midiOffsetMs());
     nt->articulationTable = src.articulationTable;   // the map goes with the instrument, content or not
     nt->articulationMapJson = src.articulationMapJson;

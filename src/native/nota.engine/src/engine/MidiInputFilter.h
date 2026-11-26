@@ -72,14 +72,19 @@ struct AtomicMidiInputFilter {
     std::atomic<uint16_t> allMask{MidiInputFilter::kAllChannels};
     std::array<std::atomic<uint16_t>, MidiInput::kMaxSources> mask{};
 
+    // Every input (the usual case) needs only its channels: the per-port masks are neither read
+    // nor copied then, so cloning a track for an edit stays as cheap as before (perf gate
+    // edit-warp-split).
     MidiInputFilter load() const {
         MidiInputFilter f;
         f.allMask = allMask.load(std::memory_order_relaxed);
+        if (f.allMask != 0) return f;
         for (size_t s = 0; s < mask.size(); ++s) f.mask[s] = mask[s].load(std::memory_order_relaxed);
         return f;
     }
     void store(const MidiInputFilter& f) {
-        for (size_t s = 0; s < mask.size(); ++s) mask[s].store(f.mask[s], std::memory_order_relaxed);
+        if (f.allMask == 0)
+            for (size_t s = 0; s < mask.size(); ++s) mask[s].store(f.mask[s], std::memory_order_relaxed);
         allMask.store(f.allMask, std::memory_order_relaxed);
     }
     bool accepts(int32_t source, int32_t channel) const {

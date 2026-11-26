@@ -417,6 +417,15 @@ class Track {
     }
     void setMidiInput(int32_t source, int32_t channel) { setMidiInput(MidiInputFilter::legacy(source, channel)); }
     uint32_t midiInputGen() const { return midiInGen_.load(std::memory_order_acquire); }
+    // A clone for an edit takes the same filter and the same generation: nothing changed, so the
+    // render has no held notes to re-check (and the edit pays no counter).
+    void copyMidiInputFrom(const Track& t) {
+        midiIn_.store(t.midiIn_.load());
+        midiInGen_.store(t.midiInGen_.load(std::memory_order_relaxed), std::memory_order_release);
+        midiInputAll = t.midiInputAll;
+        midiInputAllChannels = t.midiInputAllChannels;
+        if (!t.midiInputRoutes.empty()) midiInputRoutes = t.midiInputRoutes;
+    }
     // specs/086's view of it: the first listed source (kMidiAllInputs, or −1 = none connected) and its channel.
     int32_t midiInputSource() const { return midiInput().legacySource(); }
     int32_t midiInputChannel() const { return midiInput().legacyChannel(); }

@@ -1005,10 +1005,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setInput(t.inputFirst(), t.inputWidth());                    // hardware input pick
     nt->setMonitor(t.monitor());                                     // live input monitoring
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
-    nt->setMidiInput(t.midiInput());                                  // MIDI input filter (specs/086, specs/115)
-    nt->midiInputAll = t.midiInputAll;
-    nt->midiInputAllChannels = t.midiInputAllChannels;
-    nt->midiInputRoutes = t.midiInputRoutes;
+    nt->copyMidiInputFrom(t);                                       // MIDI input filter (specs/086, specs/115)
     nt->setMidiOffsetMs(t.midiOffsetMs());                           // MIDI playback offset
     nt->articulationTable = t.articulationTable;                     // articulation map (shared, immutable)
     nt->articulationMapJson = t.articulationMapJson;
