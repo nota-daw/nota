@@ -9,6 +9,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
@@ -38,14 +39,40 @@ internal static class MidiInputPick
         return list;
     }
 
-    /// <summary>What the track listens to, short: "All inputs", a device, "· Ch 3".</summary>
+    /// <summary>What the track listens to, short: "All inputs", a device, "· Ch 3" — or, for a list
+    /// of ports or a set of channels (specs/115), "2 ports" / a device with "Ch 3, 7, 11".</summary>
     public static string ShortLabel(IAudioEngine engine, int trackId)
     {
+        if (ListLabel(engine, trackId) is { } list) return list;
         var cur = engine.GetTrackMidiInput(trackId);
         string dev = Loc.T("midi_input.all_inputs");
         foreach (var d in Devices(engine, trackId))
             if (d.Uid == cur.Uid) { dev = d.Label; break; }
         return cur.Channel > 0 ? Loc.F("midi_input.device_channel", dev, cur.Channel) : dev;
+    }
+
+
+    /// <summary>The label of an input specs/086's pickers can't show (two ports, or a set of
+    /// channels on one); null when they can.</summary>
+    public static string? ListLabel(IAudioEngine engine, int trackId)
+    {
+        var l = engine.GetTrackMidiInputs(trackId);
+        if (l.All || l.Routes.Count == 0) return null;
+        if (l.Routes.Count > 1) return Loc.F("midi_input.ports.n_ports", l.Routes.Count);
+        var r = l.Routes[0];
+        var chs = r.ChannelList;
+        if (chs.Count <= 1 || chs.Count == 16) return null;
+        string dev = engine.MidiPorts().FirstOrDefault(p => p.Uid == r.Uid).Name ?? (r.Name.Length > 0 ? r.Name : r.Uid);
+        return Loc.F("midi_input.ports.device_channels", dev, string.Join(", ", chs));
+    }
+
+    /// <summary>Opens "Ports and channels…" for the track (specs/115).</summary>
+    public static void OpenPorts(IAudioEngine engine, int trackId, Action? edited = null)
+    {
+        var owner = (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        var win = new MidiInputPortsWindow(engine, trackId, engine.GetTrackName(trackId), edited);
+        if (owner is not null) _ = win.ShowDialog(owner);
+        else win.Show();
     }
 
     /// <summary>The channel entries: All, then 1–16.</summary>
@@ -60,6 +87,9 @@ internal static class MidiInputPick
     /// input — All inputs or a device, keeping the track's channel — or another instrument
     /// track to take MIDI from (<see cref="FromTrack"/> &gt; 0).</summary>
     public readonly record struct Entry(string? Uid, int FromTrack, string Label);
+
+    /// <summary>Entry.FromTrack of the "ports and channels" entry: the track keeps its list.</summary>
+    public const int KeepList = -2;
 
     /// <summary>The compact selectors' list: the live inputs (the current one with its channel),
     /// then "From" each other instrument track; and which entry is current. A MIDI In track that
@@ -76,6 +106,12 @@ internal static class MidiInputPick
             bool isCur = d.Uid == cur.Uid;
             if (isCur && from <= 0) current = items.Count;
             items.Add(new Entry(d.Uid, -1, isCur && cur.Channel > 0 ? Loc.F("midi_input.device_channel", d.Label, cur.Channel) : d.Label));
+        }
+        // A list of ports or a set of channels (specs/115) is its own entry: picking it keeps it.
+        if (ListLabel(engine, trackId) is { } ports)
+        {
+            if (from <= 0) current = items.Count;
+            items.Add(new Entry(cur.Uid, KeepList, ports));
         }
         bool listed = from <= 0;
         foreach (var (id, name) in instruments)
@@ -95,6 +131,11 @@ internal static class MidiInputPick
     /// <summary>Applies a compact entry: a live input clears MIDI from; a track sets it.</summary>
     public static void Apply(IAudioEngine engine, int trackId, Entry e)
     {
+        if (e.FromTrack == KeepList)
+        {
+            engine.SetTrackMidiSource(trackId, -1);
+            return;
+        }
         if (e.FromTrack > 0)
         {
             engine.SetTrackMidiSource(trackId, e.FromTrack);
@@ -116,11 +157,20 @@ internal static class MidiInputPick
         var menu = MenuKit.ValueItem(Loc.T("midi_input.menu"), GlyphKind.Input, ShortLabel(engine, trackId));
         foreach (var d in Devices(engine, trackId))
         {
-            var mi = new MenuItem { Header = d.Label, ToggleType = MenuItemToggleType.Radio, IsChecked = d.Uid == cur.Uid };
+            bool listed = ListLabel(engine, trackId) is not null;
+            var mi = new MenuItem { Header = d.Label, ToggleType = MenuItemToggleType.Radio, IsChecked = !listed && d.Uid == cur.Uid };
             string? uid = d.Uid;
             mi.Click += (_, _) => { engine.SetTrackMidiInput(trackId, uid, cur.Channel); edited?.Invoke(); };
             menu.Items.Add(mi);
         }
+        // specs/115: several ports, or a set of channels — the list editor.
+        var ports = new MenuItem
+        {
+            Header = Loc.T("midi_input.ports.menu"), ToggleType = MenuItemToggleType.Radio,
+            IsChecked = ListLabel(engine, trackId) is not null,
+        };
+        ports.Click += (_, _) => OpenPorts(engine, trackId, edited);
+        menu.Items.Add(ports);
         menu.Items.Add(new Separator());
         var ch = MenuKit.ValueItem(Loc.T("midi_input.channel"), null,
             cur.Channel > 0 ? cur.Channel.ToString(System.Globalization.CultureInfo.CurrentCulture) : Loc.T("midi_input.all_channels"));

@@ -532,6 +532,12 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
                 eng.sessionPostRender(t, ctx.frames / ctx.spb);
             }
             t.tailQuiet() = -1;
+            // An External MIDI track's synth would keep sounding what the clips started: let it
+            // go once, on going silent (specs/115 FR-010).
+            if (t.instrument && t.instrument->kind() == ExternalMidi::kKind && !t.externalSilentFlushed) {
+                static_cast<ExternalMidi&>(*t.instrument).flushFromAudio();
+                t.externalSilentFlushed = true;
+            }
             if (!frozenActive) feedSilentMidiKeys(t);
             t.setMeter(0, 0, 0, 0);
             t.stereoFold(0, 0, 0, ctx.frames, ctx.stereoA);
@@ -540,6 +546,7 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
         }
 
         t.sessionSilentReleased = false;
+        t.externalSilentFlushed = false;
         Engine::LeafPath path = Engine::LeafPath::Skip;
         if (frozenActive) {
             if (!ctx.playing) {

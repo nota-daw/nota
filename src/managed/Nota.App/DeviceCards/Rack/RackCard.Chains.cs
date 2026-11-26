@@ -320,6 +320,8 @@ internal sealed partial class RackCardView
         {
             // A Drum Rack may sit in an Instrument Rack chain; an Instrument Rack can't (specs/041).
             if (_rp.TakesInstrument && it.Kind == BrowserItemKind.BuiltinInstrument && it.BuiltinKind == 3) { why = Loc.T("device.rack.chains.an_instrument_rack_cant_go"); return false; }
+            // External MIDI plays a whole track out to a port, never a chain inside a rack (specs/115).
+            if (it.Kind == BrowserItemKind.BuiltinInstrument && it.BuiltinKind == Nota.Application.ExternalMidiDestination.Kind) { why = Loc.T("device.rack.external_midi_cant_go"); return false; }
             if (_rp.TakesInstrument) return true;
             why = _rp.Kind == RackKind.MidiEffect ? Loc.T("device.rack.a_midi_effect_rack_takes") : Loc.T("device.rack.an_audio_effect_rack_takes");
             return false;

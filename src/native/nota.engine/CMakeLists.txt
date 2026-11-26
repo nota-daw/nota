@@ -151,6 +151,7 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Modulation.cpp
     src/engine/MidiClip.cpp
     src/engine/MidiController.cpp
+    src/engine/MidiOutService.cpp
     src/engine/MidiSurface.cpp  # control-surface claims / queue (specs/051)
     src/engine/NoteExpression.cpp
     src/devices/effects/Eq.cpp
@@ -184,6 +185,7 @@ set(NOTA_ENGINE_SOURCES
     src/devices/effects/Vocoder.cpp
     src/devices/instruments/Synth.cpp
     src/devices/instruments/VoltSynth.cpp
+    src/devices/instruments/ExternalMidi.cpp
     src/devices/instruments/BassSynth.cpp
     src/devices/instruments/Monolith.cpp
     src/devices/instruments/Pentad.cpp

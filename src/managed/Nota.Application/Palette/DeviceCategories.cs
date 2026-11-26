@@ -26,6 +26,7 @@ public static class DeviceCategories
         new("Drums", ["Nota Rhythm", "Nota Drum Rack"]),
         new("Samplers", ["Nota Sampler", "Nota Mosaic", "Nota Grain"]),
         new("Racks", ["Nota Instrument Rack"]),
+        new("External", ["External MIDI"]),
     };
 
     private static readonly Category[] AudioEffects =

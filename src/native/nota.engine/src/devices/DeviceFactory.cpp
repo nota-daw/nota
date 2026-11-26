@@ -43,6 +43,7 @@
 #include "devices/midi_fx/MidiVelocity.h"
 #include "devices/instruments/Monolith.h"
 #include "devices/instruments/Mosaic.h"
+#include "devices/instruments/ExternalMidi.h"
 #include "devices/instruments/Twin.h"
 #include "devices/instruments/OperatorSynth.h"
 #include "devices/instruments/PendulumSynth.h"
@@ -118,6 +119,7 @@ std::shared_ptr<Instrument> makeBuiltinInstrument(int32_t kind) {
     case 16: return std::make_shared<Keys>();
     case 17: return std::make_shared<Mosaic>(); // empty: a program is set later
     case 18: return std::make_shared<Twin>();
+    case ExternalMidi::kKind: return std::make_shared<ExternalMidi>(); // no destination yet (specs/115)
     default: return nullptr;                    // Racks (3/4) / unknown: no simple swap
     }
 }

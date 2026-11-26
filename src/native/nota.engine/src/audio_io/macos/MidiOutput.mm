@@ -40,6 +40,18 @@ MidiOutput::~MidiOutput() {
     delete impl_;
 }
 
+std::vector<MidiOutput::Destination> MidiOutput::list() {
+    std::vector<Destination> out;
+    for (ItemCount i = 0, n = MIDIGetNumberOfDestinations(); i < n; ++i) {
+        MIDIEndpointRef d = MIDIGetDestination(i);
+        if (!d) continue;
+        Destination dst{midiUidForEndpoint(d), midiEndpointName(d)};
+        if (dst.name.empty()) dst.name = "MIDI output " + dst.uid;
+        out.push_back(std::move(dst));
+    }
+    return out;
+}
+
 bool MidiOutput::open(const std::string& uid) {
     close();
     for (ItemCount i = 0, n = MIDIGetNumberOfDestinations(); i < n; ++i) {

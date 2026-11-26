@@ -28,6 +28,7 @@
 #include "audio_io/MidiConfig.h"
 #include "audio_io/MidiInput.h"
 #include "audio_io/MidiOutput.h"
+#include "engine/MidiOutService.h"
 #include "audio_io/MidiParser.h"
 #include "audio_io/MpeInput.h"
 #include "engine/MidiSurface.h"
@@ -41,6 +42,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <deque>
 #include <functional>
 #include <cmath>
 #include <limits>
@@ -155,6 +157,10 @@ class Engine {
     // call; the strings stay valid until the next one. Message thread.
     const std::vector<MidiInput::PortInfo>& midiPorts();
     const std::vector<MidiInput::PortInfo>& midiPortRows() const { return midiPortRows_; } // last midiPorts()
+    // Every MIDI output (specs/115), then the test ports' outputs. Message thread; the rows stay
+    // valid until the next call.
+    const std::vector<MidiOutput::Destination>& midiOutputPorts();
+    const std::vector<MidiOutput::Destination>& midiOutputRows() const { return midiOutputRows_; }
     bool setMidiClaims(const MidiClaimEntry* claims, int32_t count) { return midiSurface_.setClaims(claims, count); }
     void setMidiLearnListening(bool on) { midiSurface_.setLearnListening(on); }
     int32_t pollSurfaceEvents(SurfaceEvent* out, int32_t max) { return midiSurface_.pollEvents(out, max); }
@@ -169,6 +175,17 @@ class Engine {
     int32_t addTestMidiPort(const std::string& name);
     bool injectTestMidi(int32_t source, const uint8_t* data, int32_t len);
     int32_t takeTestMidiSent(int32_t source, uint8_t* out, int32_t cap);
+    // specs/115 test hooks. Remove: the port's input and output go away as if unplugged (adding
+    // it again by name brings both back on the same source). Read: drain the messages sent to
+    // its output, each with the time it was due (ns on the engine's render clock).
+    bool removeTestMidiPort(const std::string& name);
+    int32_t readTestMidiOutput(const std::string& name, uint8_t* bytes, int32_t bytesCap, uint64_t* dueNs,
+        int32_t* lens, int32_t maxMsgs);
+    // Called by whoever delivers to a "test:" output (the MIDI out thread, midiSend): false when
+    // there is no such port or it is removed. Any thread but the audio thread.
+    bool deliverTestMidi(const std::string& outputUid, const uint8_t* data, int32_t len, uint64_t dueNs);
+    // Test ports coming and going, added to MidiInput::portsGeneration (nota_midi_ports_generation).
+    static uint32_t testPortsGeneration();
 
     // --- gamepad input (live note source) ---
     // The pad runs on its own IOKit thread and queues button edges; the UI
@@ -949,6 +966,26 @@ class Engine {
     int32_t addPluginInstrumentTrack(int32_t catalogIndex); // new track, plugin as instrument
     bool setTrackInstrumentPlugin(int32_t trackId, int32_t catalogIndex);
     bool setTrackBuiltinInstrument(int32_t trackId, int32_t kind);       // replace with a built-in synth
+    // External MIDI (specs/115): a track that plays a synth over a MIDI output. Setting the
+    // destination makes a new instance (one undo step); the old one, leaving the graph, releases
+    // its notes at its output. uid "" = no destination; channel 1-16, or 0 = Keep channels.
+    int32_t addExternalMidiTrack();
+    bool setExternalMidi(int32_t trackId, const std::string& uid, int32_t channel, const std::string& name = {},
+        const std::string& roleId = {});
+    // The instance itself (message thread), for the destination's name and role; null if not External MIDI.
+    std::shared_ptr<const ExternalMidi> externalMidiAt(int32_t trackId) const;
+    int32_t externalMidiStatus(int32_t trackId) const; // 0 none, 1 sending, 2 unavailable, -1 not External MIDI
+    uint32_t externalMidiDropped(int32_t trackId) const;
+    // Project MIDI output roles (specs/115 US4), in the graph so undo restores them. Set: the
+    // whole table (one undo step). Rebind: the role's output, and every External MIDI track that
+    // follows it to that output (channels kept), in one publish — refused (false) while the
+    // transport plays (FR-015) or for an unknown role.
+    const std::vector<MidiOutputRole>& midiRoles() const {
+        static const std::vector<MidiOutputRole> kNone;
+        return authoring_->midiRoles ? *authoring_->midiRoles : kNone;
+    }
+    bool setMidiRoles(std::vector<MidiOutputRole> roles);
+    bool rebindMidiRole(const std::string& roleId, const std::string& uid, const std::string& name);
     int32_t addTrackEffectPlugin(int32_t trackId, int32_t catalogIndex); // returns device index or -1
     // Hosted plug-ins load after they are inserted (#979, specs/113). Message thread.
     // servicePluginLoads attaches loaded plug-ins (then realigns PDC and resolves plug-in-param
@@ -1456,6 +1493,14 @@ class Engine {
     // device not connected leaves the track receiving nothing from hardware until it is.
     bool setTrackMidiInputUid(int32_t trackId, const std::string& uid, int32_t channel);
     std::string trackMidiInputUid(int32_t trackId) const;
+    // specs/115: every input on a set of channels, or a list of ports each on its own channels.
+    bool setTrackMidiInputs(int32_t trackId, bool all, uint16_t allChannels, std::vector<Track::InputRoute> routes);
+    // The saved list (message thread): all, the channels for all, and the routes by uid.
+    std::shared_ptr<const Track> trackForMidiInput(int32_t trackId) const { return findTrackAuthoring(trackId); }
+    std::string uidOfMidiSource(int32_t source) const; // "" when no open port has that index
+    MidiInputFilter resolveMidiInput(const Track& t) const;
+    void publishTrackMidiInput(Track& t, const MidiInputFilter& f);
+    void resolveAllMidiInputs(); // ports came or went: every track picks its list up again by uid
     int32_t trackMidiInputSource(int32_t trackId) const;
     int32_t trackMidiInputChannel(int32_t trackId) const;
     // Input monitoring (audio tracks): hear the record-input source live through the track.
@@ -1869,15 +1914,33 @@ class Engine {
     void onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2);
     void onMidiSysex(int32_t source, const uint8_t* data, int32_t len);
     MidiSurface midiSurface_;
-    std::map<std::string, std::unique_ptr<MidiOutput>> midiOutputs_; // by output uid (message thread)
     struct TestMidiPort {
         std::string name;
         int32_t source = 0;
         MidiParser parser;
         MidiLoopback sent;
+        std::atomic<bool> removed{false}; // unplugged (specs/115): no input, no output
+        // Every message delivered to its output with its due time (specs/115). The MIDI out
+        // thread and the message thread both deliver; the lock is never taken on the audio thread.
+        struct Sent {
+            uint64_t dueNs;
+            std::vector<uint8_t> bytes;
+        };
+        std::mutex logMx;
+        std::deque<Sent> log;
     };
-    std::vector<std::unique_ptr<TestMidiPort>> testMidiPorts_;
+    std::vector<std::unique_ptr<TestMidiPort>> testMidiPorts_; // grows only; guarded by testPortsMx_
+    mutable std::mutex testPortsMx_;                          // message + MIDI out threads, never audio
+    // MIDI out (specs/115): the block clock External MIDI stamps its messages with, the frames an
+    // offline render has counted, and the thread that owns every MIDI output. Declared after the
+    // test ports, so it stops (and releases what it holds) before they go.
+    MidiRenderClock midiClock_;
+    uint64_t offlineFrames_ = 0;
+    MidiOutService midiOut_;
+    bool externalMidiRouted_ = false; // the last publish handed the MIDI out thread a route (message thread)
+    void syncExternalMidi(const Graph& g);
     std::vector<MidiInput::PortInfo> midiPortRows_;
+    std::vector<MidiOutput::Destination> midiOutputRows_;
     void renderPreview(float* out, int32_t numFrames); // mix the audition voice
 
     std::unique_ptr<AudioBackend> backend_;
@@ -2328,8 +2391,7 @@ class Engine {
     // stored last (release), after the lanes it covers.
     static constexpr int32_t kMaxMidiTakeLanes = 16;
     std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneTrack_{};
-    std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneSrc_{};
-    std::array<std::atomic<int32_t>, kMaxMidiTakeLanes> midiLaneCh_{};
+    std::array<AtomicMidiInputFilter, kMaxMidiTakeLanes> midiLaneFilter_{}; // specs/115
     std::atomic<int32_t> midiLaneCount_{0};
     // Message-thread side of a lane: its clip and its share of the take's fold state (the
     // fold works on takeNotes_ / ctlFold_ / takeCtls_; each lane's are swapped in for it).
@@ -2604,7 +2666,7 @@ class Engine {
     };
     std::array<RtMidiLane, 16> rtMidiLanes_{};
     int32_t rtMidiLaneCount_ = 0; // this block's lanes (drainLiveMidi)
-    int32_t rtLaneSrc_[16] = {}, rtLaneCh_[16] = {};
+    MidiInputFilter rtLaneFilter_[16] = {};
     bool laneTakes(int32_t lane, const MidiEvent& e) const; // audio thread, this block's lanes
     int32_t midiLaneOfRt(int32_t trackId) const;           // audio thread: lane recording this track, or -1
     void captureRoutedNotes(int32_t lane, const MidiEv* evs, int n, double blockStart, double spb, double clockOffset);

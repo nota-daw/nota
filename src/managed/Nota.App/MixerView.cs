@@ -269,6 +269,11 @@ public sealed partial class MixerView : UserControl
         var footer = Footer();
         DockPanel.SetDock(footer, Dock.Bottom);
         dock.Children.Add(footer);
+        // MIDI routes (specs/115 US3): a side panel beside the strips, the strips still usable.
+        _routes = new MidiRoutesPanel(engine) { IsVisible = false };
+        _routes.TrackPicked += id => TrackPicked?.Invoke(id);
+        DockPanel.SetDock(_routes, Dock.Right);
+        dock.Children.Add(_routes);
         dock.Children.Add(_main);
         Content = dock;
         ApplyView();
@@ -684,7 +689,7 @@ public sealed partial class MixerView : UserControl
         var left = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new TextBlock { Text = Loc.T("common.show"), FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle, CompactToggle() },
+            Children = { new TextBlock { Text = Loc.T("common.show"), FontSize = NotaType.Caption, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle, CompactToggle(), RoutesToggle() },
         };
 
         var divider = new Border { Width = 1, Height = 20, Background = BorderDef, VerticalAlignment = VerticalAlignment.Center };
@@ -754,6 +759,52 @@ public sealed partial class MixerView : UserControl
             CompactChanged?.Invoke(_compact);
         };
         _paintCompactToggle = Paint;
+        Paint();
+        return b;
+    }
+
+    // ---- MIDI routes panel (specs/115 US3) -------------------------------------------------------
+
+    private MidiRoutesPanel? _routes;
+    private Action? _paintRoutesToggle;
+
+    /// <summary>Raised when the footer's MIDI routes key opens or closes the panel.</summary>
+    public event Action<bool>? MidiRoutesChanged;
+
+    /// <summary>The MIDI routes side panel is open.</summary>
+    public bool MidiRoutesVisible
+    {
+        get => _routes?.IsVisible == true;
+        set
+        {
+            if (_routes is null || _routes.IsVisible == value) return;
+            _routes.IsVisible = value;
+            if (value) _routes.Refresh(force: true);
+            _paintRoutesToggle?.Invoke();
+        }
+    }
+
+    // A two-state key painted like Compact.
+    private Border RoutesToggle()
+    {
+        var t = new TextBlock { Text = Loc.T("midi_routes.title"), FontSize = NotaType.Body, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Height = NotaSize.Chip, Padding = new Thickness(10, 0), CornerRadius = NotaRadius.Group, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        ToolTip.SetTip(b, Loc.T("midi_routes.tip"));
+        void Paint()
+        {
+            bool on = MidiRoutesVisible;
+            b.Background = on ? NotaPalette.AccentSoft : NotaPalette.Well;
+            b.BorderBrush = Brushes.Transparent;
+            t.Foreground = on ? NotaPalette.AccentBright : TextSecondary;
+        }
+        b.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            MidiRoutesVisible = !MidiRoutesVisible;
+            MidiRoutesChanged?.Invoke(MidiRoutesVisible);
+        };
+        _paintRoutesToggle = Paint;
         Paint();
         return b;
     }

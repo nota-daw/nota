@@ -25,6 +25,19 @@ MidiOutput::~MidiOutput() {
     delete impl_;
 }
 
+std::vector<MidiOutput::Destination> MidiOutput::list() {
+    std::vector<Destination> out;
+    try {
+        RtMidiOut scanner(RtMidi::UNSPECIFIED, "Nota-scan");
+        for (unsigned int i = 0, n = scanner.getPortCount(); i < n; ++i) {
+            std::string name = scanner.getPortName(i);
+            out.push_back({name, name}); // uid == port name, as for the inputs
+        }
+    } catch (...) {
+    }
+    return out;
+}
+
 bool MidiOutput::open(const std::string& uid) {
     close();
     try {

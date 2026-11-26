@@ -20,6 +20,7 @@
 #include "TrackContent.h"
 #include "media/Warp.h"
 #include "audio_io/AudioInput.h" // kMaxInputChannels
+#include "engine/MidiInputFilter.h"
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -277,6 +278,9 @@ class Track {
     // A silent Session track released its instrument's notes on going silent (#343), so it
     // isn't sent again every block. Audio thread only.
     bool sessionSilentReleased = false;
+    // A silent (muted, solo-gated) External MIDI track flushed its notes on going silent
+    // (specs/115 FR-010): its clips move on without their note-offs reaching it. Audio thread only.
+    bool externalSilentFlushed = false;
 
     // Effects on an audio track ring out after the track stops sounding (#449): -1 when there
     // is no tail to play, else how long (frames) the chain's output has been silent. Set to 0
@@ -292,7 +296,12 @@ class Track {
     // follows the track whatever happens to its instrument. Audio thread only.
     struct LiveHeld {
         uint64_t bits[2] = {0, 0};
-        int8_t source[128] = {}, channel[128] = {}; // where each held note came from (its off must too)
+        // Where each held note came from (its off must too): up to four inputs per pitch (two
+        // keyboards on one key sound one note, ended by the last to let go — specs/115).
+        static constexpr int kOwners = 4;
+        int8_t ownerSrc[128][kOwners] = {}, ownerCh[128][kOwners] = {};
+        uint8_t ownerN[128] = {};
+        uint32_t inputGen = 0; // the track's input generation the owners were last checked against
         bool release = false;
         int64_t tailQuiet = -1; // see tailQuiet() above
         // The notes MIDI In (the track it takes MIDI from, routedFrom) started on this track's
@@ -397,21 +406,45 @@ class Track {
     int32_t midiFromTrackId() const { return midiFromTrackId_.load(std::memory_order_relaxed); }
     void setMidiFromTrackId(int32_t id) { midiFromTrackId_.store(id, std::memory_order_relaxed); }
 
-    // MIDI input filter (specs/086): which hardware source (kMidiAllInputs = every input, the
-    // computer keyboard / Remote / UI included) and channel (0 = all, 1-16) reach this track
-    // when it is armed. Read by the audio thread.
-    static constexpr int32_t kMidiAllInputs = -2;
-    int32_t midiInputSource() const { return midiInputSource_.load(std::memory_order_relaxed); }
-    int32_t midiInputChannel() const { return midiInputChannel_.load(std::memory_order_relaxed); }
-    void setMidiInput(int32_t source, int32_t channel) {
-        midiInputSource_.store(source, std::memory_order_relaxed);
-        midiInputChannel_.store(channel, std::memory_order_relaxed);
+    // MIDI input filter (specs/086, specs/115): every input on a set of channels, or a list of
+    // ports each with its own channels (MidiInputFilter). Read by the audio thread; a change bumps
+    // midiInputGen, and the render then ends the held notes whose input no longer passes.
+    static constexpr int32_t kMidiAllInputs = MidiInputFilter::kAllInputs;
+    MidiInputFilter midiInput() const { return midiIn_.load(); }
+    void setMidiInput(const MidiInputFilter& f) {
+        midiIn_.store(f);
+        // Unique across every version of every track: a clone (an edit, undo) never reuses the
+        // number its LiveHeld last checked against.
+        static std::atomic<uint32_t> next{0};
+        midiInGen_.store(next.fetch_add(1, std::memory_order_relaxed) + 1, std::memory_order_release);
     }
+    void setMidiInput(int32_t source, int32_t channel) { setMidiInput(MidiInputFilter::legacy(source, channel)); }
+    uint32_t midiInputGen() const { return midiInGen_.load(std::memory_order_acquire); }
+    // A clone for an edit takes the same filter and the same generation: nothing changed, so the
+    // render has no held notes to re-check (and the edit pays no counter).
+    void copyMidiInputFrom(const Track& t) {
+        midiIn_.store(t.midiIn_.load());
+        midiInGen_.store(t.midiInGen_.load(std::memory_order_relaxed), std::memory_order_release);
+        midiInputAll = t.midiInputAll;
+        midiInputAllChannels = t.midiInputAllChannels;
+        if (!t.midiInputRoutes.empty()) midiInputRoutes = t.midiInputRoutes;
+    }
+    // specs/086's view of it: the first listed source (kMidiAllInputs, or −1 = none connected) and its channel.
+    int32_t midiInputSource() const { return midiInput().legacySource(); }
+    int32_t midiInputChannel() const { return midiInput().legacyChannel(); }
     // An event from `source` (-1: not hardware) on `channel` (0-15) passes the filter.
-    bool acceptsMidiFrom(int32_t source, int32_t channel) const {
-        const int32_t s = midiInputSource(), c = midiInputChannel();
-        return (s == kMidiAllInputs || (source >= 0 && s == source)) && (c == 0 || source < 0 || c == channel + 1);
-    }
+    bool acceptsMidiFrom(int32_t source, int32_t channel) const { return midiIn_.accepts(source, channel); }
+
+    // The saved input list by port uid (specs/115), which the engine resolves to source indices
+    // whenever MIDI ports come and go. Empty with all = true: every input. Message thread.
+    struct InputRoute {
+        std::string uid;
+        std::string name; // as it was when picked: shown while the port is missing (FR-006)
+        uint16_t channels = MidiInputFilter::kAllChannels;
+    };
+    bool midiInputAll = true;
+    uint16_t midiInputAllChannels = MidiInputFilter::kAllChannels;
+    std::vector<InputRoute> midiInputRoutes;
     // Track-level MIDI playback offset in milliseconds (negative = notes play earlier). Applied by
     // the scheduler to arrangement clip notes only; the stored note positions never move. Atomic:
     // written on the message thread, read on the audio thread.
@@ -531,14 +564,8 @@ class Track {
     std::atomic<double> midiOffsetMs_{0.0};                             // track MIDI playback offset (ms)
     static_assert(std::atomic<double>::is_always_lock_free, "the audio thread reads midiOffsetMs_: it must not take a lock");
     std::atomic<int32_t> midiFromTrackId_{-1};                          // -1 off, >0 forward MIDI to this track id
-    std::atomic<int32_t> midiInputSource_{kMidiAllInputs};              // MIDI input filter (specs/086)
-  public:
-    // The uid of the MIDI input the filter names ("" = All inputs); message thread only. The
-    // source index above is re-resolved from it whenever the MIDI inputs re-open.
-    std::string midiInputUid;
-
-  private:
-    std::atomic<int32_t> midiInputChannel_{0};
+    AtomicMidiInputFilter midiIn_;                                      // MIDI input filter (specs/086, specs/115)
+    std::atomic<uint32_t> midiInGen_{0};
     std::atomic<bool> frozen_{false};                                   // M7: play frozenBuf instead of the live chain
 };
 

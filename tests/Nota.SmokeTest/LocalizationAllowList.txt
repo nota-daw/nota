@@ -3149,3 +3149,9 @@ Nota.Application/Displays/DeviceDisplays.Midi.cs	Strum	# data: engine parameter 
 Nota.Application/Displays/DeviceDisplays.Midi.cs	Swing	# data: engine parameter names and the LED display's fixed text (3 × 5 Latin-capitals pixel font, specs/114)
 Nota.Application/Displays/DeviceDisplays.Midi.cs	Transpose	# data: engine parameter names and the LED display's fixed text (3 × 5 Latin-capitals pixel font, specs/114)
 Nota.Application/Displays/DeviceDisplays.Midi.cs	Vel to Len	# data: engine parameter names and the LED display's fixed text (3 × 5 Latin-capitals pixel font, specs/114)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	External MIDI	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/BuiltinDeviceCatalog.cs	external hardware outboard midi out synth module drum machine sequencer внешний синт	# data: search keywords
+Nota.Application/Palette/DeviceCategories.cs	External	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Displays/DeviceDisplays.Instruments.cs	External	# data: engine parameter names and the LED display's fixed text (3 × 5 Latin-capitals pixel font, specs/114)
+Nota.Application/Displays/DeviceDisplays.Instruments.cs	NO OUTPUT	# data: engine parameter names and the LED display's fixed text (3 × 5 Latin-capitals pixel font, specs/114)
+Nota.Application/Palette/CommandCatalog.cs	midi routing routes ports inputs outputs external overview	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)

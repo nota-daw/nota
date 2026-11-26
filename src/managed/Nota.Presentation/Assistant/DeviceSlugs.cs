@@ -26,7 +26,7 @@ public static class DeviceSlugs
         "racks/drum-rack", "instruments/aurora", "instruments/volt", "instruments/bass",
         "instruments/pendulum", "instruments/operator", "instruments/grain", "instruments/flux",
         "instruments/rhythm", "instruments/monolith", "instruments/pentad", "instruments/consort",
-        "instruments/keys", "instruments/mosaic", "instruments/twin",
+        "instruments/keys", "instruments/mosaic", "instruments/twin", "instruments/external-midi",
     ];
     private static readonly string[] AudioEffects =
     [

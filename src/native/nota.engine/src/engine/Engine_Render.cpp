@@ -981,6 +981,17 @@ void Engine::render(float* out, float* cue, int32_t numFrames) {
     const auto t0 = std::chrono::steady_clock::now();
     deviceBlock_ = true; // a deadline, whatever the gap since the last block
     phaseNs_ = 0.0;
+    {
+        // External MIDI (specs/115): this block's first frame is heard now plus the output
+        // latency, so the synth's notes are sent to land with Nota's own sound.
+        const double rate = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 48000.0;
+        const auto now = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(t0.time_since_epoch()).count());
+        midiClock_.sampleRate.store(rate, std::memory_order_relaxed);
+        midiClock_.realtime.store(true, std::memory_order_relaxed);
+        midiClock_.blockNs.store(now + static_cast<uint64_t>(std::max(0, audioOutputLatencyFrames()) * 1e9 / rate),
+            std::memory_order_relaxed);
+        midiClock_.serial.fetch_add(1, std::memory_order_release);
+    }
     processBlock(out, cue, numFrames);
     // The transport's rate, as mixGraph sizes by (a device-block render in tests has no device).
     if (phaseNs_ > 0.0 && numFrames > 0 && transport_.sampleRate() > 0.0)
@@ -1053,6 +1064,13 @@ void Engine::renderOffline(float* out, int32_t frames) {
     const int32_t need = std::clamp(frames, 1, kMaxBlock);
     if (need > preparedBlockCap_) ensureBlockCapacity(need);
     deviceBlock_ = false; // export/freeze: no deadline, every render thread
+    // External MIDI (specs/115): an offline render counts frames, it doesn't run in real time —
+    // messages are stamped on that count and sent at once (tests read them back).
+    midiClock_.sampleRate.store(sr, std::memory_order_relaxed);
+    midiClock_.realtime.store(false, std::memory_order_relaxed);
+    midiClock_.blockNs.store(static_cast<uint64_t>(static_cast<double>(offlineFrames_) * 1e9 / sr), std::memory_order_relaxed);
+    midiClock_.serial.fetch_add(1, std::memory_order_release);
+    offlineFrames_ += static_cast<uint64_t>(std::max(0, frames));
     processBlock(out, nullptr, frames); // no Cue in a bounce (specs/089 FR-016)
 }
 
@@ -1244,8 +1262,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             L.trackId = tid;
             rtLaneWasLive_[k] = false;
         }
-        rtLaneSrc_[k] = midiLaneSrc_[static_cast<size_t>(k)].load(std::memory_order_relaxed);
-        rtLaneCh_[k] = midiLaneCh_[static_cast<size_t>(k)].load(std::memory_order_relaxed);
+        rtLaneFilter_[k] = midiLaneFilter_[static_cast<size_t>(k)].load();
         // The lane's clock: the take's (the first slot, or the transport); a Session slot that
         // joined the take (specs/086) times on its own loop and records once it plays.
         rtLaneNow_[k] = nowBeat;
@@ -1432,13 +1449,12 @@ bool Engine::laneTakes(int32_t lane, const MidiEvent& e) const {
     const int32_t tid = rtMidiLanes_[static_cast<size_t>(lane)].trackId;
     if (tid < 0) return false;
     if (e.trackId >= 0) return e.trackId == tid;
-    const int32_t s = rtLaneSrc_[lane], c = rtLaneCh_[lane];
-    return (s == Track::kMidiAllInputs || (e.source >= 0 && s == e.source)) && (c == 0 || e.source < 0 || c == e.channel + 1);
+    return rtLaneFilter_[lane].accepts(e.source, e.channel); // the same rule the track monitors by (FR-004)
 }
 
 float Engine::laneStartCtl(int32_t lane, int32_t ctl) const {
     const int32_t tid = rtMidiLanes_[static_cast<size_t>(lane)].trackId;
-    const int32_t s = rtLaneSrc_[lane], c = rtLaneCh_[lane];
+    const MidiInputFilter& f = rtLaneFilter_[lane];
     uint32_t best = 0;
     float v = kCtlRest;
     auto take = [&](const LiveCtlIn& in) {
@@ -1452,8 +1468,7 @@ float Engine::laneStartCtl(int32_t lane, int32_t ctl) const {
         const int32_t src = i - 1; // as laneTakes: no device passes the all-inputs filter only
         const LiveCtlIn& in = liveCtlIn_[i][ctl];
         if (in.stamp.load(std::memory_order_relaxed) <= best) continue;
-        if (s != Track::kMidiAllInputs && (src < 0 || s != src)) continue;
-        if (c != 0 && src >= 0 && c != in.channel.load(std::memory_order_relaxed) + 1) continue;
+        if (!f.accepts(src, in.channel.load(std::memory_order_relaxed))) continue;
         take(in);
     }
     return v;
@@ -1675,26 +1690,87 @@ int Engine::gatherInstrumentNotes(
 
 int Engine::liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n) {
     Track::LiveHeld* held = t.liveHeld.get();
+    // The input filter changed since the held notes were last checked (specs/115 FR-005): a note
+    // whose every input is no longer listed ends now — the key may never come up on an input the
+    // track still hears — and its input's held pedal goes up with it. Notes another listed input
+    // also holds, and other tracks' notes, are untouched.
+    if (held && held->inputGen != t.midiInputGen()) {
+        held->inputGen = t.midiInputGen();
+        const MidiInputFilter f = t.midiInput();
+        bool pedalGone = false;
+        for (int p = 0; p < 128 && n < 1024; ++p) {
+            if (!((held->bits[p >> 6] >> (p & 63)) & 1u)) continue;
+            int k = 0;
+            for (int o = 0; o < held->ownerN[p]; ++o) {
+                const int8_t s = held->ownerSrc[p][o], c = held->ownerCh[p][o];
+                if (f.accepts(s, c)) {
+                    held->ownerSrc[p][k] = s;
+                    held->ownerCh[p][k++] = c;
+                } else if (s >= 0 && s < MidiInput::kMaxSources) {
+                    const LiveCtlIn& sus = liveCtlIn_[1 + s][64];
+                    pedalGone |= sus.value.load(std::memory_order_relaxed) >= 0.5f && sus.channel.load(std::memory_order_relaxed) == c;
+                }
+            }
+            if (k == 0 && held->ownerN[p] > 0) {
+                held->bits[p >> 6] &= ~(1ull << (p & 63));
+                evs[n++] = {0, false, p, 0.0f};
+            }
+            held->ownerN[p] = static_cast<uint8_t>(k);
+        }
+        if (pedalGone && t.instrument) t.instrument->controller(64, 0.0f);
+    }
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
-        // A note it is holding still ends after its MIDI input changed (specs/086): the off
-        // comes from the old input, which the new filter would turn away. Only that input's
-        // off, though: the same key released on another keyboard isn't this note's.
-        const bool heldOff = !le.on && held && le.pitch >= 0 && le.pitch < 128 &&
-                             ((held->bits[le.pitch >> 6] >> (le.pitch & 63)) & 1u) &&
-                             held->source[le.pitch] == le.source && held->channel[le.pitch] == le.channel;
+        // A note it is holding still ends with its own input's off, even if the filter would now
+        // turn that input away (specs/086) — and only an input that holds it: the same key let go
+        // on another keyboard isn't this note's. Two inputs on one key sound one note, ended by the
+        // last to let go (specs/115).
+        int owner = -1;
+        if (!le.on && held && le.pitch >= 0 && le.pitch < 128 && ((held->bits[le.pitch >> 6] >> (le.pitch & 63)) & 1u))
+            for (int o = 0; o < held->ownerN[le.pitch]; ++o)
+                if (held->ownerSrc[le.pitch][o] == le.source && held->ownerCh[le.pitch][o] == le.channel) owner = o;
         if (le.trackId >= 0 ? !targeted || le.trackId != t.id()
-                            : !untargeted || (!passesMidiInput(t, le) && !heldOff))
+                            : !untargeted || (!passesMidiInput(t, le) && owner < 0))
             continue;
-        evs[n++] = {0, le.on, le.pitch, le.velocity};
-        if (!held || le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
-        const uint64_t bit = 1ull << (le.pitch & 63);
+        if (!held || le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) {
+            evs[n++] = {0, le.on, le.pitch, le.velocity};
+            continue;
+        }
+        const int p = le.pitch;
+        const uint64_t bit = 1ull << (p & 63);
+        auto& cnt = held->ownerN[p];
         if (le.on) {
-            held->bits[le.pitch >> 6] |= bit;
-            held->source[le.pitch] = le.source;
-            held->channel[le.pitch] = le.channel;
+            const bool sounding = (held->bits[p >> 6] & bit) != 0;
+            int o = 0;
+            while (o < cnt && !(held->ownerSrc[p][o] == le.source && held->ownerCh[p][o] == le.channel)) ++o;
+            if (o == cnt) { // a new input on this key (the oldest makes room)
+                if (cnt == Track::LiveHeld::kOwners) {
+                    for (int m = 1; m < cnt; ++m) {
+                        held->ownerSrc[p][m - 1] = held->ownerSrc[p][m];
+                        held->ownerCh[p][m - 1] = held->ownerCh[p][m];
+                    }
+                    --cnt;
+                }
+                held->ownerSrc[p][cnt] = static_cast<int8_t>(le.source);
+                held->ownerCh[p][cnt] = static_cast<int8_t>(le.channel);
+                ++cnt;
+            }
+            held->bits[p >> 6] |= bit;
+            if (sounding && cnt > 1) continue; // already sounding for another input: one note
+            evs[n++] = {0, true, p, le.velocity};
         } else {
-            held->bits[le.pitch >> 6] &= ~bit;
+            if (owner >= 0) {
+                for (int m = owner + 1; m < cnt; ++m) {
+                    held->ownerSrc[p][m - 1] = held->ownerSrc[p][m];
+                    held->ownerCh[p][m - 1] = held->ownerCh[p][m];
+                }
+                --cnt;
+            } else if (cnt > 0) {
+                continue; // let go on an input that doesn't hold it: not this note's off
+            }
+            if (cnt > 0) continue; // another input still holds the key
+            held->bits[p >> 6] &= ~bit;
+            evs[n++] = {0, false, p, le.velocity};
         }
     }
     // Disarmed with keys down (#366): release the live notes it was given, unless it takes
@@ -1705,6 +1781,7 @@ int Engine::liveNotesFor(const Track& t, bool untargeted, bool targeted, bool st
             for (int h = 0; h < 2; ++h) {
                 uint64_t bits = held->bits[h];
                 held->bits[h] = 0;
+                for (uint64_t b = bits; b; b &= b - 1) held->ownerN[h * 64 + std::countr_zero(b)] = 0;
                 while (bits && n < 1024) {
                     evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
                     bits &= bits - 1;

@@ -65,6 +65,7 @@ public static class SemanticVocabulary
         T_("analyzer", R, "analyzer", "analyser", "scope", "spectrum", "meter", "анализатор", "спектр");
         T_("multiband", R, "multiband", "мультибэнд", "многополосный");
         T_("rack", R, "rack", "chain", "рэк", "рек", "цепочка");
+        T_("external", R, "external", "hardware", "outboard", "midiout", "внешний", "железо");   // specs/115: External MIDI
         T_("synth", R | Src, "synth", "synthesizer", "synthesiser", "синт", "синтезатор");
         Child("synth.subtractive", "synth", "subtractive", "субтрактивный");
         Child("synth.wavetable", "synth", "wavetable", "вейвтейбл", "волновой");

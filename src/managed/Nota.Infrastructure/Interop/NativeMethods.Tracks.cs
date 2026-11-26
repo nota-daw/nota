@@ -785,6 +785,54 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_sampler_info")]
     internal static partial int TrackSamplerInfo(IntPtr engine, int trackId, out NotaSamplerInfo info);
+
+
+    // --- MIDI input list (specs/115) ---
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_midi_inputs", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult TrackSetMidiInputs(IntPtr engine, int trackId, int all, ushort allChannels,
+        string[] uids, string[] names, ushort[] masks, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_midi_input_count")]
+    internal static partial int TrackMidiInputCount(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_midi_input_all_channels")]
+    internal static partial ushort TrackMidiInputAllChannels(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_midi_input_at")]
+    internal static partial int TrackMidiInputAt(IntPtr engine, int trackId, int index, int field, [Out] byte[]? buf, int cap, out ushort mask);
+
+    // --- External MIDI (specs/115) ---
+    [LibraryImport(Lib, EntryPoint = "nota_engine_add_external_midi_track")]
+    internal static partial int AddExternalMidiTrack(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_external_midi_set", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult ExternalMidiSet(IntPtr engine, int trackId, string outputUid, string outputName,
+        string roleId, int channel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_external_midi_text")]
+    internal static partial int ExternalMidiText(IntPtr engine, int trackId, int field, [Out] byte[]? buf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_external_midi_channel")]
+    internal static partial int ExternalMidiChannel(IntPtr engine, int trackId);
+
+
+    [LibraryImport(Lib, EntryPoint = "nota_external_midi_status")]
+    internal static partial int ExternalMidiStatus(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_external_midi_dropped")]
+    internal static partial uint ExternalMidiDropped(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_roles_set", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult MidiRolesSet(IntPtr engine, string[] ids, string[] names, string[] uids, string[] outNames, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_role_count")]
+    internal static partial int MidiRoleCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_role_text")]
+    internal static partial int MidiRoleText(IntPtr engine, int index, int field, [Out] byte[]? buf, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_role_rebind", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult MidiRoleRebind(IntPtr engine, string roleId, string uid, string name);
 }
 
 /// <summary>Native NotaAuroraTableInfo (specs/053), turned into

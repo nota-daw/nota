@@ -586,6 +586,43 @@ public sealed partial class NotaEngine
         return new TrackMidiInput(uid.Length == 0 ? null : uid, channel, uid.Length == 0 || source >= 0);
     }
 
+
+    public bool SetTrackMidiInputs(int trackId, MidiInputList inputs)
+    {
+        ThrowIfDisposed();
+        var routes = inputs.Routes ?? Array.Empty<MidiInputRoute>();
+        var uids = routes.Select(r => r.Uid).ToArray();
+        var names = routes.Select(r => r.Name ?? "").ToArray();
+        var masks = routes.Select(r => r.Channels).ToArray();
+        return NativeMethods.TrackSetMidiInputs(_handle, trackId, inputs.All ? 1 : 0, inputs.AllChannels, uids, names, masks, uids.Length)
+               == NativeMethods.NotaResult.Ok;
+    }
+
+    public MidiInputList GetTrackMidiInputs(int trackId)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.TrackMidiInputCount(_handle, trackId);
+        if (n < 0) return n == -1
+            ? new MidiInputList(true, NativeMethods.TrackMidiInputAllChannels(_handle, trackId), Array.Empty<MidiInputRoute>())
+            : MidiInputList.Everything;
+        var routes = new List<MidiInputRoute>(n);
+        for (int i = 0; i < n; i++)
+        {
+            string Text(int field, out ushort mask)
+            {
+                int len = NativeMethods.TrackMidiInputAt(_handle, trackId, i, field, null, 0, out mask);
+                if (len <= 0) return "";
+                var buf = new byte[len + 1];
+                NativeMethods.TrackMidiInputAt(_handle, trackId, i, field, buf, buf.Length, out mask);
+                return System.Text.Encoding.UTF8.GetString(buf, 0, len);
+            }
+            string uid = Text(0, out ushort channels);
+            if (uid.Length == 0) continue;
+            routes.Add(new MidiInputRoute(uid, channels, Text(1, out _)));
+        }
+        return new MidiInputList(false, MidiInputRoute.AllChannels, routes);
+    }
+
     /// <summary>Tests: filters a track to hardware source index <paramref name="source"/> (-2 =
     /// All inputs) without a device to name it by uid.</summary>
     public bool SetTrackMidiInputSourceForTest(int trackId, int source, int channel)
@@ -1413,4 +1450,75 @@ public sealed partial class NotaEngine
 
     public int InstrumentOutput(int trackId, float[] outv)
     { ThrowIfDisposed(); return NativeMethods.TrackInstrumentOutput(_handle, trackId, outv, outv.Length); }
+
+    // ---- External MIDI (specs/115) -------------------------------------------------------------
+
+    /// <summary>Adds an instrument track with External MIDI (no destination yet). Returns its id.</summary>
+    public int AddExternalMidiTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddExternalMidiTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add External MIDI track.");
+        return id;
+    }
+
+    public bool SetExternalMidi(int trackId, string outputUid, int channel, string outputName = "", string roleId = "")
+    {
+        ThrowIfDisposed();
+        return NativeMethods.ExternalMidiSet(_handle, trackId, outputUid ?? "", outputName ?? "", roleId ?? "", channel)
+               == NativeMethods.NotaResult.Ok;
+    }
+
+    public ExternalMidiDestination? GetExternalMidi(int trackId)
+    {
+        ThrowIfDisposed();
+        int channel = NativeMethods.ExternalMidiChannel(_handle, trackId);
+        if (channel < 0) return null;
+        string Text(int field)
+        {
+            int n = NativeMethods.ExternalMidiText(_handle, trackId, field, null, 0);
+            if (n <= 0) return "";
+            var buf = new byte[n + 1];
+            NativeMethods.ExternalMidiText(_handle, trackId, field, buf, buf.Length);
+            return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+        }
+        return new ExternalMidiDestination(Text(0), channel, Text(1), Text(2));
+    }
+
+    public int ExternalMidiStatus(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.ExternalMidiStatus(_handle, trackId); }
+
+    public uint ExternalMidiDropped(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.ExternalMidiDropped(_handle, trackId); }
+
+    public IReadOnlyList<MidiOutputRole> MidiRoles()
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.MidiRoleCount(_handle);
+        var list = new List<MidiOutputRole>(n);
+        for (int i = 0; i < n; i++)
+        {
+            string Text(int field)
+            {
+                int len = NativeMethods.MidiRoleText(_handle, i, field, null, 0);
+                if (len <= 0) return "";
+                var buf = new byte[len + 1];
+                NativeMethods.MidiRoleText(_handle, i, field, buf, buf.Length);
+                return System.Text.Encoding.UTF8.GetString(buf, 0, len);
+            }
+            list.Add(new MidiOutputRole(Text(0), Text(1), Text(2), Text(3)));
+        }
+        return list;
+    }
+
+    public bool SetMidiRoles(IReadOnlyList<MidiOutputRole> roles)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.MidiRolesSet(_handle, roles.Select(r => r.Id).ToArray(), roles.Select(r => r.Name).ToArray(),
+                   roles.Select(r => r.OutputUid ?? "").ToArray(), roles.Select(r => r.OutputName ?? "").ToArray(), roles.Count)
+               == NativeMethods.NotaResult.Ok;
+    }
+
+    public bool RebindMidiRole(string roleId, string outputUid, string outputName)
+    { ThrowIfDisposed(); return NativeMethods.MidiRoleRebind(_handle, roleId, outputUid ?? "", outputName ?? "") == NativeMethods.NotaResult.Ok; }
 }

@@ -45,7 +45,9 @@ public sealed class ProjectService
     /// v33 (specs/086) adds the optional tempo map and curve handles.
     /// v34 (specs/099) makes tempo the master track's Tempo automation lane.
     /// v35 (specs/103) adds FollowBypass on Session slots.
-    public const int CurrentFormatVersion = 35;
+    /// v36 (specs/115) adds MidiInputs on tracks, ExternalMidi on instruments and the project's
+    /// MidiOutputRoles.
+    public const int CurrentFormatVersion = 36;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -72,6 +74,9 @@ public sealed class ProjectService
         {
             SessionNames = !contentNames,
             SceneCount = engine.SceneCount,
+            MidiOutputRoles = engine.MidiRoles() is { Count: > 0 } roles   // specs/115 (v36)
+                ? roles.Select(r => new MidiOutputRoleDto { Id = r.Id, Name = r.Name, OutputUid = r.OutputUid.Length > 0 ? r.OutputUid : null, OutputName = r.OutputName.Length > 0 ? r.OutputName : null }).ToList()
+                : null,
             Session = CaptureSession(engine),
             Transport = new TransportDto
             {
@@ -135,6 +140,20 @@ public sealed class ProjectService
             {
                 t.MidiInputUid = midiIn.Uid;
                 t.MidiInputChannel = midiIn.Channel > 0 ? midiIn.Channel : null;
+                // specs/115: a list when it is more than one port on one channel (or all).
+                var list = engine.GetTrackMidiInputs(ti.Id);
+                static bool OneOrAll(ushort m) => m == MidiInputRoute.AllChannels || (m != 0 && (m & (m - 1)) == 0);
+                if (!list.All && (list.Routes.Count > 1 || list.Routes.Any(r => !OneOrAll(r.Channels))))
+                {
+                    var ports = engine.MidiPorts();
+                    t.MidiInputs = list.Routes.Select(r => new MidiInputRouteDto
+                    {
+                        Uid = r.Uid,
+                        Name = ports.FirstOrDefault(p => p.Uid == r.Uid).Name is { Length: > 0 } live ? live
+                             : r.Name.Length > 0 ? r.Name : null,
+                        Channels = r.Channels,
+                    }).ToList();
+                }
             }
             for (int b = 0; b < t.Sends.Length; b++) t.Sends[b] = engine.GetTrackSend(ti.Id, b);
 
@@ -174,6 +193,17 @@ public sealed class ProjectService
                 {
                     instDto.State = RegisterBlob(doc, engine.AuroraState(ti.Id, includeTables: false));
                     instDto.Wavetables = CaptureWavetables(doc, engine, ti.Id);
+                }
+                else if (kind == ExternalMidiDestination.Kind && engine.GetExternalMidi(ti.Id) is { } dest)
+                {      // External MIDI (specs/115): its destination, by port or by role — no state blob
+                    bool byRole = dest.RoleId.Length > 0;
+                    instDto.ExternalMidi = new ExternalMidiDto
+                    {
+                        OutputUid = byRole || dest.OutputUid.Length == 0 ? null : dest.OutputUid,
+                        OutputName = byRole || dest.OutputName.Length == 0 ? null : dest.OutputName,
+                        RoleId = byRole ? dest.RoleId : null,
+                        Channel = dest.Channel,
+                    };
                 }
                 else   // every other built-in instrument (Synth/Physical/Volt/Instrument
                 {      // Rack/Drum Rack/Flux) persists its state blob — the load path rebuilds from it.
@@ -696,6 +726,11 @@ public sealed class ProjectService
         // CV links resolved after all tracks exist (cross-track targets are doc-indices).
         var cvLinkDeferred = new List<(int owner, CvLinkDto dto, int modId)>();
 
+        // Project MIDI output roles first (specs/115): External MIDI tracks that follow one take its port.
+        if (doc.MidiOutputRoles is { Count: > 0 } docRoles)
+            engine.SetMidiRoles(docRoles.Where(r => r.Id.Length > 0)
+                .Select(r => new MidiOutputRole(r.Id, r.Name, r.OutputUid ?? "", r.OutputName ?? "")).ToList());
+
         foreach (var t in doc.Tracks)
         {
             int id;
@@ -780,8 +815,17 @@ public sealed class ProjectService
                         { Kind: 16 } => engine.AddKeysTrack(),           // Nota Keys
                         { Kind: 17 } => engine.AddMosaicTrack(),         // Nota Mosaic (its program rides the state blob)
                         { Kind: 18 } => engine.AddTwinTrack(),           // Nota Twin
+                        { Kind: ExternalMidiDestination.Kind } => engine.AddExternalMidiTrack(),   // External MIDI (specs/115)
                         _ => engine.AddInstrumentTrack(),                // Nota Synth
                     };
+                    // External MIDI: its saved port by uid alone (a missing one stays missing, FR-006),
+                    // or its role's port — the roles are applied first (ApplyMidiOutputRoles).
+                    if (id > 0 && t.Instrument is { Kind: ExternalMidiDestination.Kind, ExternalMidi: { } em })
+                    {
+                        var role = em.RoleId is { Length: > 0 } rid ? doc.MidiOutputRoles?.FirstOrDefault(r => r.Id == rid) : null;
+                        engine.SetExternalMidi(id, role?.OutputUid ?? em.OutputUid ?? "", Math.Clamp(em.Channel, 0, 16),
+                            role?.OutputName ?? em.OutputName ?? "", role?.Id ?? "");
+                    }
                     if (t.Instrument?.State is { } synthState)
                     {
                         var blob = ReadBlob(bundleDir, synthState);
@@ -848,7 +892,20 @@ public sealed class ProjectService
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
             engine.SetTrackInput(id, TrackInputOf(t));
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
-            if (t.MidiInputUid is { Length: > 0 } || t.MidiInputChannel is > 0)    // MIDI input (specs/086)
+            if (t.MidiInputs is { Count: > 0 } ins)    // specs/115: a list of ports, each on its channels
+            {
+                var routes = new List<MidiInputRoute>();
+                foreach (var r in ins)
+                {
+                    ushort ch = (ushort)(r.Channels & 0xFFFF);
+                    if (r.Uid.Length == 0 || ch == 0) continue;   // no channel: dropped (FR-002)
+                    int at = routes.FindIndex(x => x.Uid == r.Uid);
+                    if (at >= 0) routes[at] = routes[at] with { Channels = (ushort)(routes[at].Channels | ch) };
+                    else routes.Add(new MidiInputRoute(r.Uid, ch, r.Name ?? ""));
+                }
+                engine.SetTrackMidiInputs(id, new MidiInputList(false, MidiInputRoute.AllChannels, routes));
+            }
+            else if (t.MidiInputUid is { Length: > 0 } || t.MidiInputChannel is > 0)    // MIDI input (specs/086)
                 engine.SetTrackMidiInput(id, t.MidiInputUid, t.MidiInputChannel ?? 0);
             if (t.MidiOffsetMs is { } offMs && double.IsFinite(offMs)) engine.SetTrackMidiOffsetMs(id, offMs);   // v30; absent = 0, engine clamps
             if (t.Type == 1 && t.ArticulationMap is { } artMap) ApplyArticulationMap(engine, id, artMap, warnings);   // v30

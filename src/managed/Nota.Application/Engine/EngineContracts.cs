@@ -556,6 +556,23 @@ public enum RecordSkipReason { InputUnavailable = 1, TooMany = 2, SwitchedOff = 
 
 /// <summary>An instrument track's MIDI input (specs/086): the device's uid (null = All inputs)
 /// and channel (0 = all, 1–16); <see cref="Connected"/> is false while that device is away.</summary>
+/// <summary>One port of an instrument track's input list (specs/115): its uid and the channels it
+/// plays on (bit n = channel n + 1).</summary>
+public readonly record struct MidiInputRoute(string Uid, ushort Channels, string Name = "")
+{
+    public const ushort AllChannels = 0xFFFF;
+    public static ushort Mask(IEnumerable<int> channels) =>
+        (ushort)channels.Where(c => c is >= 1 and <= 16).Aggregate(0, (m, c) => m | (1 << (c - 1)));
+    public IReadOnlyList<int> ChannelList { get { ushort m = Channels; return Enumerable.Range(1, 16).Where(c => ((m >> (c - 1)) & 1) != 0).ToList(); } }
+}
+
+/// <summary>An instrument track's whole live MIDI input (specs/115): every input on <see cref="AllChannels"/>,
+/// or the listed ports (<see cref="All"/> false), each on its own channels.</summary>
+public sealed record MidiInputList(bool All, ushort AllChannels, IReadOnlyList<MidiInputRoute> Routes)
+{
+    public static MidiInputList Everything => new(true, MidiInputRoute.AllChannels, Array.Empty<MidiInputRoute>());
+}
+
 public readonly record struct TrackMidiInput(string? Uid, int Channel, bool Connected)
 {
     public static TrackMidiInput All => new(null, 0, true);
@@ -719,8 +736,32 @@ public readonly record struct MidiDevice(string Uid, string Name);
 
 /// <summary>A connected MIDI input as the engine's MIDI thread numbers it (specs/051): the
 /// source index its events carry, a stable uid, the display name, and the output of the same
-/// device ("" when it has none). Test ports have uids "test:&lt;name&gt;".</summary>
-public readonly record struct MidiPortInfo(string Uid, string Name, int Source, string OutputUid);
+/// device ("" when it has none). Test ports have uids "test:&lt;name&gt;". OverLimit (#1011,
+/// specs/115): enabled and connected but past the 16-input limit, so not opened — it sends
+/// nothing and has no source (-1).</summary>
+public readonly record struct MidiPortInfo(string Uid, string Name, int Source, string OutputUid, bool OverLimit = false);
+
+/// <summary>A MIDI output (destination) the system lists, paired with an input or not
+/// (specs/115). Test ports' outputs have uids "test:&lt;name&gt;".</summary>
+public readonly record struct MidiOutputInfo(string Uid, string Name);
+
+/// <summary>A project MIDI output role (specs/115 US4): a stable id, its name such as "Stage Synth",
+/// and the output it is bound to ("" = unbound) with that output's name when bound.</summary>
+public sealed record MidiOutputRole(string Id, string Name, string OutputUid = "", string OutputName = "");
+
+/// <summary>An External MIDI track's destination (specs/115): the output's uid ("" = none), the
+/// channel 1-16 every message goes on or 0 = Keep channels (each note on its own MPE member
+/// channel), the output's name when it was chosen (shown while it is missing) and the project
+/// output role it follows ("" = the port itself).</summary>
+public readonly record struct ExternalMidiDestination(string OutputUid, int Channel, string OutputName = "", string RoleId = "")
+{
+    public const int KeepChannels = 0;
+    public const int Kind = 19;
+}
+
+/// <summary>One message a test port's output received (specs/115) and when it was due, in ns on
+/// the engine's render clock (offline: frames rendered since the first block).</summary>
+public readonly record struct MidiSentMessage(byte[] Bytes, ulong DueNs);
 
 /// <summary>One claimed message (specs/051), blittable and matching NotaMidiClaim. A claimed
 /// message goes to the surface queue instead of the instruments. Status 0x80 note (on and

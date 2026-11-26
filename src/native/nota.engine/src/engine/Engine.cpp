@@ -47,6 +47,15 @@ Engine::Engine()
     hybrid_ = std::make_unique<HybridBufferController>(*this);
     hybrid_->onGraphChanged(authoring_);
     installRackPluginFactory(); // lets rack blobs rebuild hosted-plugin children on load
+    // MIDI out (specs/115): test ports' outputs are the engine's, the rest the service opens.
+    midiOut_.setTestHooks(
+        [this](const std::string& uid, const uint8_t* d, int32_t n, uint64_t due) { return deliverTestMidi(uid, d, n, due); },
+        [this](const std::string& uid) {
+            std::lock_guard lk(testPortsMx_);
+            for (const auto& t : testMidiPorts_)
+                if ("test:" + t->name == uid) return !t->removed.load(std::memory_order_relaxed);
+            return false;
+        });
 }
 
 Engine::~Engine() {
@@ -172,10 +181,7 @@ void Engine::openMidiInput() {
         [this](int32_t source, const uint8_t* data, int32_t len) { onMidiSysex(source, data, len); },
         midiConfig_.disabledInputUids);
     midiSourceUids_ = midiInput_->sourceUids(); // tracks filter by source index (specs/086)
-    // Indices move when inputs come and go: every track picks its input up again by uid.
-    if (authoring_)
-        for (auto& t : authoring_->tracks)
-            if (t && !t->midiInputUid.empty()) setTrackMidiInputUid(t->id(), t->midiInputUid, t->midiInputChannel());
+    resolveAllMidiInputs(); // indices move when inputs come and go: every track picks its list up again by uid
 }
 
 void Engine::onMidiMessage(int32_t source, int32_t status, int32_t channel, int32_t d1, int32_t d2) {
@@ -197,15 +203,105 @@ int32_t Engine::midiSourceOfUid(const std::string& uid) const {
     if (uid.empty()) return -1;
     for (size_t i = 0; i < midiSourceUids_.size(); ++i)
         if (midiSourceUids_[i] == uid) return static_cast<int32_t>(i);
+    if (uid.rfind("source:", 0) == 0) { // a bare index (Engine::setTrackMidiInput)
+        const int32_t s = std::atoi(uid.c_str() + 7);
+        return s >= 0 && s < MidiInput::kMaxSources ? s : -1;
+    }
+    if (uid.rfind("test:", 0) == 0) { // a test port is an input like any other (specs/115)
+        std::lock_guard lk(testPortsMx_);
+        for (const auto& t : testMidiPorts_)
+            if ("test:" + t->name == uid && !t->removed.load(std::memory_order_relaxed)) return t->source;
+    }
     return -1;
+}
+
+std::string Engine::uidOfMidiSource(int32_t source) const {
+    if (source < 0) return {};
+    if (static_cast<size_t>(source) < midiSourceUids_.size()) return midiSourceUids_[static_cast<size_t>(source)];
+    std::lock_guard lk(testPortsMx_);
+    for (const auto& t : testMidiPorts_)
+        if (t->source == source && !t->removed.load(std::memory_order_relaxed)) return "test:" + t->name;
+    return {};
+}
+
+void Engine::resolveAllMidiInputs() {
+    if (!authoring_) return;
+    for (auto& t : authoring_->tracks)
+        if (t && t->type() == TrackType::Instrument && !t->midiInputAll) publishTrackMidiInput(*t, resolveMidiInput(*t));
 }
 
 void Engine::onMidiSysex(int32_t source, const uint8_t* data, int32_t len) { midiSurface_.pushSysex(source, data, len); }
 
 const std::vector<MidiInput::PortInfo>& Engine::midiPorts() {
     midiPortRows_ = midiInput_ ? midiInput_->ports() : std::vector<MidiInput::PortInfo>{};
-    for (const auto& t : testMidiPorts_) midiPortRows_.push_back({t->source, "test:" + t->name, t->name, "test:" + t->name});
+    std::lock_guard lk(testPortsMx_);
+    for (const auto& t : testMidiPorts_)
+        if (!t->removed.load(std::memory_order_relaxed))
+            midiPortRows_.push_back({t->source, "test:" + t->name, t->name, "test:" + t->name});
     return midiPortRows_;
+}
+
+const std::vector<MidiOutput::Destination>& Engine::midiOutputPorts() {
+    midiOutputRows_ = MidiOutput::list();
+    std::lock_guard lk(testPortsMx_);
+    for (const auto& t : testMidiPorts_)
+        if (!t->removed.load(std::memory_order_relaxed)) midiOutputRows_.push_back({"test:" + t->name, t->name});
+    return midiOutputRows_;
+}
+
+namespace {
+std::atomic<uint32_t> gTestPortsGen{0};
+} // namespace
+
+uint32_t Engine::testPortsGeneration() { return gTestPortsGen.load(std::memory_order_relaxed); }
+
+bool Engine::deliverTestMidi(const std::string& outputUid, const uint8_t* data, int32_t len, uint64_t dueNs) {
+    if (outputUid.rfind("test:", 0) != 0 || !data || len <= 0) return false;
+    std::lock_guard lk(testPortsMx_);
+    for (auto& t : testMidiPorts_)
+        if ("test:" + t->name == outputUid) {
+            if (t->removed.load(std::memory_order_relaxed)) return false; // unplugged
+            t->sent.write(data, static_cast<size_t>(len));
+            std::lock_guard lg(t->logMx);
+            t->log.push_back({dueNs, std::vector<uint8_t>(data, data + len)});
+            return true;
+        }
+    return false;
+}
+
+bool Engine::removeTestMidiPort(const std::string& name) {
+    std::lock_guard lk(testPortsMx_);
+    for (auto& t : testMidiPorts_)
+        if (t->name == name && !t->removed.exchange(true)) {
+            gTestPortsGen.fetch_add(1, std::memory_order_relaxed);
+            return true;
+        }
+    return false;
+}
+
+int32_t Engine::readTestMidiOutput(const std::string& name, uint8_t* bytes, int32_t bytesCap, uint64_t* dueNs,
+    int32_t* lens, int32_t maxMsgs) {
+    if (!bytes || !lens || maxMsgs <= 0 || bytesCap <= 0) return 0;
+    midiOut_.pump(); // what External MIDI tracks rendered, delivered now (offline renders don't wait)
+    std::lock_guard lk(testPortsMx_);
+    for (auto& t : testMidiPorts_) {
+        if (t->name != name) continue;
+        std::lock_guard lg(t->logMx);
+        int32_t n = 0, used = 0;
+        while (n < maxMsgs && !t->log.empty()) {
+            const auto& m = t->log.front();
+            const auto len = static_cast<int32_t>(m.bytes.size());
+            if (used + len > bytesCap) break;
+            std::copy(m.bytes.begin(), m.bytes.end(), bytes + used);
+            used += len;
+            lens[n] = len;
+            if (dueNs) dueNs[n] = m.dueNs;
+            ++n;
+            t->log.pop_front();
+        }
+        return n;
+    }
+    return 0;
 }
 
 bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t len) {
@@ -216,32 +312,125 @@ bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t
         if (data[i] == 0xF0 && data[i + 1] == 0x7E && data[i + 3] == 0x06 && data[i + 4] == 0x01 && data[i + 5] == 0xF7)
             for (const auto& p : midiPorts())
                 if (p.outputUid == outputUid) midiSurface_.armIdentity(p.source);
-    if (outputUid.rfind("test:", 0) == 0) {
-        for (auto& t : testMidiPorts_)
-            if ("test:" + t->name == outputUid) {
-                t->sent.write(data, static_cast<size_t>(len));
-                return true;
-            }
-        return false;
+    // Through the MIDI out thread's outputs (specs/115 R3): a port that is both a controller's
+    // feedback and an External MIDI destination is opened once (WinMM opens it exclusively).
+    return midiOut_.sendControl(outputUid, data, len);
+}
+
+// ---- External MIDI (specs/115) ------------------------------------------------------------------
+
+// Before a graph goes live: its External MIDI instances learn the block clock. After: the MIDI out
+// thread gets the list, and lets go (releasing their notes) of the ones that left.
+void Engine::syncExternalMidi(const Graph& g) {
+    std::vector<MidiOutService::Route> routes;
+    for (const auto& t : g.tracks)
+        if (t && t->instrument && t->instrument->kind() == ExternalMidi::kKind) {
+            auto em = std::static_pointer_cast<ExternalMidi>(t->instrument);
+            em->attachClock(&midiClock_);
+            routes.push_back({t->id(), std::move(em)});
+        }
+    externalMidiRouted_ = !routes.empty();
+    midiOut_.setRoutes(std::move(routes));
+}
+
+int32_t Engine::addExternalMidiTrack() {
+    auto g = std::make_shared<Graph>(*authoring_);
+    const int32_t id = nextTrackId_++;
+    auto track = std::make_shared<Track>(id, TrackType::Instrument);
+    auto inst = std::make_shared<ExternalMidi>();
+    inst->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0);
+    track->instrument = inst;
+    g->tracks.push_back(track);
+    publish(g);
+    return id;
+}
+
+std::shared_ptr<const ExternalMidi> Engine::externalMidiAt(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind) return nullptr;
+    return std::static_pointer_cast<const ExternalMidi>(t->instrument);
+}
+
+bool Engine::setExternalMidi(int32_t trackId, const std::string& uid, int32_t channel, const std::string& name,
+    const std::string& roleId) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind || channel < 0 || channel > 16) return false;
+    const auto& cur = static_cast<const ExternalMidi&>(*t->instrument);
+    if (cur.outputUid() == uid && cur.channel() == channel && cur.outputName() == name && cur.roleId() == roleId) return true;
+    auto next = std::make_shared<ExternalMidi>(uid, channel, name, roleId);
+    next->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0);
+    next->folded = cur.folded;
+    next->presetTag = cur.presetTag;
+    next->setBypassed(cur.bypassed());
+    return replaceTrackInstrument(trackId, std::move(next));
+}
+
+bool Engine::setMidiRoles(std::vector<MidiOutputRole> roles) {
+    if (roles == midiRoles()) return true;
+    auto g = std::make_shared<Graph>(*authoring_);
+    g->midiRoles = roles.empty() ? nullptr : std::make_shared<const std::vector<MidiOutputRole>>(std::move(roles));
+    publish(g);
+    return true;
+}
+
+// FR-015, FR-016: with the transport stopped, the role and every track that follows it move to
+// the new output together. Each such track gets a new External MIDI instance (channel and
+// settings kept); the old instances leaving the graph release their notes at the old output.
+bool Engine::rebindMidiRole(const std::string& roleId, const std::string& uid, const std::string& name) {
+    if (transport_.uiIsPlaying()) return false;
+    auto roles = midiRoles(); // a copy: the graph's table is immutable
+    auto it = std::find_if(roles.begin(), roles.end(), [&](const MidiOutputRole& r) { return r.id == roleId; });
+    if (it == roles.end()) return false;
+    it->outputUid = uid;
+    it->outputName = name;
+    auto g = std::make_shared<Graph>(*authoring_);
+    g->midiRoles = std::make_shared<const std::vector<MidiOutputRole>>(std::move(roles));
+    const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
+    for (auto& t : g->tracks) {
+        if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind) continue;
+        const auto& cur = static_cast<const ExternalMidi&>(*t->instrument);
+        if (cur.roleId() != roleId) continue;
+        auto next = std::make_shared<ExternalMidi>(uid, cur.channel(), name, roleId);
+        next->setSampleRate(sr);
+        next->folded = cur.folded;
+        next->presetTag = cur.presetTag;
+        next->setBypassed(cur.bypassed());
+        t = cloneTrack(*t);
+        t->instrument = std::move(next);
     }
-    auto it = midiOutputs_.find(outputUid);
-    if (it == midiOutputs_.end()) {
-        auto out = std::make_unique<MidiOutput>();
-        if (!out->open(outputUid)) return false;
-        it = midiOutputs_.emplace(outputUid, std::move(out)).first;
-    }
-    if (it->second->send(data, len)) return true;
-    midiOutputs_.erase(it); // unplugged: reopen on the next send
-    return false;
+    publish(g);
+    return true;
+}
+
+int32_t Engine::externalMidiStatus(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind) return -1;
+    return static_cast<const ExternalMidi&>(*t->instrument).status.load(std::memory_order_relaxed);
+}
+
+uint32_t Engine::externalMidiDropped(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind) return 0;
+    return static_cast<const ExternalMidi&>(*t->instrument).dropped.load(std::memory_order_relaxed);
 }
 
 int32_t Engine::addTestMidiPort(const std::string& name) {
     if (name.empty()) return -1;
-    for (const auto& t : testMidiPorts_)
-        if (t->name == name) return t->source;
-    // Take the highest source index no real or test port uses.
+    {
+        std::lock_guard lk(testPortsMx_);
+        for (const auto& t : testMidiPorts_)
+            if (t->name == name) {
+                if (t->removed.exchange(false)) gTestPortsGen.fetch_add(1, std::memory_order_relaxed); // plugged back in
+                return t->source;
+            }
+    }
+    // Take the highest source index no real or test port uses (a removed test port keeps its).
     std::array<bool, MidiInput::kMaxSources> used{};
-    for (const auto& p : midiPorts()) used[static_cast<size_t>(std::clamp(p.source, 0, MidiInput::kMaxSources - 1))] = true;
+    for (const auto& p : midiPorts())
+        if (p.source >= 0 && p.source < MidiInput::kMaxSources) used[static_cast<size_t>(p.source)] = true;
+    std::lock_guard lk(testPortsMx_);
+    for (const auto& t : testMidiPorts_)
+        if (t->source >= 0 && t->source < MidiInput::kMaxSources) used[static_cast<size_t>(t->source)] = true;
     for (int32_t s = MidiInput::kMaxSources - 1; s >= 0; --s) {
         if (used[static_cast<size_t>(s)]) continue;
         auto t = std::make_unique<TestMidiPort>();
@@ -255,8 +444,9 @@ int32_t Engine::addTestMidiPort(const std::string& name) {
 
 bool Engine::injectTestMidi(int32_t source, const uint8_t* data, int32_t len) {
     if (!data || len <= 0) return false;
+    std::lock_guard lk(testPortsMx_);
     for (auto& t : testMidiPorts_)
-        if (t->source == source) {
+        if (t->source == source && !t->removed.load(std::memory_order_relaxed)) {
             t->parser.feed(
                 data, static_cast<size_t>(len),
                 [&](int status, int channel, int d1, int d2) { onMidiMessage(source, status, channel, d1, d2); },
@@ -267,6 +457,7 @@ bool Engine::injectTestMidi(int32_t source, const uint8_t* data, int32_t len) {
 }
 
 int32_t Engine::takeTestMidiSent(int32_t source, uint8_t* out, int32_t cap) {
+    std::lock_guard lk(testPortsMx_);
     for (auto& t : testMidiPorts_)
         if (t->source == source) return t->sent.take(out, cap);
     return 0;
@@ -308,7 +499,6 @@ void Engine::stop() {
     if (hybrid_) hybrid_->setStopped();
     syncStreamingPlaybackState(false);
     if (midiInput_) midiInput_->close();
-    midiOutputs_.clear();
     setPluginAudioWorkgroup(nullptr); // before the device (and its workgroup) goes
     if (pool_) pool_->setWorkgroup(nullptr, 0.0);
     if (backend_) backend_->stop();
@@ -842,8 +1032,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setInput(t.inputFirst(), t.inputWidth());                    // hardware input pick
     nt->setMonitor(t.monitor());                                     // live input monitoring
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
-    nt->setMidiInput(t.midiInputSource(), t.midiInputChannel());      // MIDI input filter (specs/086)
-    nt->midiInputUid = t.midiInputUid;
+    nt->copyMidiInputFrom(t);                                       // MIDI input filter (specs/086, specs/115)
     nt->setMidiOffsetMs(t.midiOffsetMs());                           // MIDI playback offset
     nt->articulationTable = t.articulationTable;                     // articulation map (shared, immutable)
     nt->articulationMapJson = t.articulationMapJson;
@@ -1173,6 +1362,13 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     else if (g) {
         for (auto& t : g->tracks) t->ccRoutesDirty = false;
         if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
+    }
+    // specs/115: clocks before it goes live; the MIDI out thread follows. Skipped outright while no
+    // External MIDI exists (every edit publishes: perf gate edit-warp-split).
+    if (g && (ExternalMidi::liveCount() != 0 || externalMidiRouted_)) syncExternalMidi(*g);
+    if (g && restored) { // undo / redo: a restored input list meets the ports open now (specs/115)
+        for (auto& t : g->tracks)
+            if (t && t->type() == TrackType::Instrument && !t->midiInputAll) t->setMidiInput(resolveMidiInput(*t));
     }
     if (g) {
         for (size_t i = 0; i < g->tracks.size(); ++i) {

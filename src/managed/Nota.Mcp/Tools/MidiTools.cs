@@ -119,4 +119,124 @@ public sealed class MidiTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
         E.ConsolidateRange(trackIds, Math.Max(0, startBeat), endBeat)
             ? Array.ConvertAll(E.LastPlacedClips(), p => new ClipRef(p.trackId, p.clipIndex))
             : Array.Empty<ClipRef>());
+
+    // ---- External MIDI (specs/115) ------------------------------------------------------------
+
+    public sealed record MidiOutput(
+        [property: Description("Stable output id, for set_external_midi")] string Uid,
+        [property: Description("Human-readable output name")] string Name);
+
+    public sealed record ExternalMidi(
+        [property: Description("The output's uid, or null when the track follows a role or has none")] string? OutputUid,
+        [property: Description("The output's name (its saved name while it is not connected)")] string? OutputName,
+        [property: Description("The project output role it follows, or null")] string? Role,
+        [property: Description("1-16, or \"keep\" for Keep channels (each note on its own MPE member channel)")] string Channel,
+        [property: Description("available, missing (not connected or listed twice) or none (no output chosen)")] string Availability,
+        [property: Description("Messages dropped because the output ring was full")] uint Dropped);
+
+    [McpServerTool(Name = "list_midi_outputs"), Description("List the MIDI outputs an External MIDI track can play (uid + name).")]
+    public Task<MidiOutput[]> ListMidiOutputs() => Read(() => E.MidiOutputs().Select(o => new MidiOutput(o.Uid, o.Name)).ToArray());
+
+    [McpServerTool(Name = "set_external_midi"), Description("Point an External MIDI track (add one with add_instrument_track kind 19) at a MIDI output by uid (from list_midi_outputs) and a channel: 1-16 sends every message on that channel, \"keep\" gives each note its own MPE member channel (for MPE synths). A port that isn't connected is kept and receives nothing until it is — a similarly named one never stands in. One undo step; notes the track held end at its old output.")]
+    public Task SetExternalMidi(int trackId, string outputUid, string channel = "1") => Mutate(() =>
+    {
+        int ch = ParseChannel(channel);
+        string name = E.MidiOutputs().FirstOrDefault(o => o.Uid == outputUid).Name ?? "";
+        if (!E.SetExternalMidi(trackId, outputUid ?? "", ch, name))
+            throw new ArgumentException($"Track {trackId} isn't an External MIDI track (add one with add_instrument_track kind 19).");
+    });
+
+    [McpServerTool(Name = "get_external_midi"), Description("Read an External MIDI track's output, channel and whether its output is connected.")]
+    public Task<ExternalMidi> GetExternalMidi(int trackId) => Read(() =>
+    {
+        var d = E.GetExternalMidi(trackId) ?? throw new ArgumentException($"Track {trackId} isn't an External MIDI track.");
+        string? roleName = d.RoleId.Length > 0 ? E.MidiRoles().FirstOrDefault(r => r.Id == d.RoleId)?.Name ?? d.RoleId : null;
+        int status = E.ExternalMidiStatus(trackId);
+        string avail = status == 1 ? "available" : status == 2 ? "missing" : "none";
+        bool byRole = d.RoleId.Length > 0;
+        return new ExternalMidi(byRole ? null : NullIfEmpty(d.OutputUid), NullIfEmpty(d.OutputName), roleName,
+            d.Channel == ExternalMidiDestination.KeepChannels ? "keep" : d.Channel.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            avail, E.ExternalMidiDropped(trackId));
+    });
+
+    private static string? NullIfEmpty(string s) => s.Length == 0 ? null : s;
+
+    private static int ParseChannel(string channel)
+    {
+        if (string.Equals(channel?.Trim(), "keep", StringComparison.OrdinalIgnoreCase)) return ExternalMidiDestination.KeepChannels;
+        if (int.TryParse(channel, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int c) && c is >= 1 and <= 16) return c;
+        throw new ArgumentException($"channel {channel}: 1-16 or \"keep\"");
+    }
+
+    // ---- MIDI routes overview and output roles (specs/115 US3, US4) -----------------------------
+
+    public sealed record RouteEnd(string Key, string Name, string Detail,
+        [property: Description("available, missing, ambiguous, unbound or over-limit")] string Availability);
+
+    public sealed record MidiRoute(int TrackId, string TrackName,
+        [property: Description("True when the track listens to every input")] bool AllInputs,
+        [property: Description("Channels of every input, e.g. \"3, 7, 11\"; empty = all")] string AllInputsChannels,
+        [property: Description("The ports it listens to, Detail = their channels (empty = all)")] RouteEnd[] Inputs,
+        [property: Description("The track it takes MIDI from (Key track:id), or null")] RouteEnd? MidiFrom,
+        string Instrument,
+        [property: Description("External MIDI's port or role (Key role:id), Detail = channel or keep; null for a local instrument")] RouteEnd? Destination);
+
+    public sealed record OutputRole(string Id, string Name, string? OutputUid, string? OutputName, string Availability, string[] UsedBy);
+
+    private static string Avail(Nota.Application.Midi.RouteAvailability a) => a switch
+    {
+        Nota.Application.Midi.RouteAvailability.Available => "available",
+        Nota.Application.Midi.RouteAvailability.Ambiguous => "ambiguous",
+        Nota.Application.Midi.RouteAvailability.Unbound => "unbound",
+        Nota.Application.Midi.RouteAvailability.OverLimit => "over-limit",
+        _ => "missing",
+    };
+
+    private static RouteEnd? End(Nota.Application.Midi.MidiRouteEnd? e) => e is null ? null : new RouteEnd(e.Key, e.Name, e.Detail, Avail(e.Availability));
+
+    [McpServerTool(Name = "get_midi_routes"), Description("The MIDI routes overview: one row per instrument track with what it listens to (every input, or ports with their channels), the track it takes MIDI from, and where an External MIDI track sends (port or role, channel), each marked available or missing. Optional filters: source = a port uid or \"track:<id>\"; destination = an output uid or \"role:<id>\" (a port also matches tracks following a role bound to it). Read-only.")]
+    public Task<MidiRoute[]> GetMidiRoutes(string? source = null, string? destination = null) => Read(() =>
+        Nota.Application.Midi.MidiRoutesQuery.Rows(E, source, destination).Select(r => new MidiRoute(r.TrackId, r.TrackName,
+            r.AllInputs, r.AllInputsChannels, r.Inputs.Select(i => End(i)!).ToArray(), End(r.MidiFrom), r.InstrumentName, End(r.Destination))).ToArray());
+
+    [McpServerTool(Name = "list_midi_output_roles"), Description("List the project's MIDI output roles (named destinations like \"Stage Synth\" that External MIDI tracks follow): id, name, bound output, whether it is connected, and the tracks that follow it.")]
+    public Task<OutputRole[]> ListMidiOutputRoles() => Read(() =>
+    {
+        var outputs = E.MidiOutputs();
+        return E.MidiRoles().Select(r => new OutputRole(r.Id, r.Name, r.OutputUid.Length > 0 ? r.OutputUid : null,
+            r.OutputName.Length > 0 ? r.OutputName : null,
+            r.OutputUid.Length == 0 ? "unbound" : Avail(Nota.Application.Midi.MidiRouteResolver.ResolveOutput(outputs, r.OutputUid)),
+            Nota.Application.Midi.MidiOutputRoles.UsedBy(E, r.Id).Select(E.GetTrackName).ToArray())).ToArray();
+    });
+
+    [McpServerTool(Name = "create_midi_output_role"), Description("Create a project MIDI output role, optionally bound to an output (uid from list_midi_outputs). Names are unique (case-insensitive), 1-40 characters. Returns its id.")]
+    public Task<string> CreateMidiOutputRole(string name, string? outputUid = null) => Mutate(() =>
+        Nota.Application.Midi.MidiOutputRoles.Create(E, name, outputUid, outputUid is null ? null : E.MidiOutputs().FirstOrDefault(o => o.Uid == outputUid).Name));
+
+    [McpServerTool(Name = "rename_midi_output_role"), Description("Rename a MIDI output role (by id or name).")]
+    public Task RenameMidiOutputRole(string role, string name) => Mutate(() =>
+        Nota.Application.Midi.MidiOutputRoles.Rename(E, RoleId(role), name));
+
+    [McpServerTool(Name = "rebind_midi_output_role"), Description("Bind a MIDI output role (by id or name) to an output: every External MIDI track that follows it moves there, keeping its channel — one undo step; notes they hold end at the old output. With preview = true, only returns the track names that would move. Refused while the transport plays.")]
+    public Task<string[]> RebindMidiOutputRole(string role, string outputUid, bool preview = false) => Mutate(() =>
+    {
+        string id = RoleId(role);
+        var moved = Nota.Application.Midi.MidiOutputRoles.UsedBy(E, id).Select(E.GetTrackName).ToArray();
+        if (!preview)
+            Nota.Application.Midi.MidiOutputRoles.Rebind(E, id, outputUid, E.MidiOutputs().FirstOrDefault(o => o.Uid == outputUid).Name ?? "");
+        return moved;
+    });
+
+    [McpServerTool(Name = "delete_midi_output_role"), Description("Delete a MIDI output role (by id or name). Refused while any track follows it — the message names them.")]
+    public Task DeleteMidiOutputRole(string role) => Mutate(() => Nota.Application.Midi.MidiOutputRoles.Delete(E, RoleId(role)));
+
+    [McpServerTool(Name = "set_external_midi_role"), Description("Point an External MIDI track at a project MIDI output role (by id or name) instead of a port; its channel stays.")]
+    public Task SetExternalMidiRole(int trackId, string role) => Mutate(() =>
+    {
+        if (!Nota.Application.Midi.MidiOutputRoles.Assign(E, trackId, RoleId(role)))
+            throw new ArgumentException($"Track {trackId} isn't an External MIDI track.");
+    });
+
+    private string RoleId(string role) =>
+        Nota.Application.Midi.MidiOutputRoles.Find(E, role)?.Id ?? throw new ArgumentException($"No MIDI output role \"{role}\".");
 }

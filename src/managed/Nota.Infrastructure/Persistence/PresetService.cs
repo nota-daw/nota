@@ -297,6 +297,7 @@ public static class PresetService
                     16 => engine.AddKeysTrack(),
                     17 => engine.AddMosaicTrack(),
                     18 => engine.AddTwinTrack(),
+                    19 => engine.AddExternalMidiTrack(),
                     _ => engine.AddInstrumentTrack(),
                 };
                 if (t <= 0) return Loc.T("persistence.preset.failed_to_add_instrument");

@@ -161,6 +161,66 @@ int32_t nota_engine_add_wavetable_synth_track(NotaEngine* e) {
 int32_t nota_engine_add_volt_synth_track(NotaEngine* e) {
     return e ? ENG(e)->addVoltSynthTrack() : 0;
 }
+int32_t nota_engine_add_external_midi_track(NotaEngine* e) {
+    return e ? ENG(e)->addExternalMidiTrack() : 0;
+}
+NotaResult nota_external_midi_set(NotaEngine* e, int32_t trackId, const char* uid, const char* name, const char* role,
+    int32_t channel) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setExternalMidi(trackId, uid ? uid : "", channel, name ? name : "", role ? role : "") ? NOTA_OK
+                                                                                                         : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_external_midi_text(const NotaEngine* e, int32_t trackId, int32_t field, char* out, int32_t cap) {
+    auto em = e ? CENG(e)->externalMidiAt(trackId) : nullptr;
+    if (!em || field < 0 || field > 2) return -1;
+    const std::string& s = field == 0 ? em->outputUid() : field == 1 ? em->outputName() : em->roleId();
+    if (out && cap > 0) {
+        const size_t n = std::min(s.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, s.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(s.size());
+}
+int32_t nota_external_midi_channel(const NotaEngine* e, int32_t trackId) {
+    auto em = e ? CENG(e)->externalMidiAt(trackId) : nullptr;
+    return em ? em->channel() : -1;
+}
+int32_t nota_external_midi_status(const NotaEngine* e, int32_t trackId) {
+    return e ? CENG(e)->externalMidiStatus(trackId) : -1;
+}
+uint32_t nota_external_midi_dropped(const NotaEngine* e, int32_t trackId) {
+    return e ? CENG(e)->externalMidiDropped(trackId) : 0;
+}
+NotaResult nota_midi_roles_set(NotaEngine* e, const char* const* ids, const char* const* names, const char* const* uids,
+    const char* const* outNames, int32_t count) {
+    if (!e || count < 0 || (count > 0 && (!ids || !names))) return NOTA_ERR_INVALID_ARG;
+    std::vector<nota::MidiOutputRole> roles;
+    for (int32_t i = 0; i < count; ++i) {
+        if (!ids[i] || !*ids[i]) return NOTA_ERR_INVALID_ARG;
+        roles.push_back({ids[i], names[i] ? names[i] : "", uids && uids[i] ? uids[i] : "", outNames && outNames[i] ? outNames[i] : ""});
+    }
+    return ENG(e)->setMidiRoles(std::move(roles)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_midi_role_count(const NotaEngine* e) {
+    return e ? static_cast<int32_t>(CENG(e)->midiRoles().size()) : 0;
+}
+int32_t nota_midi_role_text(const NotaEngine* e, int32_t index, int32_t field, char* out, int32_t cap) {
+    if (!e) return -1;
+    const auto& roles = CENG(e)->midiRoles();
+    if (index < 0 || index >= static_cast<int32_t>(roles.size()) || field < 0 || field > 3) return -1;
+    const auto& r = roles[static_cast<size_t>(index)];
+    const std::string& s = field == 0 ? r.id : field == 1 ? r.name : field == 2 ? r.outputUid : r.outputName;
+    if (out && cap > 0) {
+        const size_t n = std::min(s.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, s.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(s.size());
+}
+NotaResult nota_midi_role_rebind(NotaEngine* e, const char* roleId, const char* uid, const char* name) {
+    if (!e || !roleId) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->rebindMidiRole(roleId, uid ? uid : "", name ? name : "") ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 int32_t nota_engine_add_bass_synth_track(NotaEngine* e) {
     return e ? ENG(e)->addBassSynthTrack() : 0;
 }
@@ -774,6 +834,37 @@ int32_t nota_track_get_midi_input_uid(const NotaEngine* e, int32_t track_id, cha
         out[n] = '\0';
     }
     return static_cast<int32_t>(uid.size());
+}
+NotaResult nota_track_set_midi_inputs(NotaEngine* e, int32_t trackId, int32_t all, uint16_t allChannels,
+    const char* const* uids, const char* const* names, const uint16_t* masks, int32_t count) {
+    if (!e || count < 0 || (count > 0 && (!uids || !masks))) return NOTA_ERR_INVALID_ARG;
+    std::vector<nota::Track::InputRoute> routes;
+    for (int32_t i = 0; i < count; ++i)
+        if (uids[i]) routes.push_back({uids[i], names && names[i] ? names[i] : "", masks[i]});
+    return ENG(e)->setTrackMidiInputs(trackId, all != 0, allChannels, std::move(routes)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_midi_input_count(const NotaEngine* e, int32_t trackId) {
+    auto t = e ? CENG(e)->trackForMidiInput(trackId) : nullptr;
+    if (!t || t->type() != nota::TrackType::Instrument) return -2;
+    return t->midiInputAll ? -1 : static_cast<int32_t>(t->midiInputRoutes.size());
+}
+uint16_t nota_track_midi_input_all_channels(const NotaEngine* e, int32_t trackId) {
+    auto t = e ? CENG(e)->trackForMidiInput(trackId) : nullptr;
+    return t ? t->midiInputAllChannels : 0;
+}
+int32_t nota_track_midi_input_at(const NotaEngine* e, int32_t trackId, int32_t index, int32_t field, char* out, int32_t cap,
+    uint16_t* mask) {
+    auto t = e ? CENG(e)->trackForMidiInput(trackId) : nullptr;
+    if (!t || t->midiInputAll || index < 0 || index >= static_cast<int32_t>(t->midiInputRoutes.size())) return -1;
+    const auto& r = t->midiInputRoutes[static_cast<size_t>(index)];
+    if (mask) *mask = r.channels;
+    const std::string& s = field == 1 ? r.name : r.uid;
+    if (out && cap > 0) {
+        const size_t n = std::min(s.size(), static_cast<size_t>(cap - 1));
+        std::memcpy(out, s.data(), n);
+        out[n] = '\0';
+    }
+    return static_cast<int32_t>(s.size());
 }
 int32_t nota_midi_source_of_uid(const NotaEngine* e, const char* uid) {
     return e && uid ? CENG(e)->midiSourceOfUid(uid) : -1;

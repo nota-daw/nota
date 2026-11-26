@@ -3998,8 +3998,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setInput(src.inputFirst(), src.inputWidth());
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
-    nt->setMidiInput(src.midiInputSource(), src.midiInputChannel());
-    nt->midiInputUid = src.midiInputUid;
+    nt->copyMidiInputFrom(src);                                       // MIDI input filter (specs/086, specs/115)
     nt->setMidiOffsetMs(src.midiOffsetMs());
     nt->articulationTable = src.articulationTable;   // the map goes with the instrument, content or not
     nt->articulationMapJson = src.articulationMapJson;
@@ -4633,6 +4632,8 @@ int64_t Engine::beginFreeze(int32_t trackId, double lengthBeats, double tailSec,
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0;
     if (t->type() != TrackType::Instrument && t->type() != TrackType::Audio) return 0;
+    // External MIDI makes no sound to print (specs/115): freezing it would only silence the synth.
+    if (t->instrument && t->instrument->kind() == ExternalMidi::kKind) return 0;
     const double sr = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 44100.0;
     const double spb = transport_.samplesPerBeat();
     if (spb <= 0.0 || !std::isfinite(lengthBeats) || lengthBeats <= 0.0 ||
