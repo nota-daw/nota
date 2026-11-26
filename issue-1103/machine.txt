@@ -1,0 +1,6 @@
+date: 2026-11-26T07:03:45Z
+os: MINGW64_NT-10.0-19045 3.6.10-5a1665c8.x86_64 x86_64
+cpu: AMD Ryzen 7 5700G with Radeon Graphics         , 4 threads
+runs: 3
+build: before=1ad9149b
+build: after=3e9c2de8
