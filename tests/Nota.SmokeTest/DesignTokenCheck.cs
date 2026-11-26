@@ -284,6 +284,19 @@ internal static partial class DesignTokenCheck
         yield return (Regex.IsMatch(sw, @"W = 18, H = 10, KnobD = 7, Inset = 1\.5\b"), "SwitchTrack is 18×10 with a 7px knob inset 1.5");
         var sl = File.ReadAllText(Path.Combine(app, "Controls/SliderTrack.cs"));
         yield return (Regex.IsMatch(sl, @"LineW = 3, Height0 = 16, DeviceH = 9\b") && sl.Contains("NotaDepth.Groove"), "SliderTrack is a 9px value bar in a groove with a 3px line (16 in the shell)");
+
+        var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
+        var sbTheme = Regex.Match(theme, """<ControlTheme x:Key="\{x:Type ScrollBar\}" TargetType="ScrollBar">(?<body>.*?)</ControlTheme>""", RegexOptions.Singleline);
+        var sbBody = sbTheme.Groups["body"].Value;
+        yield return (sbTheme.Success
+                      && sbBody.Contains("""<Setter Property="MinWidth" Value="0"/>""")
+                      && sbBody.Contains("""<Setter Property="MinHeight" Value="0"/>""")
+                      && Regex.IsMatch(sbBody, """Selector="\^:vertical".*?<Setter Property="Width" Value="9"/>""", RegexOptions.Singleline)
+                      && Regex.IsMatch(sbBody, """Selector="\^:horizontal".*?<Setter Property="Height" Value="9"/>""", RegexOptions.Singleline)
+                      && !sbBody.Contains("TrackRect") && !sbBody.Contains("PART_LineUpButton")
+                      && theme.Contains("""<ControlTheme x:Key="NotaScrollBarThumb" TargetType="Thumb">""")
+                      && Regex.IsMatch(theme, """<Style Selector="ScrollViewer /template/ Panel#PART_ScrollBarsSeparator">.*?<Setter Property="IsVisible" Value="False"/>""", RegexOptions.Singleline),
+            "ScrollBar has its own 9px ControlTheme (no Fluent hover expansion, track box, or arrows) and ScrollViewer hides its corner separator");
     }
 
     /// <summary>Numbers and labels: a display culture with a point and U+2212, units after a
