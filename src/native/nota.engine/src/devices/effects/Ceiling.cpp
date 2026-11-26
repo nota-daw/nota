@@ -376,14 +376,19 @@ void Ceiling::process(float* buf, int32_t frames) {
     // Gain glide (#559): the ramp runs only over the frames right after a move; a settled
     // block is the plain fixed-gain loop.
     const int32_t glide = gainRamp_.begin(inGain, frames);
-    const auto render = [&]<bool truePeakMode>() {
+    const auto render = [&]<bool truePeakMode>() NOTA_FORCE_INLINE_LAMBDA {
         for (int32_t i = 0; i < glide; ++i)
             sample.template operator()<truePeakMode>(i, gainRamp_.next());
         for (int32_t i = glide; i < frames; ++i)
             sample.template operator()<truePeakMode>(i, inGain);
     };
-    if (tpMode) render.template operator()<true>();
-    else render.template operator()<false>();
+    if (tpMode) {
+        // The true-peak loop lives in its own function: two more inlined copies of the
+        // body here cost the default sample-peak loop its inlining (instruction gate).
+        const auto renderTruePeak = [&]() NOTA_NOINLINE_LAMBDA { render.template operator()<true>(); };
+        renderTruePeak();
+    } else
+        render.template operator()<false>();
 
     if (selfSilent && keySilent && outPk <= 1.0e-5f) quietSamples_ += (uint64_t)frames;
     else {
