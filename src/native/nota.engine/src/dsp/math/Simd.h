@@ -306,6 +306,57 @@ inline float dot16(const float* a, const float* b) noexcept {
 #endif
 }
 
+// Vectorized arbitrary-length dot product (direct-FIR heads, delay interpolation).
+inline float dot(const float* a, const float* b, int32_t count) noexcept {
+    if (!a || !b || count <= 0) return 0.0f;
+    int32_t i = 0;
+    float sum = 0.0f;
+#if defined(NOTA_SIMD_NEON)
+    float32x4_t acc0 = vdupq_n_f32(0.0f), acc1 = vdupq_n_f32(0.0f);
+    float32x4_t acc2 = vdupq_n_f32(0.0f), acc3 = vdupq_n_f32(0.0f);
+    for (; i + 16 <= count; i += 16) {
+        acc0 = vmlaq_f32(acc0, vld1q_f32(a + i), vld1q_f32(b + i));
+        acc1 = vmlaq_f32(acc1, vld1q_f32(a + i + 4), vld1q_f32(b + i + 4));
+        acc2 = vmlaq_f32(acc2, vld1q_f32(a + i + 8), vld1q_f32(b + i + 8));
+        acc3 = vmlaq_f32(acc3, vld1q_f32(a + i + 12), vld1q_f32(b + i + 12));
+    }
+    for (; i + 4 <= count; i += 4) acc0 = vmlaq_f32(acc0, vld1q_f32(a + i), vld1q_f32(b + i));
+    sum = vaddvq_f32(vaddq_f32(vaddq_f32(acc0, acc1), vaddq_f32(acc2, acc3)));
+#elif defined(NOTA_SIMD_SSE)
+    __m128 acc0 = _mm_setzero_ps(), acc1 = _mm_setzero_ps(), acc2 = _mm_setzero_ps(), acc3 = _mm_setzero_ps();
+    for (; i + 16 <= count; i += 16) {
+        const __m128 a0 = _mm_loadu_ps(a + i), b0 = _mm_loadu_ps(b + i);
+        const __m128 a1 = _mm_loadu_ps(a + i + 4), b1 = _mm_loadu_ps(b + i + 4);
+        const __m128 a2 = _mm_loadu_ps(a + i + 8), b2 = _mm_loadu_ps(b + i + 8);
+        const __m128 a3 = _mm_loadu_ps(a + i + 12), b3 = _mm_loadu_ps(b + i + 12);
+#if defined(NOTA_SIMD_FMA)
+        acc0 = _mm_fmadd_ps(a0, b0, acc0);
+        acc1 = _mm_fmadd_ps(a1, b1, acc1);
+        acc2 = _mm_fmadd_ps(a2, b2, acc2);
+        acc3 = _mm_fmadd_ps(a3, b3, acc3);
+#else
+        acc0 = _mm_add_ps(acc0, _mm_mul_ps(a0, b0));
+        acc1 = _mm_add_ps(acc1, _mm_mul_ps(a1, b1));
+        acc2 = _mm_add_ps(acc2, _mm_mul_ps(a2, b2));
+        acc3 = _mm_add_ps(acc3, _mm_mul_ps(a3, b3));
+#endif
+    }
+    for (; i + 4 <= count; i += 4) {
+        const __m128 a0 = _mm_loadu_ps(a + i), b0 = _mm_loadu_ps(b + i);
+#if defined(NOTA_SIMD_FMA)
+        acc0 = _mm_fmadd_ps(a0, b0, acc0);
+#else
+        acc0 = _mm_add_ps(acc0, _mm_mul_ps(a0, b0));
+#endif
+    }
+    alignas(16) float r[4];
+    _mm_store_ps(r, _mm_add_ps(_mm_add_ps(acc0, acc1), _mm_add_ps(acc2, acc3)));
+    sum = r[0] + r[1] + r[2] + r[3];
+#endif
+    for (; i < count; ++i) sum += a[i] * b[i];
+    return sum;
+}
+
 // Vectorized peak absolute amplitude finder
 inline float maxAbs(const float* src, int32_t count) noexcept {
     int32_t i = 0;
@@ -445,6 +496,7 @@ inline void squashNonFinite(float* dst, int32_t count) noexcept {
 using simd::add;
 using simd::addScaled;
 using simd::clip;
+using simd::dot;
 using simd::dot16;
 using simd::maxAbs;
 using simd::mul;

@@ -2,12 +2,6 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 #include "dsp/math/SimdDispatch.h"
-#include "dsp/math/SimdAudio.h"
-
-#include <array>
-#include <cmath>
-#include <mutex>
-#include <vector>
 
 #if defined(__x86_64__) || defined(_M_X64)
 #if defined(_MSC_VER)
@@ -21,23 +15,35 @@ namespace nota {
 namespace simd {
 namespace {
 
-void defaultAdd(float* dst, const float* src, int32_t count) noexcept {
-    nota::simd::add(dst, src, count);
+void baselineConvCmac(float* __restrict ar, float* __restrict ai, const float* __restrict xr,
+    const float* __restrict xi, const float* __restrict hr, const float* __restrict hi, int32_t bins) noexcept {
+    nota::simd_audio::convCmac(ar, ai, xr, xi, hr, hi, bins);
 }
-void defaultAddScaled(float* dst, const float* src, float scale, int32_t count) noexcept {
-    nota::simd::addScaled(dst, src, scale, count);
+
+float baselinePeakAbs(const float* src, int32_t count) noexcept {
+    return nota::simd_audio::peakAbs(src, count);
 }
-void defaultScale(float* dst, const float* src, float scale, int32_t count) noexcept {
-    nota::simd::scale(dst, src, scale, count);
-}
-void defaultMul(float* dst, const float* a, const float* b, int32_t count) noexcept {
-    nota::simd::mul(dst, a, b, count);
-}
-float defaultMaxAbs(const float* src, int32_t count) noexcept {
-    return nota::simd::maxAbs(src, count);
-}
-void defaultPeakAndSumSq(const float* src, int32_t count, float& outPeak, double& outSumSq) noexcept {
+
+void baselinePeakAndSumSquares(const float* src, int32_t count, float& outPeak, double& outSumSq) noexcept {
     nota::simd_audio::peakAndSumSquares(src, count, outPeak, outSumSq);
+}
+
+SimdKernels makeBaseline() noexcept {
+    SimdKernels k;
+#if defined(NOTA_SIMD_NEON)
+    k.isa = SimdIsa::Neon;
+    k.name = "neon";
+#elif defined(__x86_64__) || defined(_M_X64)
+    k.isa = SimdIsa::Sse2;
+    k.name = "sse2";
+#else
+    k.isa = SimdIsa::Scalar;
+    k.name = "scalar";
+#endif
+    k.convCmac = &baselineConvCmac;
+    k.peakAbs = &baselinePeakAbs;
+    k.peakAndSumSquares = &baselinePeakAndSumSquares;
+    return k;
 }
 
 #if defined(__x86_64__) || defined(_M_X64)
@@ -51,11 +57,7 @@ uint64_t readXcr0() noexcept {
 #endif
 }
 
-CpuCaps probeX86Caps() noexcept {
-    CpuCaps caps;
-    caps.sse2 = true;
-    caps.activeBackend = "sse2";
-
+bool hostSupportsAvx2Fma() noexcept {
     int info1[4]{};
     int info7[4]{};
 #if defined(_MSC_VER)
@@ -80,105 +82,26 @@ CpuCaps probeX86Caps() noexcept {
     const bool fmaBit = (info1[2] & (1 << 12)) != 0;
     const bool avx2Bit = (info7[1] & (1 << 5)) != 0;
     const bool ymmOsEnabled = osxsave && ((readXcr0() & 0x6u) == 0x6u);
-
-    caps.avx2 = ymmOsEnabled && avxBit && avx2Bit;
-    caps.fma = caps.avx2 && fmaBit;
-    if (caps.avx2) caps.activeBackend = caps.fma ? "avx2+fma" : "avx2";
-    return caps;
+    return ymmOsEnabled && avxBit && avx2Bit && fmaBit;
 }
 #endif
-
-struct InitState {
-    CpuCaps caps;
-    DispatchTable table;
-};
-
-const InitState& initState() noexcept {
-    static InitState state = [] {
-        InitState s;
-        s.table.add = &defaultAdd;
-        s.table.addScaled = &defaultAddScaled;
-        s.table.scale = &defaultScale;
-        s.table.mul = &defaultMul;
-        s.table.maxAbs = &defaultMaxAbs;
-        s.table.peakAndSumSquares = &defaultPeakAndSumSq;
-
-#if defined(NOTA_SIMD_NEON)
-        s.caps.neon = true;
-        s.caps.activeBackend = "neon";
-#elif defined(__x86_64__) || defined(_M_X64)
-        s.caps = probeX86Caps();
-        if (s.caps.avx2 && s.caps.fma) avx2::bind(s.table);
-#endif
-        return s;
-    }();
-    return state;
-}
 
 } // namespace
 
-const CpuCaps& cpuCaps() noexcept { return initState().caps; }
-const DispatchTable& dispatchTable() noexcept { return initState().table; }
+const SimdKernels& SimdKernels::baseline() noexcept {
+    static const SimdKernels k = makeBaseline();
+    return k;
+}
 
-bool simdDispatchSelfTest() noexcept {
-    const CpuCaps& caps = cpuCaps();
-#if defined(NOTA_SIMD_NEON)
-    if (!caps.neon) return false;
-#elif defined(__x86_64__) || defined(_M_X64)
-    if (!caps.sse2) return false;
+const SimdKernels& SimdKernels::active() noexcept {
+    static const SimdKernels k = [] {
+        SimdKernels s = makeBaseline();
+#if !defined(NOTA_SIMD_NEON) && (defined(__x86_64__) || defined(_M_X64))
+        if (hostSupportsAvx2Fma()) avx2::bind(s);
 #endif
-    if (!caps.activeBackend || caps.activeBackend[0] == '\0') return false;
-
-    for (int count : {131, 8192}) { // unaligned tail + large buffer sweep
-        std::vector<float> a(static_cast<size_t>(count));
-        std::vector<float> b(static_cast<size_t>(count));
-        std::vector<float> dst(static_cast<size_t>(count));
-        for (int i = 0; i < count; ++i) {
-            a[static_cast<size_t>(i)] = static_cast<float>((i % 97) - 48) * 0.015f;
-            b[static_cast<size_t>(i)] = static_cast<float>(97 - (i % 97)) * 0.01f;
-        }
-
-        dst = a;
-        dispatchAdd(dst.data(), b.data(), count);
-        for (int i = 0; i < count; ++i) {
-            if (std::fabs(dst[static_cast<size_t>(i)] - (a[static_cast<size_t>(i)] + b[static_cast<size_t>(i)])) > 1e-6f)
-                return false;
-        }
-
-        dst = a;
-        dispatchAddScaled(dst.data(), b.data(), 0.5f, count);
-        for (int i = 0; i < count; ++i) {
-            const float expected = a[static_cast<size_t>(i)] + b[static_cast<size_t>(i)] * 0.5f;
-            if (std::fabs(dst[static_cast<size_t>(i)] - expected) > 1e-6f) return false;
-        }
-
-        dispatchScale(dst.data(), b.data(), 0.75f, count);
-        for (int i = 0; i < count; ++i) {
-            if (std::fabs(dst[static_cast<size_t>(i)] - b[static_cast<size_t>(i)] * 0.75f) > 1e-6f) return false;
-        }
-
-        dispatchMul(dst.data(), a.data(), b.data(), count);
-        for (int i = 0; i < count; ++i) {
-            if (std::fabs(dst[static_cast<size_t>(i)] - a[static_cast<size_t>(i)] * b[static_cast<size_t>(i)]) > 1e-6f)
-                return false;
-        }
-
-        const float maxA = dispatchMaxAbs(a.data(), count);
-        float pk = 0.0f;
-        double sq = 0.0;
-        dispatchPeakAndSumSquares(a.data(), count, pk, sq);
-        float pkRef = 0.0f;
-        double sqRef = 0.0;
-        for (int i = 0; i < count; ++i) {
-            const float x = a[static_cast<size_t>(i)];
-            pkRef = std::max(pkRef, std::fabs(x));
-            sqRef += static_cast<double>(x) * static_cast<double>(x);
-        }
-        if (std::fabs(maxA - pkRef) > 1e-6f || std::fabs(pk - pkRef) > 1e-6f ||
-            std::fabs(sq - sqRef) > std::max(1e-3, sqRef * 1e-5))
-            return false;
-    }
-    return true;
+        return s;
+    }();
+    return k;
 }
 
 } // namespace simd

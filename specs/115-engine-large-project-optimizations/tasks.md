@@ -45,7 +45,7 @@ description: "Consolidated task list for nota-daw/nota#1050 (specs/115-engine-la
 
 - [x] T015 Convert `Track` heavy snapshot vectors (`clips`, `takes`, `midiClips`, `sessionSlots`, `automation`, `modulators`, `cvLinks`) in `Track.h` to `CowSlice<T>` (`TrackContent.h`), update `.write()` mutators across `Engine*.cpp`, reuse `TimelineIndex` via storage tokens, seal on `publishRaw()`, skip no-op `recomputeRouting()` / telemetry sync, and optimize `recomputePdc()` to a single pass
 - [x] T016 Migrate `RackDevice`, `RackInstrument`, `DrumRack`, and `Engine::RenderScratch::leafBuf` to `StereoScratchArena` session-sized capacity (`2048` live frames, expanding up to `kMaxBlock` prior to offline bounces)
-- [x] T017 Upgrade `Eq.{h,cpp}` with per-band `BandCache` coefficients, SIMD `peakAbs`, and flat-stereo `double2` NEON/SSE2 filtering; wire `SimdDispatch.{h,cpp}` / `SimdAvx2.cpp`, Clang `-fno-math-errno`, and Clang/MSVC Release IPO in `CMakeLists.txt`
+- [x] T017 Upgrade `Eq.{h,cpp}` with per-band `BandCache` coefficients, SIMD `peakAbs`, and flat-stereo `double2` NEON/SSE2 filtering; wire shared `convCmac` / `dot` (`Chamber`, `Convolution`), thresholded `peakAbs`/`peakAndSumSquares` runtime AVX2+FMA `SimdDispatch.{h,cpp}` / `SimdAvx2.cpp` (with MSVC `/arch:AVX2`), Clang `-fno-math-errno`, and Clang/MSVC Release IPO in `CMakeLists.txt`
 
 ---
 

@@ -301,6 +301,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
     target_compile_options(nota_engine PRIVATE -fno-math-errno)
 endif()
 
+# MSVC ignores __attribute__((target("avx2,fma"))); compile the runtime-dispatched AVX2 TU with /arch:AVX2
+# on x86_64 so SimdAvx2.cpp emits 256-bit AVX2+FMA instructions safely after CPUID gating.
+if(MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|x64")
+    set_source_files_properties(src/dsp/math/SimdAvx2.cpp PROPERTIES COMPILE_OPTIONS "/arch:AVX2")
+endif()
+
 # Release-mode IPO (ThinLTO on Clang, LTCG on MSVC) for cross-TU inlining across DSP and ABI boundaries.
 # GCC's monolithic -flto hurts instruction counts across large polyphonic synth loops on Linux.
 if(MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")

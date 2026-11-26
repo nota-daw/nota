@@ -5,7 +5,7 @@
 
 ## Summary
 
-Improve audio engine CPU usage, cache locality, multi-core scaling, memory footprint, and UI meter responsiveness on large arrangements and dense mixing graphs without altering audio output or breaking real-time safety (`AR-4`–`AR-7`). The work introduces focused, domain-named engine abstractions — `DeviceTelemetry`, `SilenceGate`, `RenderBusState` (`ActiveBusMask`), `TimelineIndex`, `RenderRoutingPlan`, `TrackContent` (`CowSlice<T>`), `ScratchArena` (`StereoScratchArena`, `ChainScratchBank`), `SimdDispatch` + cached `double2` `Eq` filtering, `RenderGraphExecutor`, `RenderExecutor` + `PolyVoiceScheduler` + `PlanarStereoBuffer`, `StreamingAudioSource`, and `HybridBufferController` — while keeping `Engine_Render.cpp` smaller and cleaner (`4,019` lines, down from `5,066`).
+Improve audio engine CPU usage, cache locality, multi-core scaling, memory footprint, and UI meter responsiveness on large arrangements and dense mixing graphs without altering audio output or breaking real-time safety (`AR-4`–`AR-7`). The work introduces focused, domain-named engine abstractions — `DeviceTelemetry`, `SilenceGate`, `RenderBusState` (`ActiveBusMask`), `TimelineIndex`, `RenderRoutingPlan`, `TrackContent` (`CowSlice<T>`), `ScratchArena` (`StereoScratchArena`, `ChainScratchBank`), `SimdKernels` + cached `double2` `Eq` filtering, `RenderGraphExecutor`, `RenderExecutor` + `PolyVoiceScheduler` + `PlanarStereoBuffer`, `StreamingAudioSource`, and `HybridBufferController` — while keeping `Engine_Render.cpp` smaller and cleaner (`4,019` lines, down from `5,066`).
 
 ## Technical Context
 
@@ -14,7 +14,7 @@ Improve audio engine CPU usage, cache locality, multi-core scaling, memory footp
 **Audio-Thread Impact** *(required)*: Strict `AR-6` compliance — zero heap allocations, locks, or blocking I/O on hardware callbacks or render pool worker threads. Lease counters, epochs, `SilenceGate`, `ActiveBusMask`, `SubSlot`, seqlock page rings, and `HybridBufferController` ring copies use lock-free atomics; all heap buffers and indices allocate off-RT (`open()`, `prepare()`, `publishRaw()`, `renderOffline()` pre-sizing).
 **Testing**: `./scripts/build.sh` (`nota-scanner-selftest`, `Nota.SmokeTest` including `TrackMeterAndTelemetryTests`, `SilenceGateAndBusMaskTests`, `TimelineIndexAndRoutingTests`, `TrackSnapshotArenaSimdTests`, `RenderDagParallelTests`, `DiskStreamingAndHybridBufferTests`, `HostedRenderPoolTests`), `-- --perf`, `tests/perf/nota_idle_cpu`, `scripts/bench-engine.sh`
 **Target Platform**: macOS (`arm64` + `x86_64` universal), Linux (`x86_64`), Windows (`x86_64`)
-**Constraints**: Pure C ABI (`AR-7`), `0` vs `N` thread bit-exact parity (`maxdiff == 0.0`), `Eq` scalar parity (`< -120 dBFS`), `0.0%` idle CPU, universal x86_64 safety (`-mavx2 -mfma` isolated to `SimdAvx2.cpp`), AGPL-3.0-only headers.
+**Constraints**: Pure C ABI (`AR-7`), `0` vs `N` thread bit-exact parity (`maxdiff == 0.0`), `Eq` scalar parity (`< -120 dBFS`), `0.0%` idle CPU, universal x86_64 safety (AVX2+FMA isolated in `SimdAvx2.cpp` with per-function `target("avx2,fma")` / MSVC `/arch:AVX2`), AGPL-3.0-only headers.
 
 ## Constitution Check
 
@@ -70,8 +70,9 @@ src/native/nota.engine/
 │   │   └── SilenceGate.h                               # [NEW] PluginSleepMode, lock-free SilenceGate (hangover + holdAwake)
 │   ├── math/
 │   │   ├── SimdAudio.h                                 # Planar/interleaved helpers + SIMD peak/mix utilities
-│   │   ├── SimdAvx2.cpp                                # [NEW] Per-TU -mavx2 -mfma kernels on x86_64
-│   │   └── SimdDispatch.{h,cpp}                        # [NEW] Runtime CPUID/NEON capability detection & dispatch table
+│   │   ├── Simd.h, SimdAudio.h                         # Pure inline base vector & audio SIMD (zero dep on runtime dispatch)
+│   │   ├── SimdAvx2.cpp                                # [NEW] Per-function/MSVC-/arch:AVX2 kernels on x86_64 (convCmac, peakAbs, peakAndSumSquares)
+│   │   └── SimdDispatch.{h,cpp}                        # [NEW] SimdIsa + SimdKernels (active/baseline) & thresholded entry points
 │   └── poly/
 │       └── PolyVoiceScheduler.h                        # [NEW] Deterministic active-voice batch partitioning + PolyVoiceScratchBank
 ├── src/devices/

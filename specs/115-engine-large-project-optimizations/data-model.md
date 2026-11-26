@@ -43,9 +43,9 @@
 - **`dsp::StereoScratchArena<N>` & `dsp::ChainScratchBank` (`ScratchArena.h`)**:
   - Live capacity defaults to `kDefaultLiveFrames = 2048` (`8×` smaller than `16384`-frame `kMaxBlock`), prepared outside RT to handle offline chunks cleanly (`Engine::ensureRenderScratch` + `ensureBlockCapacity`).
   - `ChainScratchBank` dynamically prepares aligned multi-chain scratch buffers for `RackInstrument`, `DrumRack`, and `RackDevice`.
-- **`Eq::BandCache` & `SimdDispatch`**:
+- **`Eq::BandCache` & `SimdKernels`**:
   - Per-band cached `BiquadCoeffs[kMaxSec]` + inputs (`sr, freq, gain, q, scale, type, slope, ch`) and flat-stereo `double2` L/R SIMD biquad runner.
-  - `nota::simd::CpuCaps` + `DispatchTable` (`SimdDispatch.h`) selecting runtime AVX2+FMA (`SimdAvx2.cpp`), SSE2, or NEON kernels.
+  - `nota::simd::SimdIsa` + `SimdKernels` (`SimdDispatch.h` layered strictly over `SimdAudio.h`) selecting runtime AVX2+FMA (`SimdAvx2.cpp`) or baseline SSE2/NEON kernels specifically for heavy block operations (`nota::simd::convCmac` in `Chamber`/`Convolution` for `bins >= 33`, and `nota::simd::peakAbs`/`peakAndSumSquares` for `count >= 512`), alongside inlined `nota::simd::dot` for multi-tap FIR heads.
 
 ## 5. Render DAG, Intra-Track Parallelism & Planar Chains (`AudioThreadPool.h`, `RenderExecutor.h`, `RenderGraphExecutor.h`, `PolyVoiceScheduler.h`, `AudioBufferView.h`)
 

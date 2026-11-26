@@ -16,62 +16,6 @@
 namespace nota {
 namespace simd_audio {
 
-// Fast, early-exiting silence detection for flat or interleaved float audio buffers.
-// Returns true if all samples have an absolute amplitude <= threshold (default 1e-5f ≈ -100 dBFS).
-inline bool isSilent(const float* src, int32_t count, float threshold = 1.0e-5f) noexcept {
-    if (!src || count <= 0) return true;
-    int32_t i = 0;
-#if defined(NOTA_SIMD_NEON)
-    const float32x4_t vThresh = vdupq_n_f32(threshold);
-    for (; i + 16 <= count; i += 16) {
-        const float32x4_t s0 = vabsq_f32(vld1q_f32(src + i));
-        const float32x4_t s1 = vabsq_f32(vld1q_f32(src + i + 4));
-        const float32x4_t s2 = vabsq_f32(vld1q_f32(src + i + 8));
-        const float32x4_t s3 = vabsq_f32(vld1q_f32(src + i + 12));
-        const uint32x4_t m0 = vcgtq_f32(s0, vThresh);
-        const uint32x4_t m1 = vcgtq_f32(s1, vThresh);
-        const uint32x4_t m2 = vcgtq_f32(s2, vThresh);
-        const uint32x4_t m3 = vcgtq_f32(s3, vThresh);
-        const uint32x4_t or01 = vorrq_u32(m0, m1);
-        const uint32x4_t or23 = vorrq_u32(m2, m3);
-        const uint32x4_t combined = vorrq_u32(or01, or23);
-        if (vmaxvq_u32(combined) != 0) return false;
-    }
-    for (; i + 4 <= count; i += 4) {
-        const float32x4_t s = vabsq_f32(vld1q_f32(src + i));
-        const uint32x4_t m = vcgtq_f32(s, vThresh);
-        if (vmaxvq_u32(m) != 0) return false;
-    }
-#elif defined(NOTA_SIMD_SSE)
-    static const __m128 absMask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff));
-    const __m128 vThresh = _mm_set1_ps(threshold);
-    for (; i + 16 <= count; i += 16) {
-        const __m128 s0 = _mm_and_ps(_mm_loadu_ps(src + i), absMask);
-        const __m128 s1 = _mm_and_ps(_mm_loadu_ps(src + i + 4), absMask);
-        const __m128 s2 = _mm_and_ps(_mm_loadu_ps(src + i + 8), absMask);
-        const __m128 s3 = _mm_and_ps(_mm_loadu_ps(src + i + 12), absMask);
-        const __m128 m0 = _mm_cmpgt_ps(s0, vThresh);
-        const __m128 m1 = _mm_cmpgt_ps(s1, vThresh);
-        const __m128 m2 = _mm_cmpgt_ps(s2, vThresh);
-        const __m128 m3 = _mm_cmpgt_ps(s3, vThresh);
-        const __m128 comb = _mm_or_ps(_mm_or_ps(m0, m1), _mm_or_ps(m2, m3));
-        if (_mm_movemask_ps(comb) != 0) return false;
-    }
-    for (; i + 4 <= count; i += 4) {
-        const __m128 s = _mm_and_ps(_mm_loadu_ps(src + i), absMask);
-        const __m128 m = _mm_cmpgt_ps(s, vThresh);
-        if (_mm_movemask_ps(m) != 0) return false;
-    }
-#endif
-    for (; i < count; ++i) {
-        if (std::fabs(src[i]) > threshold) return false;
-    }
-    return true;
-}
-
-// Peak absolute amplitude of a flat or interleaved float buffer (0 when empty). For a
-// peak a device needs only once per block: one pass after the loop is cheaper than a
-// running max inside a per-sample loop.
 inline float peakAbs(const float* src, int32_t count) noexcept {
     if (!src || count <= 0) return 0.0f;
     int32_t i = 0;
@@ -99,7 +43,6 @@ inline float peakAbs(const float* src, int32_t count) noexcept {
     return peak;
 }
 
-// Single-pass peak absolute amplitude finder and sum-of-squares accumulator for float audio buffers.
 inline void peakAndSumSquares(const float* src, int32_t count, float& outPeak, double& outSumSquares) noexcept {
     if (!src || count <= 0) {
         outPeak = 0.0f;
@@ -187,6 +130,109 @@ inline void peakAndSumSquares(const float* src, int32_t count, float& outPeak, d
     }
     outPeak = peak;
     outSumSquares = sumSq;
+}
+
+// Complex multiply-accumulate over `bins` packed RealFFT frequency bins (bin 0 packs DC + Nyquist).
+inline void convCmac(float* __restrict ar, float* __restrict ai, const float* __restrict xr,
+    const float* __restrict xi, const float* __restrict hr, const float* __restrict hi, int32_t bins) noexcept {
+    if (!ar || !ai || !xr || !xi || !hr || !hi || bins <= 0) return;
+    ar[0] += xr[0] * hr[0]; // bin 0 packs DC (re) and Nyquist (im): two independent real products
+    ai[0] += xi[0] * hi[0];
+    int32_t i = 1;
+#if defined(NOTA_SIMD_NEON)
+    for (; i + 8 <= bins; i += 8) {
+        const float32x4_t ar0 = vld1q_f32(ar + i), ar1 = vld1q_f32(ar + i + 4);
+        const float32x4_t ai0 = vld1q_f32(ai + i), ai1 = vld1q_f32(ai + i + 4);
+        const float32x4_t xr0 = vld1q_f32(xr + i), xr1 = vld1q_f32(xr + i + 4);
+        const float32x4_t xi0 = vld1q_f32(xi + i), xi1 = vld1q_f32(xi + i + 4);
+        const float32x4_t hr0 = vld1q_f32(hr + i), hr1 = vld1q_f32(hr + i + 4);
+        const float32x4_t hi0 = vld1q_f32(hi + i), hi1 = vld1q_f32(hi + i + 4);
+
+        vst1q_f32(ar + i, vfmaq_f32(vfmsq_f32(ar0, xi0, hi0), xr0, hr0));
+        vst1q_f32(ar + i + 4, vfmaq_f32(vfmsq_f32(ar1, xi1, hi1), xr1, hr1));
+        vst1q_f32(ai + i, vfmaq_f32(vfmaq_f32(ai0, xr0, hi0), xi0, hr0));
+        vst1q_f32(ai + i + 4, vfmaq_f32(vfmaq_f32(ai1, xr1, hi1), xi1, hr1));
+    }
+    for (; i + 4 <= bins; i += 4) {
+        const float32x4_t ar0 = vld1q_f32(ar + i), ai0 = vld1q_f32(ai + i);
+        const float32x4_t xr0 = vld1q_f32(xr + i), xi0 = vld1q_f32(xi + i);
+        const float32x4_t hr0 = vld1q_f32(hr + i), hi0 = vld1q_f32(hi + i);
+        vst1q_f32(ar + i, vfmaq_f32(vfmsq_f32(ar0, xi0, hi0), xr0, hr0));
+        vst1q_f32(ai + i, vfmaq_f32(vfmaq_f32(ai0, xr0, hi0), xi0, hr0));
+    }
+#elif defined(NOTA_SIMD_SSE)
+    for (; i + 4 <= bins; i += 4) {
+        const __m128 ar0 = _mm_loadu_ps(ar + i), ai0 = _mm_loadu_ps(ai + i);
+        const __m128 xr0 = _mm_loadu_ps(xr + i), xi0 = _mm_loadu_ps(xi + i);
+        const __m128 hr0 = _mm_loadu_ps(hr + i), hi0 = _mm_loadu_ps(hi + i);
+#if defined(NOTA_SIMD_FMA)
+        _mm_storeu_ps(ar + i, _mm_fmadd_ps(xr0, hr0, _mm_fnmadd_ps(xi0, hi0, ar0)));
+        _mm_storeu_ps(ai + i, _mm_fmadd_ps(xi0, hr0, _mm_fmadd_ps(xr0, hi0, ai0)));
+#else
+        const __m128 pr = _mm_sub_ps(_mm_mul_ps(xr0, hr0), _mm_mul_ps(xi0, hi0));
+        const __m128 pi = _mm_add_ps(_mm_mul_ps(xr0, hi0), _mm_mul_ps(xi0, hr0));
+        _mm_storeu_ps(ar + i, _mm_add_ps(ar0, pr));
+        _mm_storeu_ps(ai + i, _mm_add_ps(ai0, pi));
+#endif
+    }
+#endif
+    for (; i < bins; ++i) {
+        ar[i] += xr[i] * hr[i] - xi[i] * hi[i];
+        ai[i] += xr[i] * hi[i] + xi[i] * hr[i];
+    }
+}
+
+// Fast, early-exiting silence detection for flat or interleaved float audio buffers.
+// Returns true if all samples have an absolute amplitude <= threshold (default 1e-5f ≈ -100 dBFS).
+inline bool isSilent(const float* src, int32_t count, float threshold = 1.0e-5f) noexcept {
+    if (!src || count <= 0) return true;
+    int32_t i = 0;
+#if defined(NOTA_SIMD_NEON)
+    const float32x4_t vThresh = vdupq_n_f32(threshold);
+    for (; i + 16 <= count; i += 16) {
+        const float32x4_t s0 = vabsq_f32(vld1q_f32(src + i));
+        const float32x4_t s1 = vabsq_f32(vld1q_f32(src + i + 4));
+        const float32x4_t s2 = vabsq_f32(vld1q_f32(src + i + 8));
+        const float32x4_t s3 = vabsq_f32(vld1q_f32(src + i + 12));
+        const uint32x4_t m0 = vcgtq_f32(s0, vThresh);
+        const uint32x4_t m1 = vcgtq_f32(s1, vThresh);
+        const uint32x4_t m2 = vcgtq_f32(s2, vThresh);
+        const uint32x4_t m3 = vcgtq_f32(s3, vThresh);
+        const uint32x4_t or01 = vorrq_u32(m0, m1);
+        const uint32x4_t or23 = vorrq_u32(m2, m3);
+        const uint32x4_t combined = vorrq_u32(or01, or23);
+        if (vmaxvq_u32(combined) != 0) return false;
+    }
+    for (; i + 4 <= count; i += 4) {
+        const float32x4_t s = vabsq_f32(vld1q_f32(src + i));
+        const uint32x4_t m = vcgtq_f32(s, vThresh);
+        if (vmaxvq_u32(m) != 0) return false;
+    }
+#elif defined(NOTA_SIMD_SSE)
+    static const __m128 absMask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff));
+    const __m128 vThresh = _mm_set1_ps(threshold);
+    for (; i + 16 <= count; i += 16) {
+        const __m128 s0 = _mm_and_ps(_mm_loadu_ps(src + i), absMask);
+        const __m128 s1 = _mm_and_ps(_mm_loadu_ps(src + i + 4), absMask);
+        const __m128 s2 = _mm_and_ps(_mm_loadu_ps(src + i + 8), absMask);
+        const __m128 s3 = _mm_and_ps(_mm_loadu_ps(src + i + 12), absMask);
+        const __m128 m0 = _mm_cmpgt_ps(s0, vThresh);
+        const __m128 m1 = _mm_cmpgt_ps(s1, vThresh);
+        const __m128 m2 = _mm_cmpgt_ps(s2, vThresh);
+        const __m128 m3 = _mm_cmpgt_ps(s3, vThresh);
+        const __m128 comb = _mm_or_ps(_mm_or_ps(m0, m1), _mm_or_ps(m2, m3));
+        if (_mm_movemask_ps(comb) != 0) return false;
+    }
+    for (; i + 4 <= count; i += 4) {
+        const __m128 s = _mm_and_ps(_mm_loadu_ps(src + i), absMask);
+        const __m128 m = _mm_cmpgt_ps(s, vThresh);
+        if (_mm_movemask_ps(m) != 0) return false;
+    }
+#endif
+    for (; i < count; ++i) {
+        if (std::fabs(src[i]) > threshold) return false;
+    }
+    return true;
 }
 
 // Vectorized stereo buffer scaling: dst[i*2] = src[i*2] * gl, dst[i*2+1] = src[i*2+1] * gr
@@ -475,6 +521,7 @@ inline void applyLinearGainRampStereo(float* buf, int32_t frames, float startGai
 // --- Convenient nota namespace aliases for SIMD audio
 using simd_audio::addStereoScaled;
 using simd_audio::applyLinearGainRampStereo;
+using simd_audio::convCmac;
 using simd_audio::deinterleaveStereo;
 using simd_audio::interleaveStereo;
 using simd_audio::interleaveStereoAdd;

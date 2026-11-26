@@ -13,7 +13,7 @@
 #include "Chamber.h"
 
 #include "dsp/math/FastMath.h"
-#include "dsp/math/SimdAudio.h"
+#include "dsp/math/SimdDispatch.h"
 #include "dsp/primitives/Hadamard.h"
 
 #include <signalsmith-linear/fft.h>
@@ -271,16 +271,6 @@ void Biquad::highShelf(double f, double db, double sr) {
 // Zero-latency partitioned convolution
 // ============================================================================
 
-void cmac(float* __restrict ar, float* __restrict ai, const float* __restrict xr, const float* __restrict xi,
-    const float* __restrict hr, const float* __restrict hi, int b) {
-    ar[0] += xr[0] * hr[0]; // bin 0 packs DC (re) and Nyquist (im): two real products
-    ai[0] += xi[0] * hi[0];
-    for (int i = 1; i < b; ++i) {
-        ar[i] += xr[i] * hr[i] - xi[i] * hi[i];
-        ai[i] += xr[i] * hi[i] + xi[i] * hr[i];
-    }
-}
-
 class ConvKernel {
   public:
     struct Path {
@@ -428,9 +418,7 @@ class ConvKernel {
                     for (int p = 0; p < nPaths; ++p) {
                         const float* win = &hist[static_cast<size_t>(paths[p].in) * 2 * f + pos + 1];
                         const float* tp = &taps[static_cast<size_t>(paths[p].k) * f];
-                        float acc = 0.0f;
-                        for (int t = 0; t < f; ++t) acc += tp[t] * win[t];
-                        (paths[p].out == 0 ? oL : oR)[i] += acc;
+                        (paths[p].out == 0 ? oL : oR)[i] += nota::simd::dot(tp, win, f);
                     }
                 }
                 if (++pos >= f) pos = 0;
@@ -581,7 +569,7 @@ class ConvKernel {
                         if (!live[static_cast<size_t>(ph.in) * P + s]) continue;
                         const size_t xo = (static_cast<size_t>(ph.in) * P + s) * B;
                         const size_t ho = (static_cast<size_t>(ph.k) * P + j) * B;
-                        cmac(accR, accI, &Xr[xo], &Xi[xo], &Hr[ho], &Hi[ho], B);
+                        nota::simd::convCmac(accR, accI, &Xr[xo], &Xi[xo], &Hr[ho], &Hi[ho], B);
                         any[ph.out] = true;
                     }
                 }
