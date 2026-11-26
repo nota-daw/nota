@@ -685,7 +685,7 @@ NOTA_ALWAYS_INLINE float WavetableSynth::oscStack(double* ph, double inc, int ba
     return (accL + accR) * 0.5f;
 }
 
-float WavetableSynth::oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode,
+NOTA_ALWAYS_INLINE float WavetableSynth::oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode,
     double warpAmt, int uniN, const double* detF, double maxDet, const float* panL, const float* panR, float norm,
     float& sideOut) const {
     // Mip pick (research R4): the smallest level k whose top harmonic (below 1024 >> k)
