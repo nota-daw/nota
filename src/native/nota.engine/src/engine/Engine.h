@@ -946,7 +946,10 @@ class Engine {
     // whole table (one undo step). Rebind: the role's output, and every External MIDI track that
     // follows it to that output (channels kept), in one publish — refused (false) while the
     // transport plays (FR-015) or for an unknown role.
-    const std::vector<MidiOutputRole>& midiRoles() const { return authoring_->midiRoles; }
+    const std::vector<MidiOutputRole>& midiRoles() const {
+        static const std::vector<MidiOutputRole> kNone;
+        return authoring_->midiRoles ? *authoring_->midiRoles : kNone;
+    }
     bool setMidiRoles(std::vector<MidiOutputRole> roles);
     bool rebindMidiRole(const std::string& roleId, const std::string& uid, const std::string& name);
     int32_t addTrackEffectPlugin(int32_t trackId, int32_t catalogIndex); // returns device index or -1

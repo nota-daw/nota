@@ -78,7 +78,8 @@ struct Graph {
     // Project MIDI output roles (specs/115 US4): a named destination, such as "Stage Synth", bound
     // to one output. External MIDI instruments that follow a role carry its id; rebinding it
     // republishes them with the new output in the same graph — one undo step.
-    std::vector<MidiOutputRole> midiRoles;
+    // Shared and immutable: copying the graph for an edit copies a pointer (null while there are none).
+    std::shared_ptr<const std::vector<MidiOutputRole>> midiRoles;
 };
 
 // Graph-level fields (everything except `tracks`). A fresh graph built from scratch must

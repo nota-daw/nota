@@ -69,30 +69,41 @@ struct MidiInputFilter {
 // half-written filter for one block; every value it can see is one of the two filters' parts, so
 // nothing is let in that neither allowed for longer than that block.
 struct AtomicMidiInputFilter {
+    static_assert(MidiInput::kMaxSources % 4 == 0, "four 16-bit port masks per word");
+    static constexpr size_t kWords = MidiInput::kMaxSources / 4;
     std::atomic<uint16_t> allMask{MidiInputFilter::kAllChannels};
-    std::array<std::atomic<uint16_t>, MidiInput::kMaxSources> mask{};
+    // The per-port masks, four to a 64-bit word: a track is built (every edit clones one) with
+    // four stores, not sixteen (perf gate edit-warp-split).
+    std::array<std::atomic<uint64_t>, kWords> words{};
 
     // Every input (the usual case) needs only its channels: the per-port masks are neither read
-    // nor copied then, so cloning a track for an edit stays as cheap as before (perf gate
-    // edit-warp-split).
+    // nor copied then.
     MidiInputFilter load() const {
         MidiInputFilter f;
         f.allMask = allMask.load(std::memory_order_relaxed);
         if (f.allMask != 0) return f;
-        for (size_t s = 0; s < mask.size(); ++s) f.mask[s] = mask[s].load(std::memory_order_relaxed);
+        for (size_t w = 0; w < kWords; ++w) {
+            const uint64_t v = words[w].load(std::memory_order_relaxed);
+            for (size_t k = 0; k < 4; ++k) f.mask[w * 4 + k] = static_cast<uint16_t>(v >> (16 * k));
+        }
         return f;
     }
     void store(const MidiInputFilter& f) {
         if (f.allMask == 0)
-            for (size_t s = 0; s < mask.size(); ++s) mask[s].store(f.mask[s], std::memory_order_relaxed);
+            for (size_t w = 0; w < kWords; ++w) {
+                uint64_t v = 0;
+                for (size_t k = 0; k < 4; ++k) v |= static_cast<uint64_t>(f.mask[w * 4 + k]) << (16 * k);
+                words[w].store(v, std::memory_order_relaxed);
+            }
         allMask.store(f.allMask, std::memory_order_relaxed);
     }
     bool accepts(int32_t source, int32_t channel) const {
         if (channel < 0 || channel > 15) return false;
         const uint16_t all = allMask.load(std::memory_order_relaxed);
         if (all != 0) return source < 0 || ((all >> channel) & 1u);
-        return source >= 0 && source < MidiInput::kMaxSources &&
-               ((mask[static_cast<size_t>(source)].load(std::memory_order_relaxed) >> channel) & 1u);
+        if (source < 0 || source >= MidiInput::kMaxSources) return false;
+        const uint64_t v = words[static_cast<size_t>(source) / 4].load(std::memory_order_relaxed);
+        return (static_cast<uint16_t>(v >> (16 * (static_cast<size_t>(source) % 4))) >> channel) & 1u;
     }
 };
 

@@ -314,10 +314,6 @@ bool Engine::midiSend(const std::string& outputUid, const uint8_t* data, int32_t
 // Before a graph goes live: its External MIDI instances learn the block clock. After: the MIDI out
 // thread gets the list, and lets go (releasing their notes) of the ones that left.
 void Engine::syncExternalMidi(const Graph& g) {
-    // Every edit publishes a graph: while no External MIDI instance exists anywhere (live, in undo
-    // history or in the MIDI out thread's hands), there is nothing to wire — skip the walk (perf
-    // gate edit-warp-split).
-    if (ExternalMidi::liveCount() == 0 && !externalMidiRouted_) return;
     std::vector<MidiOutService::Route> routes;
     for (const auto& t : g.tracks)
         if (t && t->instrument && t->instrument->kind() == ExternalMidi::kKind) {
@@ -362,9 +358,9 @@ bool Engine::setExternalMidi(int32_t trackId, const std::string& uid, int32_t ch
 }
 
 bool Engine::setMidiRoles(std::vector<MidiOutputRole> roles) {
-    if (roles == authoring_->midiRoles) return true;
+    if (roles == midiRoles()) return true;
     auto g = std::make_shared<Graph>(*authoring_);
-    g->midiRoles = std::move(roles);
+    g->midiRoles = roles.empty() ? nullptr : std::make_shared<const std::vector<MidiOutputRole>>(std::move(roles));
     publish(g);
     return true;
 }
@@ -374,13 +370,13 @@ bool Engine::setMidiRoles(std::vector<MidiOutputRole> roles) {
 // settings kept); the old instances leaving the graph release their notes at the old output.
 bool Engine::rebindMidiRole(const std::string& roleId, const std::string& uid, const std::string& name) {
     if (transport_.uiIsPlaying()) return false;
-    auto it = std::find_if(authoring_->midiRoles.begin(), authoring_->midiRoles.end(),
-        [&](const MidiOutputRole& r) { return r.id == roleId; });
-    if (it == authoring_->midiRoles.end()) return false;
+    auto roles = midiRoles(); // a copy: the graph's table is immutable
+    auto it = std::find_if(roles.begin(), roles.end(), [&](const MidiOutputRole& r) { return r.id == roleId; });
+    if (it == roles.end()) return false;
+    it->outputUid = uid;
+    it->outputName = name;
     auto g = std::make_shared<Graph>(*authoring_);
-    auto& role = g->midiRoles[static_cast<size_t>(it - authoring_->midiRoles.begin())];
-    role.outputUid = uid;
-    role.outputName = name;
+    g->midiRoles = std::make_shared<const std::vector<MidiOutputRole>>(std::move(roles));
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     for (auto& t : g->tracks) {
         if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind) continue;
@@ -1236,7 +1232,9 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         for (auto& t : g->tracks) t->ccRoutesDirty = false;
         if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
     }
-    if (g) syncExternalMidi(*g); // specs/115: clocks before it goes live; the MIDI out thread follows
+    // specs/115: clocks before it goes live; the MIDI out thread follows. Skipped outright while no
+    // External MIDI exists (every edit publishes: perf gate edit-warp-split).
+    if (g && (ExternalMidi::liveCount() != 0 || externalMidiRouted_)) syncExternalMidi(*g);
     if (g && restored) { // undo / redo: a restored input list meets the ports open now (specs/115)
         for (auto& t : g->tracks)
             if (t && t->type() == TrackType::Instrument && !t->midiInputAll) t->setMidiInput(resolveMidiInput(*t));
