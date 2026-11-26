@@ -23,6 +23,7 @@ namespace nota {
 
 class RackDevice final : public Device, public RackCore {
   public:
+    RackDevice();
     int32_t builtinKind() const override { return 5; } // Audio Effect Rack (project compat)
     const RackCore* asRack() const override { return this; }
     const char* displayName() const override { return "Nota Audio Effect Rack"; }
@@ -55,6 +56,9 @@ class RackDevice final : public Device, public RackCore {
     std::shared_ptr<Device> clone() const override;
 
   private:
+    void prepareRackState(RackState& state) override;
+    void inheritRackRuntime(const RackCore& source) override;
+    std::shared_ptr<RackCompensation> dryCompensation_;
     float input_[kMaxBlock * 2];
     float acc_[kMaxBlock * 2];
     float scratch_[kMaxBlock * 2];

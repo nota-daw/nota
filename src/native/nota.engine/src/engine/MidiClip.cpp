@@ -71,12 +71,12 @@ void MidiClip::sliceControllersFrom(const MidiClip& src, double from, double len
     controllers.clear();
     for (const auto& c : src.controllers) {
         if (!c) continue;
-        std::vector<AutomationPoint> p;
-        if (from <= 0.0) {
+        std::vector<AutomationPoint> p = sliceCtlPoints(*c, from, from + len);
+        // A zero-start slice previously retained explicit rest points. They can still
+        // reset a controller inherited from an earlier clip, so do not erase them.
+        if (p.empty() && from <= 0.0)
             for (const auto& x : c->points)
                 if (x.beat < len) p.push_back(x);
-        } else
-            p = sliceCtlPoints(*c, from, from + len);
         if (!p.empty()) setController(c->ctl, std::move(p));
     }
 }

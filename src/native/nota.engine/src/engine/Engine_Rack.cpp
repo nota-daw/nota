@@ -1357,7 +1357,9 @@ int32_t Engine::rackChainDeviceCount(int32_t t, int32_t di, int32_t c) const {
 int32_t Engine::rackAddChainDevice(int32_t t, int32_t di, int32_t c, int32_t k) {
     auto* r = rackCoreAt(t, di);
     if (!r || c < 0 || c >= r->chainCount() || !makeChainDevice(k)) return -1;
-    return rackForEdit(t, di)->addChainDevice(c, k);
+    const int32_t added = rackForEdit(t, di)->addChainDevice(c, k);
+    if (added >= 0) recomputePdc();
+    return added;
 }
 bool Engine::rackRemoveChainDevice(int32_t t, int32_t di, int32_t c, int32_t d) {
     auto* r = rackCoreAt(t, di);
@@ -1365,6 +1367,7 @@ bool Engine::rackRemoveChainDevice(int32_t t, int32_t di, int32_t c, int32_t d) 
     const uint64_t uid = r->chainBaseUid(c);
     const bool ok = rackForEdit(t, di)->removeChainDevice(c, d);
     if (ok) remapNestedAfterRackEdit(t, di, slotRemoved(uid, d, false));
+    if (ok) recomputePdc();
     return ok;
 }
 bool Engine::rackMoveChainDevice(int32_t t, int32_t di, int32_t c, int32_t from, int32_t to) {
@@ -1496,7 +1499,9 @@ void Engine::rackChainDeviceParamSet(int32_t t, int32_t di, int32_t c, int32_t d
         setLatencyConfigurationParam(*dev, p, v);
         return;
     }
+    const int32_t previousLatency = dev->latencySamples();
     dev->setParam(p, v);
+    if (dev->latencySamples() != previousLatency) recomputePdc();
     routeNestedCvBaseEdit(t, di, c, d, p, v);   // a grouped, CV-linked device (specs/044)
 }
 void Engine::rackChainMidiParamSet(int32_t t, int32_t di, int32_t c, int32_t i, int32_t p, float v) {
@@ -1508,7 +1513,7 @@ void Engine::rackChainMidiParamSet(int32_t t, int32_t di, int32_t c, int32_t i, 
 void Engine::rackSetChainDeviceBypassed(int32_t t, int32_t di, int32_t c, int32_t d, bool b) {
     auto* r = rackCoreAt(t, di);
     Device* dev = r ? r->chainDeviceAt(c, d) : nullptr;
-    if (dev) dev->setBypassed(b);
+    if (dev) { dev->setBypassed(b); recomputePdc(); }
 }
 bool Engine::rackChainDeviceBypassed(int32_t t, int32_t di, int32_t c, int32_t d) const {
     auto* r = rackCoreAt(t, di);
@@ -1550,10 +1555,10 @@ void Engine::rackSetChainPan(int32_t t, int32_t di, int32_t c, float v) {
     if (auto* r = rackCoreAt(t, di)) r->setChainPan(c, v);
 }
 void Engine::rackSetChainMute(int32_t t, int32_t di, int32_t c, bool b) {
-    if (auto* r = rackCoreAt(t, di)) r->setChainMute(c, b);
+    if (auto* r = rackCoreAt(t, di)) { r->setChainMute(c, b); recomputePdc(); }
 }
 void Engine::rackSetChainSolo(int32_t t, int32_t di, int32_t c, bool b) {
-    if (auto* r = rackCoreAt(t, di)) r->setChainSolo(c, b);
+    if (auto* r = rackCoreAt(t, di)) { r->setChainSolo(c, b); recomputePdc(); }
 }
 float Engine::rackChainGain(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);
@@ -1611,7 +1616,7 @@ float Engine::rackHumanize(int32_t t, int32_t di) const {
 
 // ---- Audio Effect Rack routing + output stage ----------------------------
 void Engine::rackSetMode(int32_t t, int32_t di, int32_t m) {
-    if (auto* r = rackCoreAt(t, di)) r->setRackMode(m);
+    if (auto* r = rackCoreAt(t, di)) { r->setRackMode(m); recomputePdc(); }
 }
 int32_t Engine::rackMode(int32_t t, int32_t di) const {
     auto* r = rackCoreAt(t, di);
@@ -1625,7 +1630,7 @@ float Engine::rackDryWet(int32_t t, int32_t di) const {
     return r ? r->rackDryWet() : 1.0f;
 }
 void Engine::rackSetPdc(int32_t t, int32_t di, bool b) {
-    if (auto* r = rackCoreAt(t, di)) r->setRackPdc(b);
+    if (auto* r = rackCoreAt(t, di)) { r->setRackPdc(b); recomputePdc(); }
 }
 bool Engine::rackPdc(int32_t t, int32_t di) const {
     auto* r = rackCoreAt(t, di);
@@ -1813,7 +1818,10 @@ bool Engine::rackSelfTest() {
 // through; two parallel Utility chains sum; mute silences a chain; the blob
 // round-trips chain structure.
 bool Engine::rackDeviceSelfTest() {
-    RackDevice rack;
+    // RackDevice owns large block buffers. Keep fixtures off the thread stack,
+    // including on Windows where the default stack is only 1 MiB.
+    auto rackStorage = std::make_unique<RackDevice>();
+    auto& rack = *rackStorage;
     rack.setSampleRate(44100.0, RackCore::kMaxBlock);
 
     const int32_t frames = 256;
@@ -1846,10 +1854,80 @@ bool Engine::rackDeviceSelfTest() {
 
     // Blob round-trips the two-chain structure onto a fresh rack.
     auto blob = rack.getState();
-    RackDevice rk2;
+    auto rk2Storage = std::make_unique<RackDevice>();
+    auto& rk2 = *rk2Storage;
     rk2.setSampleRate(44100.0, RackCore::kMaxBlock);
     rk2.setState(blob.data(), static_cast<int32_t>(blob.size()));
     if (rk2.chainCount() != 2 || rk2.chainDeviceCount(0) != 1 || !rk2.chainMute(1)) return false;
+
+    // #1084: parallel paths and the dry branch align with a delayed wet path.
+    for (bool dryMix : {false, true}) for (int block : {32, 257}) {
+        auto storage = std::make_unique<RackDevice>();
+        auto& r = *storage;
+        r.setSampleRate(48000, 257);
+        r.addChain(-1);
+        if (!dryMix) r.addChain(-1);
+        const int delayed = dryMix ? 0 : 1;
+        if (r.addChainDevice(delayed, 1) != 0) return false;
+        auto* comp = r.chainDeviceAt(delayed, 0);
+        if (!comp) return false;
+        comp->setParam(1, 1.0f); // unity ratio
+        comp->setParam(7, 2.0f); // 96 samples
+        if (r.latencySamples() != 96) return false;
+        if (dryMix) r.setRackDryWet(0.5f);
+        std::vector<float> impulse(block * 2, 0.0f);
+        float atInput = 0.0f, atDelayed = 0.0f;
+        for (int start = 0; start < 257 * 2; start += block) {
+            std::fill(impulse.begin(), impulse.end(), 0.0f);
+            if (start <= 32 && start + block > 32)
+                impulse[(32 - start) * 2] = impulse[(32 - start) * 2 + 1] = 0.25f;
+            r.process(impulse.data(), block);
+            if (start <= 32 && start + block > 32) atInput = impulse[(32 - start) * 2];
+            if (start <= 128 && start + block > 128) atDelayed = impulse[(128 - start) * 2];
+        }
+        const float expected = dryMix ? 0.25f : 0.5f;
+        if (std::fabs(atInput) > 1e-5f || std::fabs(atDelayed - expected) > 1e-3f) return false;
+    }
+    {
+        auto storage = std::make_unique<RackDevice>();
+        auto& r = *storage;
+        r.setSampleRate(48000, 257);
+        r.addChain(-1); r.addChain(-1);
+        r.addChainDevice(1, 1);
+        auto* comp = r.chainDeviceAt(1, 0);
+        if (!comp) return false;
+        comp->setParam(1, 1.0f);
+        comp->setParam(7, 2.0f);
+        r.setRackPdc(false);
+        std::vector<float> impulse(257 * 2, 0.0f);
+        impulse[32 * 2] = impulse[32 * 2 + 1] = 0.25f;
+        r.process(impulse.data(), 257);
+        if (r.latencySamples() != 0 || std::fabs(impulse[32 * 2] - 0.25f) > 1e-3f ||
+            std::fabs(impulse[128 * 2] - 0.25f) > 1e-3f) return false;
+    }
+    {
+        auto sourceStorage = std::make_unique<RackDevice>();
+        auto& source = *sourceStorage;
+        source.setSampleRate(48000, 32);
+        source.addChain(-1); source.addChain(-1);
+        source.addChainDevice(1, 1);
+        auto* comp = source.chainDeviceAt(1, 0);
+        if (!comp) return false;
+        comp->setParam(1, 1.0f); comp->setParam(7, 2.0f);
+        float buffer[64]{};
+        buffer[16 * 2] = buffer[16 * 2 + 1] = 0.25f;
+        source.process(buffer, 32);
+        auto forkStorage = std::make_unique<RackDevice>();
+        auto& fork = *forkStorage;
+        fork.forkFrom(source);
+        float delayed = 0.0f;
+        for (int start = 32; start <= 96; start += 32) {
+            std::fill(std::begin(buffer), std::end(buffer), 0.0f);
+            fork.process(buffer, 32);
+            if (start == 96) delayed = buffer[16 * 2];
+        }
+        if (std::fabs(delayed - 0.5f) > 1e-3f) return false;
+    }
     return true;
 }
 

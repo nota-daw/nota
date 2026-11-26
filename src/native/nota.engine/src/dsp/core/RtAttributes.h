@@ -53,10 +53,15 @@
 // list it needs the GNU spelling ([[gnu::always_inline]] there appertains to the closure
 // type and is ignored). MSVC has no force-inline for lambdas; its inliner is trusted
 // there (the instruction gate runs on Linux only).
+// NOTA_NOINLINE_LAMBDA is its opposite, same spelling: it keeps a second, rarely used
+// copy of such a body (a mode specialisation) out of the caller, so the caller's own
+// inlining — and the gate's count for its default loop — stays as it was.
 #if defined(__GNUC__) || defined(__clang__)
 #define NOTA_FORCE_INLINE_LAMBDA __attribute__((always_inline))
+#define NOTA_NOINLINE_LAMBDA __attribute__((noinline))
 #else
 #define NOTA_FORCE_INLINE_LAMBDA
+#define NOTA_NOINLINE_LAMBDA
 #endif
 
 namespace nota {

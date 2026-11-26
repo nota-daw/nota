@@ -37,6 +37,8 @@
 
 namespace nota {
 
+class RackCompensation;
+
 class RackCore {
   public:
     static constexpr int32_t kNumMacros = 8;
@@ -90,6 +92,7 @@ class RackCore {
         // an Instrument Rack chain runs them before its instrument (issue #329).
         std::vector<std::shared_ptr<MidiDevice>> midiDevices;
         std::shared_ptr<ChainControls> ctl = std::make_shared<ChainControls>();
+        std::shared_ptr<RackCompensation> compensation; // Audio Effect Rack, prepared off the audio thread
         // Display name (v8). Message thread only — the audio thread never reads it.
         // Empty means "fall back to the chain instrument's name": a Drum Rack pad that
         // holds a Sampler would otherwise read "Nota Sampler" on all 16 pads.
@@ -487,6 +490,8 @@ class RackCore {
     void deserialize(const uint8_t* data, int32_t size);
 
   protected:
+    virtual void prepareRackState(RackState&) {}
+    virtual void inheritRackRuntime(const RackCore&) {}
     // Max chain latency (per-chain internal alignment is a follow-up).
     int32_t maxChainLatency() const;
 
@@ -535,6 +540,7 @@ class RackCore {
         return authoring_ ? std::make_shared<RackState>(*authoring_) : std::make_shared<RackState>();
     }
     void commit(std::shared_ptr<RackState> ns) {
+        prepareRackState(*ns);
         authoring_ = ns;
         states_.publish(std::move(ns));
     }

@@ -2,6 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 using System.Text.Json.Nodes;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Nota.Infrastructure;
 
@@ -58,7 +60,29 @@ public sealed class ProjectStore : IProjectStore
     }
 
     public string Fingerprint(IAudioEngine engine, TransportState transport)
-        // Session names: no audio is read or hashed on this frequent path. Edits inside a
-        // plugin's own state aren't seen here (as before) — only structural/param changes.
-        => ProjectService.SerializeManifest(ProjectService.Capture(engine, transport, new List<string>(), contentNames: false));
+    {
+        // Session sample names avoid reading audio; state blobs are already captured and
+        // must participate in change detection even when no host-visible parameter changed.
+        var doc = ProjectService.Capture(engine, transport, new List<string>(), contentNames: false);
+        string manifest = ProjectService.SerializeManifest(doc);
+        var previews = new HashSet<string>(StringComparer.Ordinal);
+        void FindPreviews(JsonNode? node)
+        {
+            if (node is JsonObject obj)
+                foreach (var (key, value) in obj)
+                {
+                    if (key == "preview" && value is JsonValue v && v.TryGetValue<string>(out var path))
+                        previews.Add(path);
+                    else FindPreviews(value);
+                }
+            else if (node is JsonArray array)
+                foreach (var value in array) FindPreviews(value);
+        }
+        FindPreviews(JsonNode.Parse(manifest));
+        var result = new StringBuilder(manifest);
+        foreach (var (name, bytes) in doc.StateBlobs.OrderBy(x => x.Key, StringComparer.Ordinal))
+            if (!previews.Contains(name))
+                result.Append('\n').Append(name).Append(':').Append(Convert.ToHexString(SHA256.HashData(bytes)));
+        return result.ToString();
+    }
 }

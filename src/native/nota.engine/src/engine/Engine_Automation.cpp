@@ -1216,6 +1216,10 @@ int32_t Engine::midiCtlSelfTest() {
         if (p.size() != 2 || !near(p[0].value, 1.0f) || p[0].beat != 0.0 || p[1].beat != 1.0 || !near(p[1].value, 0.0f))
             return 3;
         if (!sliceCtlPoints(sus, 0.0, 0.5).empty()) return 3; // before its first point: nothing
+        MidiClip original, part;
+        original.setController(kCtlModWheel, mod.points);
+        part.sliceControllersFrom(original, 0.0, 1.0);
+        if (part.controllers.empty() || !near(part.controllers.front()->valueAt(0.5), 0.25f)) return 3;
     }
     // 4: the playback wire — a clip starting in the block sends its values from there; a switch
     // whose first point lies later sends nothing until it; points land on their sample.
@@ -1236,6 +1240,20 @@ int32_t Engine::midiCtlSelfTest() {
             if (ev[i].dim == kCtlDimBase + kCtlSustain && ev[i].off == 0) susAtStart = true;
         }
         if (!modStart || !susAt100 || susAtStart || !modMoves) return 4;
+        // A small block still emits a moving controller on the clip-relative grid.
+        for (int size : {32, 64, 128}) {
+            for (bool session : {false, true}) {
+                n = 0;
+                const double block = 64.0;
+                clipCtlEvents(c, session ? -block : 0.0, session ? 336.0 : 400.0,
+                              session ? 0.0 : block, size, 100.0, false, ev, n, 256);
+                bool found = false;
+                for (int i = 0; i < n; ++i)
+                    if (ev[i].off == 0 && ev[i].dim == kCtlDimBase + kCtlModWheel && near(ev[i].value, 0.32f))
+                        found = true;
+                if (!found) return 4;
+            }
+        }
         // 5: chase — a jump to beat 2.5 sends the pedal down and the wheel up there.
         n = 0;
         clipCtlEvents(c, 0.0, 400.0, 250.0, 64, 100.0, true, ev, n, 256);

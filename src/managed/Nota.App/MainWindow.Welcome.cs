@@ -33,24 +33,25 @@ public partial class MainWindow
         string? recoveryMessage = PendingRecovery is { } info ? RecoveryPromptText(info) : null;
 
         WelcomeWindow? win = null;
+        bool recoveryFailed = false;
         win = new WelcomeWindow(
             recent,
             onNew: () => OnMenuNew(this, EventArgs.Empty),
             onOpen: () => _ = DoOpenAsync(),
-            onOpenRecent: OpenProject,
+            onOpenRecent: path => OpenProject(path),
             onSettings: () => new PreferencesWindow(new SettingsViewModel(settings), _vm).ShowDialog(win!),
             onWhatsNew: () => new WhatsNewWindow(AppInfo.UnseenSince("")).ShowDialog(win!),
             showOnStartup: settings.Current.ShowWelcomeOnStartup,
             onShowOnStartupChanged: v => { settings.Current.ShowWelcomeOnStartup = v; settings.Save(); },
             recoveryMessage: recoveryMessage,
             onRecover: recoveryMessage is null ? null
-                : () => { if (PendingRecovery is { } ri) ApplyPendingRecovery(ri); win!.Close(); },
+                : () => { if (PendingRecovery is { } ri) recoveryFailed = !ApplyPendingRecovery(ri); win!.Close(); },
             onDismissRecovery: () => { try { _recovery.ClearRecovery(); } catch { } });
 
         // Whatever choice closes the launcher (New / Open / recent), the crash snapshot has
         // been offered — resolve it exactly once so it isn't re-offered next launch.
         if (PendingRecovery is not null)
-            win.Closed += (_, _) => { try { _recovery.ClearRecovery(); } catch { } };
+            win.Closed += (_, _) => { if (!recoveryFailed) try { _recovery.ClearRecovery(); } catch { } };
 
         // A newer release (AppUpdates: checked on launch, and by Help → Check for updates…)
         // shows as a banner, now or when the check comes back while the launcher is open.

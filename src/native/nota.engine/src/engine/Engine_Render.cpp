@@ -398,9 +398,16 @@ void Engine::clipCtlEvents(const MidiClip& clip, double clipStartS, double clipE
             if (off < first || off >= end || off >= frames) continue;
             out[n++] = ExprEv{static_cast<int32_t>(off), -1, dim, p.value};
         }
-        if (!ctlIsSwitch(c.ctl) && c.movesIn(beatAt(first), beatAt(end)))
-            for (int32_t off = (first / kStep + 1) * kStep; off < end && n < cap; off += kStep)
+        if (!ctlIsSwitch(c.ctl) && c.movesIn(beatAt(first), beatAt(end))) {
+            // Anchor the cadence to the clip, not to each render block. In particular,
+            // a 64-frame block must emit the boundary at its start.
+            const double elapsed = blockStart + first - clipStartS;
+            const int32_t gridFirst = first + static_cast<int32_t>(std::ceil(elapsed / kStep) * kStep - elapsed);
+            for (int32_t off = gridFirst; off < end && n < cap; off += kStep) {
+                if (entry && off == first) continue;
                 if (beatAt(off) >= firstBeat) out[n++] = ExprEv{off, -1, dim, c.valueAt(beatAt(off))};
+            }
+        }
     }
 }
 

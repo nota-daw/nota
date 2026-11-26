@@ -41,6 +41,7 @@ internal static class MidiControllerTests
         foreach (var r in Chase()) yield return r;
         foreach (var r in EndRelease()) yield return r;
         foreach (var r in SplitCarry()) yield return r;
+        foreach (var r in DuplicateTimeRamp()) yield return r;
         foreach (var r in OverdubFold()) yield return r;
         foreach (var r in PedalOnlyReplace()) yield return r;
         foreach (var r in Persistence()) yield return r;
@@ -123,6 +124,29 @@ internal static class MidiControllerTests
     }
 
     private static bool Near(float a, float b, float tol = 0.02f) => Math.Abs(a - b) <= tol;
+
+    private static IEnumerable<(bool, string)> DuplicateTimeRamp()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        int clip = e.AddMidiClip(t, 0, 12);
+        e.SetMidiClipController(t, clip, 11, new[] { new AutomationPoint(0, 0), new AutomationPoint(8, 1) });
+        e.InsertTime(6, 4, duplicate: true);
+        float Read(double beat)
+        {
+            if (!e.TryGetTrackInfo(0, out var info)) return float.NaN;
+            for (int i = 0; i < info.ClipCount; i++)
+                if (e.TryGetClipInfo(t, i, out var c) && beat >= c.StartBeat && beat < c.StartBeat + c.LengthBeats)
+                    return ValueAt(e.GetMidiClipController(t, i, 11), 11, beat - c.StartBeat);
+            return float.NaN;
+        }
+        float a = Read(3), b = Read(8), c = Read(11);
+        yield return (Near(a, 0.375f, 0.001f) && Near(b, 0.5f, 0.001f) && Near(c, 0.875f, 0.001f),
+            $"#1072 Duplicate Time preserves CC ramp ({a:F3}, {b:F3}, {c:F3})");
+        bool roundTrip = e.Undo() && e.Redo();
+        yield return (roundTrip && Near(Read(3), a, 0.001f) && Near(Read(8), b, 0.001f) && Near(Read(11), c, 0.001f),
+            "#1072 Duplicate Time undo/redo preserves the CC ramp");
+    }
     private static string Pts(AutomationPoint[] p) => string.Join(" ", p.Select(x => $"{x.Beat:F2}:{x.Value:F2}"));
 
     private static IEnumerable<(bool, string)> SelfTest()
