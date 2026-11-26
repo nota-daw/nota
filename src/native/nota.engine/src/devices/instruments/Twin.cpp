@@ -1426,8 +1426,6 @@ void Twin::renderSegment(float* out, int n) {
     const int parts = layoutMode() != 0 || upperTail_ ? 2 : 1;
     for (int part = 0; part < parts; ++part) {
         const float* lfo1 = gLfo1_[part] + (twin::kCtl - ctlLeft_);
-        std::fill(osL_, osL_ + n * os, 0.0f);
-        std::fill(osR_, osR_ + n * os, 0.0f);
         bool sounding = false;
         twin::Voice* partVoices[twin::kMaxVoices];
         int partCount = 0;
@@ -1440,10 +1438,11 @@ void Twin::renderSegment(float* out, int n) {
         sounding = partCount > 0;
         if (!anyPending && partCount >= 6 && n >= 32 && voiceScratch_.capacityFrames() >= n * os) {
             std::array<dsp::PolyVoiceBatchRange, dsp::PolyVoiceScheduler::kMaxBatches> batches{};
-            const int32_t maxBatches = (n < 64 && partCount <= 12) ? 3 : 4;
+            const int32_t maxBatches = (n < 64 && partCount <= 8) ? 2 : ((n < 64 && partCount <= 12) ? 3 : 4);
             const int32_t batchesN = dsp::PolyVoiceScheduler::planBatches(partCount, maxBatches, batches);
+            const int samples = n * os;
             dsp::RenderExecutor::parallelFor(batchesN, true, [&](int32_t b) {
-                voiceScratch_.clearBatch(b, n * os);
+                voiceScratch_.clearBatch(b, samples);
                 float* bL = voiceScratch_.left(b);
                 float* bR = voiceScratch_.right(b);
                 const auto range = batches[static_cast<size_t>(b)];
@@ -1453,12 +1452,16 @@ void Twin::renderSegment(float* out, int n) {
                         V, V.hasOwn ? V.own : ctl_[V.part], 0, n, os, sr_, modWheel_, fadeLen_, lfo1, bL, bR);
                 }
             });
-            for (int32_t b = 0; b < batchesN; ++b) {
-                dsp::PolyVoiceScheduler::accumulateMonoAdd(osL_, voiceScratch_.left(b), n * os);
-                dsp::PolyVoiceScheduler::accumulateMonoAdd(osR_, voiceScratch_.right(b), n * os);
+            std::copy_n(voiceScratch_.left(0), samples, osL_);
+            std::copy_n(voiceScratch_.right(0), samples, osR_);
+            for (int32_t b = 1; b < batchesN; ++b) {
+                dsp::PolyVoiceScheduler::accumulateMonoAdd(osL_, voiceScratch_.left(b), samples);
+                dsp::PolyVoiceScheduler::accumulateMonoAdd(osR_, voiceScratch_.right(b), samples);
             }
             for (int vi = 0; vi < partCount; ++vi) active += partVoices[vi]->active ? 1 : 0;
         } else {
+            std::fill(osL_, osL_ + n * os, 0.0f);
+            std::fill(osR_, osR_ + n * os, 0.0f);
             for (int vi = 0; vi < partCount; ++vi) {
                 twin::Voice& V = *partVoices[vi];
                 int k = 0;

@@ -156,8 +156,8 @@ class AudioThreadPool {
             if (const int asleep = sleepers_.load(std::memory_order_seq_cst); asleep > 0) {
                 const int want = std::min(helpers < 0 ? workerCount() : helpers, n - 1);
                 wake_.fetch_add(1, std::memory_order_release);
-                if (helpers < 0 || want >= asleep)
-                    wake_.notify_all(); // one non-blocking futex wake for everyone
+                if (want >= asleep)
+                    wake_.notify_all(); // one non-blocking futex wake when every sleeper is needed
                 else
                     for (int i = 0; i < want; ++i) wake_.notify_one();
             }
