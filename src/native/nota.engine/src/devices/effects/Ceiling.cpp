@@ -300,6 +300,9 @@ void Ceiling::process(float* buf, int32_t frames) {
         // when the musical detector has a slow attack or a filtered sidechain.
         // Hold its maximum over the delay and reconstruction window, so the same
         // attenuation covers all samples contributing to the detected peak.
+        // The meter and the auto release read the linked gain (as before #1088), now
+        // including the guard; sample-peak mode keeps its exact pre-guard behaviour.
+        float linkedGain = gain;
         if (tpMode) {
             const float guard = std::max(guardL, guardR);
             tpGuardPeak_ = std::max(tpGuardPeak_, guard);
@@ -309,9 +312,9 @@ void Ceiling::process(float* buf, int32_t frames) {
             const float safe = tpGuardPeak_ > ceilLin ? ceilLin / tpGuardPeak_ : 1.0f;
             gL = std::min(gL, safe);
             gR = std::min(gR, safe);
+            linkedGain = std::min(linkedGain, safe);
         }
-        const float appliedGain = std::min(gL, gR);
-        grPrev_ = appliedGain < 1.0f ? -20.0f * std::log10(std::max(1e-6f, appliedGain)) : 0.0f;
+        grPrev_ = linkedGain < 1.0f ? -20.0f * std::log10(std::max(1e-6f, linkedGain)) : 0.0f;
         if (grPrev_ > maxGr) maxGr = grPrev_;
 
         // Look-ahead: apply the gain (already ducked) to the delayed sample.
