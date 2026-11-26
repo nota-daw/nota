@@ -64,8 +64,9 @@ native self-test covers #1011 index assignment. Hardware checks are in
 
 **Performance Goals**: no added audio-thread cost when no External MIDI instrument exists and
 no track uses a port list (the masks replace the two existing atomics one-for-one).
-External send jitter stays within 1 ms of `dueNs` on the RtMidi path; on CoreMIDI it is
-hardware-scheduled. No dropouts in the smoke project with 8 External MIDI tracks and an
+External send jitter stays within about 1 ms of `dueNs` on every platform: the MIDI out
+thread waits for each message and sends it when due (CoreMIDI timestamps are a later
+refinement; research.md "As built"). No dropouts in the smoke project with 8 External MIDI tracks and an
 arpeggiator (SC-005).
 
 **Constraints**: AR-6 on the audio thread; WinMM's exclusive output handles (R3); the

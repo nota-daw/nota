@@ -271,11 +271,20 @@ internal sealed class TrackInspectorView : UserControl
     {
         var cur = _engine.GetTrackMidiInput(id);
         var devices = MidiInputPick.Devices(_engine, id);
-        string devLabel = devices.Find(d => d.Uid == cur.Uid).Label ?? Loc.T("midi_input.all_inputs");
+        // A list of ports or a set of channels (specs/115) shows as such, and its editor is one pick away.
+        string? listLabel = MidiInputPick.ListLabel(_engine, id);
+        const string PortsKey = "\u0001ports";
+        string devLabel = listLabel ?? devices.Find(d => d.Uid == cur.Uid).Label ?? Loc.T("midi_input.all_inputs");
         var rows = new StackPanel { Spacing = 8 };
         var devChip = SessionView.Chip(devLabel, false, a =>
-            SessionView.Pick(a, devices.Select(d => (d.Uid, d.Label)), u => u == cur.Uid,
-                u => { _engine.SetTrackMidiInput(id, u, cur.Channel); Edited(); }));
+            SessionView.Pick(a, devices.Select(d => (d.Uid, d.Label)).Append((PortsKey, Loc.T("midi_input.ports.menu"))),
+                u => listLabel is not null ? u == PortsKey : u == cur.Uid,
+                u =>
+                {
+                    if (u == PortsKey) { MidiInputPick.OpenPorts(_engine, id, Edited); return; }
+                    _engine.SetTrackMidiInput(id, u, cur.Channel);
+                    Edited();
+                }));
         ToolTip.SetTip(devChip, Loc.T("midi_input.tooltip"));
         rows.Children.Add(SessionView.Row(Loc.T("midi_input.menu"), devChip));
         var channels = MidiInputPick.Channels();

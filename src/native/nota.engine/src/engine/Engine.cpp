@@ -393,15 +393,6 @@ bool Engine::rebindMidiRole(const std::string& roleId, const std::string& uid, c
     return true;
 }
 
-bool Engine::externalMidi(int32_t trackId, std::string* uid, int32_t* channel) const {
-    auto t = findTrackAuthoring(trackId);
-    if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind) return false;
-    const auto& em = static_cast<const ExternalMidi&>(*t->instrument);
-    if (uid) *uid = em.outputUid();
-    if (channel) *channel = em.channel();
-    return true;
-}
-
 int32_t Engine::externalMidiStatus(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || !t->instrument || t->instrument->kind() != ExternalMidi::kKind) return -1;

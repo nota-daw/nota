@@ -796,6 +796,7 @@ internal sealed partial class RackCardView
             case Nota.Presentation.BrowserItemKind.BuiltinInstrument:
                 // Racks nest one level, and only in an Instrument Rack chain (specs/041).
                 if (item.BuiltinKind is 3 or 4) { _ctx.Status(Loc.T("device.rack.drum.a_rack_cant_go_on")); return; }
+                if (item.BuiltinKind == Nota.Application.ExternalMidiDestination.Kind) { _ctx.Status(Loc.T("device.rack.external_midi_cant_go")); return; }   // specs/115
                 if (existing >= 0) a.RemoveChain(existing);
                 added = a.AddChain(item.BuiltinKind);
                 if (added >= 0) a.SetChainTriggerNote(added, note);

@@ -217,3 +217,14 @@ T033 ‖ T034
 4. Add **US4** (roles), then validate.
 5. Polish, docs, converge, one PR, with one commit series per phase so each can be reviewed
    on its own (plan.md Complexity Tracking).
+
+## Phase 8: Convergence
+
+- [X] T064 CRITICAL (done: the base commit 1ad9149b fails the same Consort stress, Twin SC-006 and four-VST3-jobs checks on this machine; the overload-burst check is flaky — it passes on the base and in a quiet run of the branch): compare the Consort stress, four-VST3-jobs and overload-burst checks with the base commit (1ad9149b) as done for Twin SC-006; fix any regression, or record in the PR that they fail on the base too, so `scripts/build-win.ps1`'s gate is understood per Constitution IV (partial)
+- [X] T065 Add an explicit preview-then-confirm step to rebinding a role in `src/managed/Nota.App/MidiRolesWindow.cs` (list the tracks that will move, Rebind / Cancel) per FR-015 / US4/AC2 (partial)
+- [X] T066 Refuse External MIDI (kind 19) dropped onto an Instrument Rack chain or a Drum Rack pad with a status message, like racks, in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Chains.cs` and `RackCardView.Drum.cs` per data-model (External MIDI is not a chain instrument) (partial)
+- [X] T067 Offer **Ports and channels…** (and show a port list's label) in the track inspector's MIDI input in `src/managed/Nota.App/TrackInspectorView.cs` per T043 / FR-002 (partial)
+- [X] T068 Build, check and commit the `../nota-docs` pages for spec 115 (`npm ci`, `npm run build`, `npm run check`) per Constitution VI / T057 (partial)
+- [X] T069 Make plan.md's Performance Goals and the MIDI out thread agree on CoreMIDI timing (timestamped sends, or the plan states the 1 ms wait) per plan: Performance Goals (contradicts)
+- [X] T070 Update `contracts/mcp-tools.md` to the tools as built (`set_external_midi_role`, `set_external_midi` without `role`) per contracts/mcp-tools.md (contradicts)
+- [X] T071 Remove the unused `Engine::externalMidi(int32_t, std::string*, int32_t*)` from `src/native/nota.engine/src/engine/Engine.h` / `Engine.cpp` (unrequested)

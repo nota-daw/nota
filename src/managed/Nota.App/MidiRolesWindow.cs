@@ -23,6 +23,7 @@ public sealed class MidiRolesWindow : NotaWindow
     private readonly Action? _edited;
     private readonly StackPanel _rows = new() { Spacing = 8 };
     private readonly TextBlock _status = new() { FontSize = 10, Foreground = NotaPalette.TextTertiary, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+    private readonly StackPanel _confirm = new() { Spacing = 8, IsVisible = false };
 
     public MidiRolesWindow(IAudioEngine engine, Action? edited = null)
     {
@@ -53,6 +54,7 @@ public sealed class MidiRolesWindow : NotaWindow
             {
                 new TextBlock { Text = Loc.T("midi_roles.caption"), Classes = { "Caption" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
                 new ScrollViewer { MaxHeight = 360, Content = _rows },
+                _confirm,
                 _status,
                 new DockPanel
                 {
@@ -72,6 +74,20 @@ public sealed class MidiRolesWindow : NotaWindow
         try { a(); _status.Text = ""; _edited?.Invoke(); }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { _status.Text = ex.Message; }
         Rebuild();
+    }
+
+
+    // The rebind preview (FR-015): which tracks move, then Rebind or Cancel.
+    private void Confirm(string text, Action yes)
+    {
+        _confirm.Children.Clear();
+        var go = new Button { Content = Loc.T("midi_roles.rebind"), Classes = { "primary" } };
+        var no = new Button { Content = Loc.T("common.cancel"), Classes = { "ghost" } };
+        go.Click += (_, _) => { _confirm.IsVisible = false; yes(); };
+        no.Click += (_, _) => { _confirm.IsVisible = false; Rebuild(); };
+        _confirm.Children.Add(new TextBlock { Text = text, FontSize = 11, Foreground = NotaPalette.TextPrimary, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        _confirm.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { go, no } });
+        _confirm.IsVisible = true;
     }
 
     private void Rebuild()
@@ -111,8 +127,13 @@ public sealed class MidiRolesWindow : NotaWindow
             if (i < 0 || i >= uids.Count || uids[i] == role.OutputUid) return;
             string uid = uids[i];
             string outName = outputs.FirstOrDefault(o => o.Uid == uid).Name ?? "";
-            Try(() => MidiOutputRoles.Rebind(_engine, role.Id, uid, outName));
-            if (users.Count > 0) _status.Text = Loc.F("midi_roles.moved", string.Join(", ", users));
+            // A role nobody follows just binds; one tracks follow shows them first (FR-015).
+            if (users.Count == 0) { Try(() => MidiOutputRoles.Rebind(_engine, role.Id, uid, outName)); return; }
+            Confirm(Loc.F("midi_roles.confirm_rebind", role.Name, outName.Length > 0 ? outName : uid, string.Join(", ", users)), () =>
+            {
+                Try(() => MidiOutputRoles.Rebind(_engine, role.Id, uid, outName));
+                _status.Text = Loc.F("midi_roles.moved", string.Join(", ", users));
+            });
         };
 
         var delete = new Button { Content = Loc.T("common.delete"), Classes = { "ghost" } };

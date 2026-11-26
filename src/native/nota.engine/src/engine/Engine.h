@@ -940,7 +940,6 @@ class Engine {
         const std::string& roleId = {});
     // The instance itself (message thread), for the destination's name and role; null if not External MIDI.
     std::shared_ptr<const ExternalMidi> externalMidiAt(int32_t trackId) const;
-    bool externalMidi(int32_t trackId, std::string* uid, int32_t* channel) const;
     int32_t externalMidiStatus(int32_t trackId) const; // 0 none, 1 sending, 2 unavailable, -1 not External MIDI
     uint32_t externalMidiDropped(int32_t trackId) const;
     // Project MIDI output roles (specs/115 US4), in the graph so undo restores them. Set: the
