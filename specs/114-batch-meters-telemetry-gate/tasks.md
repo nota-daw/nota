@@ -63,7 +63,7 @@
 
 **Purpose**: Extend smoke tests, verify full build, collect before/after benchmarks, and update changelog.
 
-- [x] T016 [US1][US2] Add `Phase1MeterTelemetryTests.cs` in `tests/Nota.SmokeTest/Phase1MeterTelemetryTests.cs` covering 100-track batch meter parity, buffer truncation/null guards, `AlwaysOff`/`OnDemand`/`AlwaysOn` telemetry behavior, lease renewal via `DeviceScope`/`InstrumentScope`, and `Consort`/`Pentad` CPU scope reporting; wire into `tests/Nota.SmokeTest/Program.cs`
+- [x] T016 [US1][US2] Add `TrackMeterAndTelemetryTests.cs` in `tests/Nota.SmokeTest/TrackMeterAndTelemetryTests.cs` covering 100-track batch meter parity, buffer truncation/null guards, `AlwaysOff`/`OnDemand`/`AlwaysOn` telemetry behavior, lease renewal via `DeviceScope`/`InstrumentScope`, and `Consort`/`Pentad` CPU scope reporting; wire into `tests/Nota.SmokeTest/Program.cs`
 - [x] T017 Update `CHANGELOG.md` `[Unreleased]` with Phase 1 entry under `Changed`/`Added`
 - [x] T018 Run `./scripts/build.sh` end-to-end and verify all smoke + perf regression tests (`-- --perf`) pass
 - [x] T019 Run `./scripts/bench-engine.sh` comparing `develop` baseline against Phase 1 build and verify `git diff` / `/speckit-converge`

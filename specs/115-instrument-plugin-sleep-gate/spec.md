@@ -2,8 +2,8 @@
 
 **Feature Branch**: `perf/silence-gate-active-buses`  
 **Created**: 2026-11-24  
-**Status**: Approved (`nota-daw/nota#1050` — Phase 2)  
-**Input**: [GitHub Issue #1050](https://github.com/nota-daw/nota/issues/1050) and [implementation_plan.md](file:///Users/rafal/.gemini/antigravity-cli/brain/106800d4-4fa8-4ee9-93f4-ec477e9904c6/implementation_plan.md)
+**Status**: Approved (`nota-daw/nota#1050`)  
+**Input**: [GitHub Issue #1050](https://github.com/nota-daw/nota/issues/1050)
 
 ## Nota Context
 
@@ -91,7 +91,7 @@ As a producer routing tracks through multiple group buses and return buses, idle
 
 ### Success Criteria
 
-- **SC-001**: `./scripts/build.sh` compiles cleanly and passes all existing tests plus new Phase 2 smoke tests (`Phase2SleepGateTests.cs` and extended `HostedRenderPoolTests` checks covering all 10 synths, racks, VST3 instrument/effect sleep & wake, `PluginSleepMode.Never`, and idle group/return buses).
+- **SC-001**: `./scripts/build.sh` compiles cleanly and passes all existing tests plus `SilenceGateAndBusMaskTests.cs` and extended `HostedRenderPoolTests` checks covering all synths, racks, VST3 instrument/effect sleep & wake, `PluginSleepMode.Never`, and idle group/return buses.
 - **SC-002**: `dotnet run --project tests/Nota.SmokeTest --no-build -c Release -- --perf` exits cleanly with `PERF PASSED`.
 - **SC-003**: Idle multi-track projects containing the 10 newly-gated built-in synths, racks, silent VST3 tracks, and unused Group/Return buses show measurable reduction in render CPU / wall time vs the Phase 1 commit and `develop` baseline in `./scripts/bench-engine.sh -r 3`.
 - **SC-004**: `RenderPoolTests` and hosted multi-thread vs single-thread regression tests remain 100% bit-identical (`SequenceEqual`).

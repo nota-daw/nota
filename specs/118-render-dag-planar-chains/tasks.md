@@ -27,6 +27,6 @@ description: "Task list for Phase 5 of nota-daw/nota#1050"
 
 ## Phase 5: Verification, Tests, Changelog & Benchmarks
 
-- [x] T010 Create `tests/Nota.SmokeTest/Phase5RenderDagPlanarTests.cs` (wired in `Program.cs`) and extend `tests/Nota.SmokeTest/HostedRenderPoolTests.cs` for macOS AU parallel parity (`--hosted-au-pool`), multi-plugin planar chains, parallel group/return DAG, multi-chain racks, and heavy polyphonic synths (`0` vs `N` bit-exactness)
+- [x] T010 Create `tests/Nota.SmokeTest/RenderDagParallelTests.cs` (wired in `Program.cs`) and extend `tests/Nota.SmokeTest/HostedRenderPoolTests.cs` for macOS AU parallel parity (`--hosted-au-pool`), multi-plugin planar chains, parallel group/return DAG, multi-chain racks, and heavy polyphonic synths (`0` vs `N` bit-exactness)
 - [x] T011 Update `CHANGELOG.md` `[Unreleased]` with Phase 5 entry and audit `Engine_Render.cpp` readability / SPDX headers across all new files
 - [x] T012 Run `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu`, Phase 5 targeted microbenchmarks, and `./scripts/bench-engine.sh -r 3`; mark completed tasks `[x]` via `/speckit-converge`

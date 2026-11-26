@@ -59,6 +59,6 @@ description: "Task list for Phase 2 of nota-daw/nota#1050"
 
 ## Phase 6: Verification, Changelog & Benchmarks
 
-- [x] T014 Add Phase 2 smoke test suite in `tests/Nota.SmokeTest/Phase2SleepGateTests.cs` (wiring into `Program.cs`) and extend `tests/Nota.SmokeTest/HostedRenderPoolTests.cs` for VST3 `PluginEffect`/`PluginInstrument` sleep, tail preservation, audio/MIDI wake, and `PluginSleepMode.Never`
+- [x] T014 Add silence-gate and bus-mask smoke tests in `tests/Nota.SmokeTest/SilenceGateAndBusMaskTests.cs` (wiring into `Program.cs`) and extend `tests/Nota.SmokeTest/HostedRenderPoolTests.cs` for VST3 `PluginEffect`/`PluginInstrument` sleep, tail preservation, audio/MIDI wake, and `PluginSleepMode.Never`
 - [x] T015 Update `CHANGELOG.md` `[Unreleased]` with Phase 2 summary
 - [x] T016 Run `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu`, and `./scripts/bench-engine.sh -r 3` comparing vs `develop` baseline; check off tasks (`/speckit-converge`)

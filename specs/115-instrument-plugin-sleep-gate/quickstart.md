@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- Branch `perf/silence-gate-active-buses` (stacked on Phase 1 `perf/batch-meters-telemetry-gate`).
-- Baseline `develop` engine library archived at `/Users/rafal/.gemini/antigravity-cli/brain/106800d4-4fa8-4ee9-93f4-ec477e9904c6/scratch/bench-base`.
+- Branch `perf/silence-gate-active-buses` (stacked on `perf/batch-meters-telemetry-gate`).
+- Baseline `develop` engine library built at `/tmp/nota-bench-base`.
 
 ## Build & Smoke Test Verification
 
@@ -23,8 +23,8 @@ Expected:
 
 ```bash
 dotnet run --project tests/Nota.SmokeTest --no-build -c Release -- --perf
-./scripts/bench-engine.sh -r 3 /Users/rafal/.gemini/antigravity-cli/brain/106800d4-4fa8-4ee9-93f4-ec477e9904c6/scratch/bench-p2 \
-  before="/Users/rafal/.gemini/antigravity-cli/brain/106800d4-4fa8-4ee9-93f4-ec477e9904c6/scratch/bench-base" \
+./scripts/bench-engine.sh -r 3 /tmp/nota-bench-sleep-gate \
+  before="/tmp/nota-bench-base" \
   after="$PWD/src/native/nota.engine/build"
 ```
 

@@ -24,9 +24,9 @@ description: "Task list for Phase 6 of nota-daw/nota#1050"
 
 - [x] T008 [P] Implement C ABI handlers in `src/native/nota.engine/src/abi/nota_engine_core.cpp` and `nota_engine_import.cpp` for streaming threshold/policy/stats and hybrid mode/stats
 - [x] T009 [P] Add managed interfaces and P/Invoke wrappers in `src/managed/Nota.Application/Engine/IAudioEngine.cs`, `src/managed/Nota.Infrastructure/Interop/NativeMethods.cs`, and `src/managed/Nota.Infrastructure/Interop/NotaEngine.cs`
-- [x] T010 Create `tests/Nota.SmokeTest/Phase6StreamingHybridTests.cs` (registered in `tests/Nota.SmokeTest/Program.cs` under `--phase6`, `--perf`, and full run) verifying WAV/FLAC streaming RAM reduction, peak/RMS waveform & `nota_sample_read` parity, offline `0` vs `N` bit-exactness across seeks/offsets/reverses/warps, RT async streaming, hybrid live-bypass vs anticipative hits, invalidation on seek/edit/param/arm, and parity vs `HybridOff`
+- [x] T010 Create `tests/Nota.SmokeTest/DiskStreamingAndHybridBufferTests.cs` (registered in `tests/Nota.SmokeTest/Program.cs` under `--perf` and full run) verifying WAV/FLAC streaming RAM reduction, peak/RMS waveform & `nota_sample_read` parity, offline `0` vs `N` bit-exactness across seeks/offsets/reverses/warps, RT async streaming, hybrid live-bypass vs anticipative hits, invalidation on seek/edit/param/arm, and parity vs `HybridOff`
 
 ## Phase 5: Verification, Documentation & Local Commit
 
 - [x] T011 Update `CHANGELOG.md` `[Unreleased]`, audit SPDX headers and file line counts (`Engine_Render.cpp`, `Engine.h`)
-- [x] T012 Run `./scripts/build.sh`, `-- --phase6`, `-- --perf`, `nota_idle_cpu 5 5`, targeted Phase 6 RAM & CPU microbenchmarks (`phase5-base` vs `phase6`), and `./scripts/bench-engine.sh -r 3`; converge `tasks.md` and commit locally on `perf/streaming-source-hybrid-buffer`
+- [x] T012 Run `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu 5 5`, targeted streaming RAM & CPU microbenchmarks (`phase5-base` vs `phase6`), and `./scripts/bench-engine.sh -r 3`; converge `tasks.md` and commit locally on `perf/streaming-source-hybrid-buffer`

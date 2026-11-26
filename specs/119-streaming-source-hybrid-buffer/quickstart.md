@@ -6,12 +6,11 @@
 ./scripts/build.sh
 ```
 
-Builds the universal native engine (`arm64` + `x86_64`), scanner self-test, and runs `Nota.SmokeTest` including `Phase6StreamingHybridTests`.
+Builds the universal native engine (`arm64` + `x86_64`), scanner self-test, and runs `Nota.SmokeTest` including `DiskStreamingAndHybridBufferTests`.
 
-## 2. Run Targeted Phase 6 & Performance Smoke Tests
+## 2. Run Targeted Streaming & Performance Smoke Tests
 
 ```bash
-dotnet run --project tests/Nota.SmokeTest -c Release --no-build -- --phase6
 dotnet run --project tests/Nota.SmokeTest -c Release --no-build -- --perf
 ```
 

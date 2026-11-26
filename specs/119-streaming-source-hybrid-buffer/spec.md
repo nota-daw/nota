@@ -66,6 +66,6 @@ When playing a multi-track session at low hardware buffer sizes (e.g., `64`–`2
 
 ### Measurable Outcomes
 
-- **SC-001 (Zero Regressions & Idle Gate)**: `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu 5 5` (`0.0%` idle CPU), and `Phase6StreamingHybridTests` pass completely cleanly on Debug/Release universal builds.
+- **SC-001 (Zero Regressions & Idle Gate)**: `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu 5 5` (`0.0%` idle CPU), and `DiskStreamingAndHybridBufferTests` pass completely cleanly on Debug/Release universal builds.
 - **SC-002 (Memory Reduction & Fidelity on Long Stems)**: Streaming a large multi-minute WAV/FLAC/MP3 file (`> threshold`) reduces resident sample memory footprint by `>= 80%` relative to full float32 RAM decoding while achieving exact/near-exact (`maxdiff == 0.0` offline) audio & waveform overview parity.
 - **SC-003 (Hybrid Lookahead Correctness & Live Latency)**: With `HybridBufferMode::Auto`, live/armed tracks bypass lookahead and reflect live MIDI/input immediately, non-live tracks hit anticipative buffers (`cacheHits > 0`) cleanly during real-time device blocks, edits/seeks trigger clean invalidations (`invalidations > 0`) with accurate re-convergence and audio parity, and `./scripts/bench-engine.sh -r 3` shows no regressions and measurable wins on low-buffer/large-stem workloads.

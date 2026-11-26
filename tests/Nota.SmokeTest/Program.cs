@@ -464,25 +464,11 @@ if (args.Length >= 1 && args[0] == "--perf")
 {
     Console.WriteLine("-- render pool --");
     foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
-    Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
-    foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
-    Console.WriteLine("-- phase 6 streaming sources & hybrid buffering --");
-    foreach (var (ok, label) in Phase6StreamingHybridTests.Run()) Check(ok, label);
+    Console.WriteLine("-- parallel DAG, racks, synth voice batches & planar chains --");
+    foreach (var (ok, label) in RenderDagParallelTests.Run()) Check(ok, label);
+    Console.WriteLine("-- disk audio streaming & hybrid buffering --");
+    foreach (var (ok, label) in DiskStreamingAndHybridBufferTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PERF PASSED" : $"PERF FAILED ({failures})");
-    return failures == 0 ? 0 : 1;
-}
-if (args.Length >= 1 && args[0] == "--phase5")
-{
-    Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
-    foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
-    Console.WriteLine(failures == 0 ? "PHASE 5 PASSED" : $"PHASE 5 FAILED ({failures})");
-    return failures == 0 ? 0 : 1;
-}
-if (args.Length >= 1 && args[0] == "--phase6")
-{
-    Console.WriteLine("-- phase 6 streaming sources & hybrid buffering --");
-    foreach (var (ok, label) in Phase6StreamingHybridTests.Run()) Check(ok, label);
-    Console.WriteLine(failures == 0 ? "PHASE 6 PASSED" : $"PHASE 6 FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Process CPU readout alone: `--cpu`. Also part of the full run.
@@ -16434,18 +16420,18 @@ Console.WriteLine("-- dsp optimization --");
 foreach (var (ok, label) in DspOptimizationTests.Run()) Check(ok, label);
 Console.WriteLine("-- dsp silence bypass --");
 foreach (var (ok, label) in DspSilenceBypassTests.Run()) Check(ok, label);
-Console.WriteLine("-- phase 1 meters & telemetry --");
-foreach (var (ok, label) in Phase1MeterTelemetryTests.Run()) Check(ok, label);
-Console.WriteLine("-- phase 2 silence gate & active buses --");
-foreach (var (ok, label) in Phase2SleepGateTests.Run()) Check(ok, label);
-Console.WriteLine("-- phase 3 timeline index & routing plan --");
-foreach (var (ok, label) in Phase3TimelineRoutingTests.Run()) Check(ok, label);
-Console.WriteLine("-- phase 4 CoW, ScratchArena & SIMD --");
-foreach (var (ok, label) in Phase4CowArenaSimdTests.Run()) Check(ok, label);
-Console.WriteLine("-- phase 5 DAG, rack, poly synth & planar chains --");
-foreach (var (ok, label) in Phase5RenderDagPlanarTests.Run()) Check(ok, label);
-Console.WriteLine("-- phase 6 streaming sources & hybrid buffering --");
-foreach (var (ok, label) in Phase6StreamingHybridTests.Run()) Check(ok, label);
+Console.WriteLine("-- batch track meters & device telemetry --");
+foreach (var (ok, label) in TrackMeterAndTelemetryTests.Run()) Check(ok, label);
+Console.WriteLine("-- silence gate & active submix buses --");
+foreach (var (ok, label) in SilenceGateAndBusMaskTests.Run()) Check(ok, label);
+Console.WriteLine("-- timeline index & compiled routing --");
+foreach (var (ok, label) in TimelineIndexAndRoutingTests.Run()) Check(ok, label);
+Console.WriteLine("-- track snapshots, scratch arena & EQ SIMD --");
+foreach (var (ok, label) in TrackSnapshotArenaSimdTests.Run()) Check(ok, label);
+Console.WriteLine("-- parallel DAG, racks, synth voice batches & planar chains --");
+foreach (var (ok, label) in RenderDagParallelTests.Run()) Check(ok, label);
+Console.WriteLine("-- disk audio streaming & hybrid buffering --");
+foreach (var (ok, label) in DiskStreamingAndHybridBufferTests.Run()) Check(ok, label);
 Console.WriteLine("-- render pool --");
 foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 

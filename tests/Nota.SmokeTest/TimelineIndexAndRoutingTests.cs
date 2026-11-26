@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Phase 3 (#1050): TimelineIndex O(log N) clip/note/curve queries and RenderRoutingPlan
+// TimelineIndex O(log N) clip/note/curve queries and RenderRoutingPlan
 // O(1)/O(log T) compiled routing, nested group ancestry, sidechain consumer pass, and
-// generation-guarded automation / CV / Arp-CC endpoints across 0 vs N worker threads.
+// generation-guarded automation / CV / Arp-CC endpoints across 0 vs N worker threads (#1050).
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -11,14 +11,14 @@ using Nota.Presentation;
 
 namespace Nota.SmokeTest;
 
-internal static class Phase3TimelineRoutingTests
+internal static class TimelineIndexAndRoutingTests
 {
     private const int Block = 512, Rate = 48000;
     private const int EqKind = 0, CompressorKind = 1, DelayKind = 3, RackDeviceKind = 5, VoltKind = 6, ArpKind = 0;
 
     private static string ShortToneClip()
     {
-        string path = Path.Combine(Path.GetTempPath(), "nota-phase3-tone-05s.wav");
+        string path = Path.Combine(Path.GetTempPath(), "nota-timeline-tone-05s.wav");
         if (!File.Exists(path))
         {
             WavWriter.WriteStereo(path, 0.5, Rate, i =>

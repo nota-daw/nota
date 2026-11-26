@@ -14,7 +14,7 @@
 
 Expected:
 - Native engine builds cleanly without warnings on new files (`DeviceTelemetry.h`).
-- `Nota.SmokeTest` passes all suites, including new Phase 1 checks:
+- `Nota.SmokeTest` passes all suites, including `TrackMeterAndTelemetryTests`:
   - `BatchMeter` accuracy against `TryGetTrackMeter` across 100 tracks, partial buffer truncation, empty/null guard, track deletion/reordering.
   - `DeviceTelemetry` `AlwaysOff` / `OnDemand` / `AlwaysOn` mode transitions, automatic observation renewal via `DeviceScope` / `InstrumentScope`, and `AutoFilter` / `EqAnalyzerTests` / `VocoderTests` parity.
 

@@ -2,8 +2,8 @@
 
 **Feature Branch**: `perf/timeline-index-routing-plan`  
 **Created**: 2026-11-24  
-**Status**: Approved (`nota-daw/nota#1050` — Phase 3)  
-**Input**: [GitHub Issue #1050](https://github.com/nota-daw/nota/issues/1050) and [implementation_plan.md](file:///Users/rafal/.gemini/antigravity-cli/brain/106800d4-4fa8-4ee9-93f4-ec477e9904c6/implementation_plan.md)
+**Status**: Approved (`nota-daw/nota#1050`)  
+**Input**: [GitHub Issue #1050](https://github.com/nota-daw/nota/issues/1050)
 
 ## Nota Context
 
@@ -14,7 +14,7 @@
   - `src/native/nota.engine/src/engine/RenderRoutingPlan.{h,cpp}` (new domain abstraction)
   - `src/native/nota.engine/src/engine/{Track.h,Graph.h,Automation.cpp,MidiController.cpp,Engine.h,Engine.cpp,Engine_Render.cpp,Engine_Automation.cpp,Engine_Modulation.cpp,Engine_Devices.cpp}`
   - `src/native/nota.engine/src/devices/racks/RackCore.h` (`RackState::generation` guard for lock-free nested rack endpoint validation)
-  - `tests/Nota.SmokeTest/{Phase3TimelineRoutingTests.cs,Program.cs}`
+  - `tests/Nota.SmokeTest/{TimelineIndexAndRoutingTests.cs,Program.cs}`
 - **Hard Readability Gate (#1050)**: Decompose hot-path timeline scanning and routing resolution out of `Engine_Render.cpp`, `Engine_Automation.cpp`, and `Engine_Modulation.cpp` into small, domain-named `TimelineIndex` and `RenderRoutingPlan` modules with explicit window query methods rather than inline index arrays or ad-hoc binary searches scattered through `Engine`.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -87,6 +87,6 @@ As a producer using modular CV links, LFOs, multi-track parameter modulation, an
 
 ### Success Criteria
 
-- **SC-001**: `./scripts/build.sh` compiles cleanly across `arm64 + x86_64`, passes `SCANNER SELFTEST PASSED`, and passes the full `Nota.SmokeTest` suite (`SMOKE TEST PASSED`, including new `Phase3TimelineRoutingTests`).
+- **SC-001**: `./scripts/build.sh` compiles cleanly across `arm64 + x86_64`, passes `SCANNER SELFTEST PASSED`, and passes the full `Nota.SmokeTest` suite (`SMOKE TEST PASSED`, including `TimelineIndexAndRoutingTests`).
 - **SC-002**: `dotnet run --project tests/Nota.SmokeTest --no-build -c Release -- --perf` exits with `PERF PASSED`, and `nota_idle_cpu` passes (`<= 5.0%`, expected `0.0%`).
 - **SC-003**: A targeted C++ Phase 3 benchmark verifies sub-linear / constant scaling on long multi-thousand-note / multi-hundred-clip arrangements, dense automation curves, and 128+ track routing/group/modulation graphs compared against the Phase 2 baseline, while `./scripts/bench-engine.sh -r 3` shows zero regressions (and gains on heavy/keyed multi-track scenarios) vs `develop` and Phase 2.

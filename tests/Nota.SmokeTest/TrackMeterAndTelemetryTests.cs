@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Phase 1 (#1050): batch track-meter C ABI parity, DeviceTelemetry gating
-// (AlwaysOff / OnDemand / AlwaysOn + 3s observation lease), AutoFilter S_SampleRate
-// scope invariant under gated CPU telemetry, and nested rack propagation.
+// Batch track-meter C ABI parity, DeviceTelemetry gating (AlwaysOff / OnDemand /
+// AlwaysOn + 3s observation lease), AutoFilter S_SampleRate scope invariant under
+// gated CPU telemetry, and nested rack propagation (#1050).
 
 using Nota.Application;
 using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
 
-internal static class Phase1MeterTelemetryTests
+internal static class TrackMeterAndTelemetryTests
 {
     private const int Block = 512, Rate = 48000;
     private const int EqKind = 0, ReverbKind = 2, RackDeviceKind = 5, AutoFilterKind = 7;
@@ -20,7 +20,7 @@ internal static class Phase1MeterTelemetryTests
 
     private static string ToneClip()
     {
-        string path = Path.Combine(Path.GetTempPath(), "nota-phase1-tone.wav");
+        string path = Path.Combine(Path.GetTempPath(), "nota-meter-telemetry-tone.wav");
         if (!File.Exists(path))
         {
             var rng = new Random(7);

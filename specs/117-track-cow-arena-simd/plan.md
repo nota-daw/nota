@@ -24,4 +24,4 @@
    - Enable `-fno-math-errno` and `CMAKE_INTERPROCEDURAL_OPTIMIZATION` (ThinLTO on Release when supported and safe with static JUCE/exports) in `CMakeLists.txt`.
 
 5. **Verification**:
-   - `tests/Nota.SmokeTest/Phase4CowArenaSimdTests.cs` (`Program.cs`), `CHANGELOG.md`, full `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu`, Phase 4 CoW/Eq microbenchmark, and `./scripts/bench-engine.sh -r 3`.
+   - `tests/Nota.SmokeTest/TrackSnapshotArenaSimdTests.cs` (`Program.cs`), `CHANGELOG.md`, full `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu`, CoW/Eq microbenchmark, and `./scripts/bench-engine.sh -r 3`.

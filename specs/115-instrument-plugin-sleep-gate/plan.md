@@ -27,7 +27,7 @@ Eliminate silent-processing overhead across instruments, racks, hosted plugins, 
 | 0. Approved Issue First | Pass | `nota-daw/nota#1050` approved (`approved` label). |
 | I. Real-Time Audio Safety | Pass | Lock-free `SilenceGate` and wait-free `ActiveBusMask`; zero allocations/locks on RT path. |
 | II. Boundary Discipline | Pass | Pure C enum + `nota_plugin_set_sleep_mode` / `nota_plugin_sleep_mode`; JUCE confined to `pluginhost/`. |
-| III. Licensing Hygiene | Pass | AGPL-3.0-only SPDX headers on every new file (`SilenceGate.h`, `RenderBusState.h`, `Phase2SleepGateTests.cs`). |
+| III. Licensing Hygiene | Pass | AGPL-3.0-only SPDX headers on every new file (`SilenceGate.h`, `RenderBusState.h`, `SilenceGateAndBusMaskTests.cs`). |
 | IV. Verification Gate | Pass | Smoke tests verify built-in synths, racks, hosted VST3 probe sleep/wake, sleep modes, and bus skips. |
 | V. One Logical Change per PR | Pass | Phase 2 stacked cleanly on Phase 1 branch; Phases 3–6 remain separate. |
 | VI. Documentation Stays in Sync | Pass | `CHANGELOG.md` `[Unreleased]` updated once implementation finishes. |
@@ -63,5 +63,5 @@ src/managed/
 
 tests/Nota.SmokeTest/
 ├── HostedRenderPoolTests.cs
-└── Phase2SleepGateTests.cs                          # [NEW]
+└── SilenceGateAndBusMaskTests.cs                    # [NEW]
 ```

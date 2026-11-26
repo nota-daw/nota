@@ -62,7 +62,7 @@ Tracks carrying `Nota EQ-8` (built-in EQ on nearly every audio/instrument/group 
 ## Success Criteria *(mandatory)*
 
 - **SC-001 (Zero regressions)**: `./scripts/build.sh` (`nota-scanner-selftest`, full `Nota.SmokeTest`, `--scan-scale`, `--default-scan-paths`, `--default-scan-paths-upgrade`) and standalone `-- --perf` pass cleanly with `0` failures and `nota_idle_cpu` stays `0.0%` (`PASS`).
-- **SC-002 (`0` vs `N` thread bit-identity)**: New Phase 4 verification suite (`Phase4CowArenaSimdTests.cs`) passes bit-identical comparison between single-threaded and multi-threaded renders across CoW edits, live-to-offline scratch scaling, static/gliding/MS EQ configurations, and vector kernels.
+- **SC-002 (`0` vs `N` thread bit-identity)**: `TrackSnapshotArenaSimdTests.cs` passes bit-identical comparison between single-threaded and multi-threaded renders across CoW edits, live-to-offline scratch scaling, static/gliding/MS EQ configurations, and vector kernels.
 - **SC-003 (Measurable speedups)**:
   - Microbenchmarks demonstrate dramatic speedups on: (a) repeated `cloneTrack` / live automation & clip edits on note-heavy tracks, (b) multi-instance `Eq` 8-band stereo processing, and (c) multi-rack live buffer footprint / cache locality.
   - `./scripts/bench-engine.sh -r 3` confirms overall improvements / zero regressions against `develop` baseline.

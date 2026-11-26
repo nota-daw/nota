@@ -42,7 +42,6 @@ Added an audio-thread-safe atomic open-editor state (`EditorHost::open_`) that h
 
 - `./scripts/build.sh` -> exit 0 (`SMOKE TEST PASSED`, 0 failures)
 - `dotnet run --project tests/Nota.SmokeTest -c Release --no-build -- --perf` -> exit 0 (`PERF PASSED`)
-- `dotnet run --project tests/Nota.SmokeTest -c Release --no-build -- --phase6` -> exit 0 (`PHASE 6 PASSED`)
 - `nota_idle_cpu 5 5` -> `0.0%` (`PASS`)
 
 ## Deviations from Assessment

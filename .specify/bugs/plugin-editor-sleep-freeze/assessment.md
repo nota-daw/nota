@@ -9,11 +9,9 @@
 - **Verdict**: valid
 - **Severity**: high — breaks interactive UI metering, analyzers, internal GUI keyboards/sequencers, and plugin UI↔DSP responsiveness whenever an audio/MIDI gap exceeds silence hangover or transport stops
 
-## Report (verbatim)
+## Report
 
-> napraw błąd ze gdy edytor wtyczki vst albo au jest otwarty to wtyczka czasem nie reaguje, jest zamrozona, fixem wydaje sie byc to by wtyczka zawsze przetwarzala gdy jest otwarta, ale nie wiem zaplanuj to
->
-> *(Follow-up clarification)*: nie robimy issue, ten bug pojawił się w trakcie rewritu silnika który jeszcze nie jest zmergowany, traktujemy to jako fix dla tego rewritu i optymalizacji
+When a VST3 or AudioUnit plugin's native editor window is open, the plugin intermittently stops reacting or freezes during silence or stopped playback. Keeping the plugin processing whenever its editor window is open resolves the freeze. (Introduced on the unmerged `#1050` engine performance branch, fixed directly on the branch.)
 
 ## Symptom
 
@@ -39,7 +37,7 @@ When a VST3 or AudioUnit plugin's native editor window is open, the plugin inter
 
 ## Root Cause Hypothesis
 
-**High confidence.** Phase 2 (`specs/115-instrument-plugin-sleep-gate`, commit `7bdc3472`) introduced `SilenceGate` auto-sleep to `PluginInstrument` and `PluginEffect`, and Phase 2/5 graph skipping omits idle tracks, muted/solo-gated tracks, inactive audio tails, buses, and rack chains when `isIdle()` or `tailQuiet() < 0`. `EditorHost` did not track an audio-thread-safe atomic open state or hold `SilenceGate` awake while visible, and the render graph / rack propagation only checked `PluginSleepMode::Never` (not even reliably for stopped audio tracks with settled `tailQuiet < 0`), starving `plugin_->processBlock()` whenever the editor remained open during silence.
+**High confidence.** Auto-sleep (`specs/115-instrument-plugin-sleep-gate`, commit `7bdc3472`) introduced `SilenceGate` auto-sleep to `PluginInstrument` and `PluginEffect`, and graph skipping (`specs/115`, `specs/118`) omits idle tracks, muted/solo-gated tracks, inactive audio tails, buses, and rack chains when `isIdle()` or `tailQuiet() < 0`. `EditorHost` did not track an audio-thread-safe atomic open state or hold `SilenceGate` awake while visible, and the render graph / rack propagation only checked `PluginSleepMode::Never` (not even reliably for stopped audio tracks with settled `tailQuiet < 0`), starving `plugin_->processBlock()` whenever the editor remained open during silence.
 
 ## Proposed Remediation
 

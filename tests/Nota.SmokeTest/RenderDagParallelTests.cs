@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Phase 5 (#1050, specs/118): Parallel multi-group/sub-group + return DAG waves,
-// intra-track multi-chain racks (Instrument Rack, Drum Rack, Effect Rack),
-// deterministic polyphonic synth voice batching (Aurora/Wavetable, Twin, Consort),
-// and sample-identical parity across 0 vs N worker threads (AR-6).
+// Parallel multi-group/sub-group + return DAG waves, intra-track multi-chain racks
+// (Instrument Rack, Drum Rack, Effect Rack), deterministic polyphonic synth voice
+// batching (Aurora/Wavetable, Twin, Consort), and sample-identical parity across
+// 0 vs N worker threads (#1050).
 
 using System.Diagnostics;
 using Nota.Application;
@@ -12,7 +12,7 @@ using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
 
-internal static class Phase5RenderDagPlanarTests
+internal static class RenderDagParallelTests
 {
     private const int Rate = 48000;
     private const int EqKind = 0, CompKind = 1, ReverbKind = 2, DelayKind = 3, RackDeviceKind = 5, AmpKind = 6;
@@ -124,7 +124,7 @@ internal static class Phase5RenderDagPlanarTests
         var r0 = BuildAndRender(0);
         var r4 = BuildAndRender(4);
         bool ok = r0.Pcm.All(float.IsFinite) && PeakOf(r0.Pcm) > 0.01 && r0.Pcm.SequenceEqual(r4.Pcm) && r4.WorkerMs > 0.0;
-        return (ok, $"phase5 group/return/sidechain DAG parity (0 vs 4 threads bit-identical, peak={PeakOf(r0.Pcm):0.000}, worker={r4.WorkerMs:0.0} ms)");
+        return (ok, $"group/return/sidechain DAG parity (0 vs 4 threads bit-identical, peak={PeakOf(r0.Pcm):0.000}, worker={r4.WorkerMs:0.0} ms)");
     }
 
     // Multi-chain racks (>= 2 active chains) fan out across audio workers and match serial output bit-for-bit.
@@ -162,7 +162,7 @@ internal static class Phase5RenderDagPlanarTests
             var s0 = RenderInstRack(0);
             var s4 = RenderInstRack(4);
             bool ok = s0.Pcm.All(float.IsFinite) && PeakOf(s0.Pcm) > 0.01 && s0.Pcm.SequenceEqual(s4.Pcm) && s4.WorkerMs > 0.0;
-            yield return (ok, $"phase5 InstrumentRack 6-chain parallel parity (0 vs 4 threads bit-identical, peak={PeakOf(s0.Pcm):0.000}, worker={s4.WorkerMs:0.0} ms)");
+            yield return (ok, $"InstrumentRack 6-chain parallel parity (0 vs 4 threads bit-identical, peak={PeakOf(s0.Pcm):0.000}, worker={s4.WorkerMs:0.0} ms)");
         }
 
         // 2) Drum Rack (6 pads hit together with inserts).
@@ -192,7 +192,7 @@ internal static class Phase5RenderDagPlanarTests
             var d0 = RenderDrumRack(0);
             var d4 = RenderDrumRack(4);
             bool ok = d0.All(float.IsFinite) && PeakOf(d0) > 0.01 && d0.SequenceEqual(d4);
-            yield return (ok, $"phase5 DrumRack 6-pad parallel parity (0 vs 4 threads bit-identical, peak={PeakOf(d0):0.000})");
+            yield return (ok, $"DrumRack 6-pad parallel parity (0 vs 4 threads bit-identical, peak={PeakOf(d0):0.000})");
         }
 
         // 3) Audio Effect Rack (6 parallel chains with FX inserts).
@@ -222,7 +222,7 @@ internal static class Phase5RenderDagPlanarTests
             var e0 = RenderEffectRack(0);
             var e4 = RenderEffectRack(4);
             bool ok = e0.All(float.IsFinite) && PeakOf(e0) > 0.01 && e0.SequenceEqual(e4);
-            yield return (ok, $"phase5 EffectRack 6-chain parallel parity (0 vs 4 threads bit-identical, peak={PeakOf(e0):0.000})");
+            yield return (ok, $"EffectRack 6-chain parallel parity (0 vs 4 threads bit-identical, peak={PeakOf(e0):0.000})");
         }
     }
 
@@ -254,7 +254,7 @@ internal static class Phase5RenderDagPlanarTests
             var w0 = RenderAurora(0);
             var w4 = RenderAurora(4);
             bool ok = w0.Pcm.All(float.IsFinite) && PeakOf(w0.Pcm) > 0.01 && w0.Pcm.SequenceEqual(w4.Pcm) && w4.WorkerMs > 0.0;
-            yield return (ok, $"phase5 Aurora (Wavetable) 12-voice parallel batch parity (0 vs 4 threads bit-identical, peak={PeakOf(w0.Pcm):0.000}, worker={w4.WorkerMs:0.0} ms)");
+            yield return (ok, $"Aurora (Wavetable) 12-voice parallel batch parity (0 vs 4 threads bit-identical, peak={PeakOf(w0.Pcm):0.000}, worker={w4.WorkerMs:0.0} ms)");
         }
 
         // 2) Twin (10 active voices)
@@ -275,7 +275,7 @@ internal static class Phase5RenderDagPlanarTests
             var t0 = RenderTwin(0);
             var t4 = RenderTwin(4);
             bool ok = t0.All(float.IsFinite) && PeakOf(t0) > 0.01 && t0.SequenceEqual(t4);
-            yield return (ok, $"phase5 Twin 10-voice parallel batch parity (0 vs 4 threads bit-identical, peak={PeakOf(t0):0.000})");
+            yield return (ok, $"Twin 10-voice parallel batch parity (0 vs 4 threads bit-identical, peak={PeakOf(t0):0.000})");
         }
 
         // 3) Consort in True-Poly mode (10 active voices)
@@ -297,7 +297,7 @@ internal static class Phase5RenderDagPlanarTests
             var c0 = RenderConsort(0);
             var c4 = RenderConsort(4);
             bool ok = c0.All(float.IsFinite) && PeakOf(c0) > 0.01 && c0.SequenceEqual(c4);
-            yield return (ok, $"phase5 Consort True-Poly 10-voice parallel batch parity (0 vs 4 threads bit-identical, peak={PeakOf(c0):0.000})");
+            yield return (ok, $"Consort True-Poly 10-voice parallel batch parity (0 vs 4 threads bit-identical, peak={PeakOf(c0):0.000})");
         }
     }
 }

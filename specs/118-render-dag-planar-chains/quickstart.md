@@ -4,7 +4,7 @@
 ```bash
 ./scripts/build.sh
 ```
-Must exit `0` (`nota-scanner-selftest`, `Phase5RenderDagPlanarTests`, `HostedRenderPoolTests` including macOS AudioUnit checks when AU probe present, `SmokeTest`, `DEFAULT SCAN PATHS`).
+Must exit `0` (`nota-scanner-selftest`, `RenderDagParallelTests`, `HostedRenderPoolTests` including macOS AudioUnit checks when AU probe present, `SmokeTest`, `DEFAULT SCAN PATHS`).
 
 ## 2. Standalone Performance & Idle Gate
 ```bash

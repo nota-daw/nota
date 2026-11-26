@@ -12,7 +12,7 @@ Eliminate unbounded PCM memory consumption for long audio stems via a lock-free 
 
 **Language/Version**: C++20 (`nota_engine`), C# / .NET 10 (`Nota.Application`, `Nota.Infrastructure`, `Nota.SmokeTest`)  
 **Primary Dependencies**: Existing `dr_wav`, `dr_flac`, `dr_mp3` (`dr_libs`), STL `<atomic>` / `<thread>` / `<condition_variable>`; zero new third-party dependencies (`Constitution III`)  
-**Testing**: `./scripts/build.sh` (`Nota.SmokeTest`, `nota-scanner-selftest`), `-- --phase6`, `-- --perf`, `nota_idle_cpu 5 5`, Phase 6 microbenchmarks (RAM RSS + CPU/latency vs Phase 5 baseline), `./scripts/bench-engine.sh -r 3`  
+**Testing**: `./scripts/build.sh` (`Nota.SmokeTest`, `nota-scanner-selftest`), `-- --perf`, `nota_idle_cpu 5 5`, streaming & hybrid microbenchmarks (RAM RSS + CPU/latency vs baseline), `./scripts/bench-engine.sh -r 3`  
 **Target Platform**: macOS (`arm64` + `x86_64` universal Release), Linux (`x86_64`), Windows (`x86_64`)  
 **Performance Goals**: `>= 80%` RAM footprint reduction on long (`> threshold`) audio stems; `0.0%` idle CPU; deterministic zero-dropout RT lookahead cache hits on non-live heavy tracks with instant live-track response; zero regression in `bench-engine.sh`  
 **Constraints**: Strict `AR-6` (zero RT alloc/locks/disk I/O), single-owner DSP thread safety, exact offline bit-identity (`0` vs `N` threads, memory vs stream), 2-line AGPL-3.0 SPDX headers, `#1050` Hard Readability Gate
@@ -68,6 +68,6 @@ src/managed/
     └── NotaEngine.cs                                   # Managed implementation forwarding cleanly to native C ABI
 
 tests/Nota.SmokeTest/
-├── Phase6StreamingHybridTests.cs                       # Streaming RAM/parity/waveform/seek/loop tests + Hybrid live/anticipative/invalidation tests
-└── Program.cs                                          # Register `--phase6` + `--perf` + full suite
+├── DiskStreamingAndHybridBufferTests.cs                # Streaming RAM/parity/waveform/seek/loop tests + Hybrid live/anticipative/invalidation tests
+└── Program.cs                                          # Register under `--perf` + full suite
 ```

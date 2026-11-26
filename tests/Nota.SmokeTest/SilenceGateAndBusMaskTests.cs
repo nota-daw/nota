@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Phase 2 (#1050): thread-safe SilenceGate across the 10 newly-gated built-in synths,
-// idle-clock continuity (Twin/Keys/Mosaic/Rhythm), RackInstrument/DrumRack/RackDevice
-// recursive idle propagation, Group/Return ActiveBusMask skipping, and PluginSleepMode C ABI.
+// Thread-safe SilenceGate across built-in synths, idle-clock continuity
+// (Twin/Keys/Mosaic/Rhythm), RackInstrument/DrumRack/RackDevice recursive idle propagation,
+// Group/Return ActiveBusMask skipping, and PluginSleepMode C ABI (#1050).
 
 using Nota.Application;
 using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
 
-internal static class Phase2SleepGateTests
+internal static class SilenceGateAndBusMaskTests
 {
     private const int Block = 512, Rate = 48000;
     private const int EqKind = 0, ReverbKind = 2, DelayKind = 3, RackDeviceKind = 5;
@@ -139,13 +139,13 @@ internal static class Phase2SleepGateTests
         if (PeakSlice(a0, 0, 20) <= 0.005 || PeakSlice(a0, 140, 40) <= 0.005)
             return (false, $"synths sound on both attack (peak={PeakSlice(a0, 0, 20):0.000}) and post-sleep wake (peak={PeakSlice(a0, 140, 40):0.000})");
         if (!a0.SequenceEqual(a4))
-            return (false, "10 newly-gated + 3 clock synths match bit-identically between 0 and 4 helper threads");
+            return (false, "built-in synths match bit-identically between 0 and 4 helper threads across sleep and wake");
         // Before any sleep kicks in (while the beat-0 note is still held), Auto and Never match bit-identically.
         int preSleepSamples = 11 * Block * 2;
         if (!a0.AsSpan(0, preSleepSamples).SequenceEqual(n0.AsSpan(0, preSleepSamples)))
             return (false, "SilenceGate Auto matches Never bit-identically before entering sleep across all 13 built-in synths");
 
-        // Verify per-synth wake + 0-vs-4 MT parity individually across all 10 newly gated synths.
+        // Verify per-synth wake + 0-vs-4 MT parity individually across auto-sleeping synths.
         (string Name, Func<NotaEngine, int> Add)[] gatedSynths =
         [
             ("Synth", e => e.AddInstrumentTrack()),
@@ -198,7 +198,7 @@ internal static class Phase2SleepGateTests
         if (PeakSlice(woken, 0, 8) <= 0.005 || !woken.All(float.IsFinite))
             return (false, "OperatorSynth wakes immediately on param tweak + note after sleep");
 
-        return (true, "all 10 newly-gated + clock synths pass sleep, wake, Auto/Never, and MT parity");
+        return (true, "built-in synths sleep, wake, Auto/Never, and multi-thread parity");
     }
 
     private static (bool ok, string label) CheckRackAndArpSleep()

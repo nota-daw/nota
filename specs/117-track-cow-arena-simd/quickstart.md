@@ -1,7 +1,7 @@
 # Quickstart Verification: Phase 4 (`specs/117-track-cow-arena-simd`)
 
 ```bash
-# Build native engine + full smoke suite (includes Phase4CowArenaSimdTests)
+# Build native engine + full smoke suite (includes TrackSnapshotArenaSimdTests)
 ./scripts/build.sh
 
 # Isolated real-time / offline render-pool perf suite

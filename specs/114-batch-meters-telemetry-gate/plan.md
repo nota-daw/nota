@@ -96,7 +96,7 @@ src/managed/
     └── DeviceCards/Bodies/AutoFilterDeviceBody.cs # Replace Sc(S_Cpu) > 0 sentinel with Sc(S_SampleRate) > 0
 
 tests/Nota.SmokeTest/
-└── Phase1MeterTelemetryTests.cs                # [NEW] Batch meter & on-demand telemetry verification
+└── TrackMeterAndTelemetryTests.cs            # [NEW] Batch meter & on-demand telemetry verification
 ```
 
 **Structure Decision**: Keep new native abstraction cleanly in `src/native/nota.engine/src/dsp/core/DeviceTelemetry.h` alongside `SilenceDetector.h` and `AudioSpan.h`, while routing managed callers exclusively through `Nota.Application` → `Nota.Infrastructure` → `nota_engine.h` (`AR-7`).

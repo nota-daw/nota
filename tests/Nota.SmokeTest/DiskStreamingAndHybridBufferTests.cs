@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Phase 6 (#1050, specs/119): Disk-streamed audio sources (`StreamingAudioSource`)
-// and low-latency live + anticipative lookahead buffering (`HybridBufferController`).
+// Disk-streamed audio sources (`StreamingAudioSource`) and low-latency live +
+// anticipative lookahead buffering (`HybridBufferController`) (#1050).
 
 using Nota.Application;
 using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
 
-internal static class Phase6StreamingHybridTests
+internal static class DiskStreamingAndHybridBufferTests
 {
     private const int Rate = 48000;
     private const int EqKind = 0, ReverbKind = 2;
 
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
-        string tmpDir = Path.Combine(Path.GetTempPath(), $"nota-phase6-{Guid.NewGuid():N}");
+        string tmpDir = Path.Combine(Path.GetTempPath(), $"nota-streaming-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tmpDir);
         try
         {
@@ -183,7 +183,7 @@ internal static class Phase6StreamingHybridTests
 
         bool ok = !memIsStrm && strmIsStrm && stStrm.ActiveStreams >= 1 && memSavePct >= 80.0 &&
                   maxPeakDiff < 1e-5 && maxReadDiff == 0.0 && peak > 0.05 && maxAudioDiff == 0.0;
-        return (ok, $"phase6 disk streaming RAM (-{memSavePct:0.0}%, {stStrm.ResidentSampleBytes / 1024} KiB vs {stMem.ResidentSampleBytes / 1024} KiB) & bit-exact parity (diff={maxAudioDiff:0.0e0}, pkDiff={maxPeakDiff:0.0e0})");
+        return (ok, $"disk streaming RAM (-{memSavePct:0.0}%, {stStrm.ResidentSampleBytes / 1024} KiB vs {stMem.ResidentSampleBytes / 1024} KiB) & bit-exact parity (diff={maxAudioDiff:0.0e0}, pkDiff={maxPeakDiff:0.0e0})");
     }
 
     private static (bool Ok, string Label) CheckRtAsyncStreamingNoUnderruns(string longWav)
@@ -218,7 +218,7 @@ internal static class Phase6StreamingHybridTests
 
         var st = e.GetStreamingStats();
         bool ok = st.ActiveStreams == 1 && st.RtUnderruns == 0 && st.PagesFaulted > 0 && peak > 0.05;
-        return (ok, $"phase6 RT async disk streaming zero underruns (faulted={st.PagesFaulted}, async={st.PagesServedAsync}, sync={st.PagesServedSync}, underruns={st.RtUnderruns}, peak={peak:0.000})");
+        return (ok, $"RT async disk streaming zero underruns (faulted={st.PagesFaulted}, async={st.PagesServedAsync}, sync={st.PagesServedSync}, underruns={st.RtUnderruns}, peak={peak:0.000})");
     }
 
     private static (bool Ok, string Label) CheckAudioImportStreaming(string longWav)
@@ -229,11 +229,11 @@ internal static class Phase6StreamingHybridTests
         int t = e.AddAudioTrack();
 
         using var job = e.OpenAudioImport(longWav);
-        if (job == null) return (false, "phase6 AudioImportJob open returned null");
+        if (job == null) return (false, "AudioImportJob open returned null");
         while (!job.IsDone)
         {
             int rc = job.Step(1 << 16);
-            if (rc < 0) return (false, "phase6 AudioImportJob step error");
+            if (rc < 0) return (false, "AudioImportJob step error");
         }
         var midPeaks = new float[64 * 2];
         int pkCount = job.ReadPeaks(midPeaks, 64);
@@ -248,7 +248,7 @@ internal static class Phase6StreamingHybridTests
         double peak = pcm.Max(Math.Abs);
 
         bool ok = clip >= 0 && pkCount == 64 && streamed && peak > 0.05;
-        return (ok, $"phase6 background AudioImportJob streaming (>16 MiB auto-stream={streamed}, peaks={pkCount}, peak={peak:0.000})");
+        return (ok, $"background AudioImportJob streaming (>16 MiB auto-stream={streamed}, peaks={pkCount}, peak={peak:0.000})");
     }
 
     private static (bool Ok, string Label) CheckHybridLiveBypassAndLookaheadHits(string longWav)
@@ -302,7 +302,7 @@ internal static class Phase6StreamingHybridTests
 
         bool ok = stMid.Active == 1 && stMid.AnticipativeTracks >= 2 && stMid.LiveTracks >= 1 &&
                   stMid.CacheHits > 0 && livePeakImmediate > 0.01;
-        return (ok, $"phase6 hybrid lookahead (hits={stMid.CacheHits}, ant={stMid.AnticipativeTracks}, live={stMid.LiveTracks}, immediateLivePeak={livePeakImmediate:0.000})");
+        return (ok, $"hybrid lookahead (hits={stMid.CacheHits}, ant={stMid.AnticipativeTracks}, live={stMid.LiveTracks}, immediateLivePeak={livePeakImmediate:0.000})");
     }
 
     private static (bool Ok, string Label) CheckHybridInvalidationAndParity(string longWav)
@@ -378,6 +378,6 @@ internal static class Phase6StreamingHybridTests
 
         bool ok = stAuto.CacheHits > 0 && invDelta > 0 && pcmAuto.All(float.IsFinite) &&
                   peak > 0.02 && maxDiff < 1e-4;
-        return (ok, $"phase6 hybrid invalidation & parity (hits={stAuto.CacheHits}, invDelta={invDelta}, maxDiff={maxDiff:0.0e0}, peak={peak:0.000})");
+        return (ok, $"hybrid invalidation & parity (hits={stAuto.CacheHits}, invDelta={invDelta}, maxDiff={maxDiff:0.0e0}, peak={peak:0.000})");
     }
 }

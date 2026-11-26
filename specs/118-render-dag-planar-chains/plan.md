@@ -23,7 +23,7 @@ Eliminate the remaining serial bottlenecks across groups (`Pass 1.5`), return bu
 - **I. Real-Time Audio Safety (`AR-4`–`AR-6`)**: Pass — all DAG wave buffers, multi-slot rack chain buffers, planar scratch buffers, and voice-batch scratch buffers are pre-allocated during `RenderScratch` publish or non-RT device preparation. Workers use lock-free `AudioThreadPool` atomics only.
 - **II. Boundary Discipline (`AR-7`, JUCE confinement)**: Pass — `dsp::RenderExecutor`, `AudioBufferView`, `PolyVoiceScheduler`, and `RenderGraphExecutor` contain zero JUCE headers; AU thread-safety vetting lives inside `pluginhost/hosting/PluginCommon.*` + `PluginInstrument/PluginEffect`.
 - **III. Licensing Hygiene**: Pass — every new header/source carries `// SPDX-License-Identifier: AGPL-3.0-only` + copyright line, zero third-party dependencies added.
-- **IV. Verification Gate & VII. Spec-First**: Pass — `specs/118-render-dag-planar-chains/` artifacts complete; full `Nota.SmokeTest` + `Phase5RenderDagPlanarTests` + `HostedRenderPoolTests` extensions planned cleanly.
+- **IV. Verification Gate & VII. Spec-First**: Pass — `specs/118-render-dag-planar-chains/` artifacts complete; full `Nota.SmokeTest` + `RenderDagParallelTests` + `HostedRenderPoolTests` extensions planned cleanly.
 
 ## Project Structure
 
@@ -68,6 +68,6 @@ src/native/nota.engine/
 
 tests/Nota.SmokeTest/
 ├── HostedRenderPoolTests.cs                           # Add real AU parallel & planar chain tests (APPLE)
-├── Phase5RenderDagPlanarTests.cs                      # Multi-group/return DAG, racks, poly synths, planar chains (0 vs N bit-exact)
-└── Program.cs                                         # Wire Phase5RenderDagPlanarTests
+├── RenderDagParallelTests.cs                          # Multi-group/return DAG, racks, poly synths, planar chains (0 vs N bit-exact)
+└── Program.cs                                         # Wire RenderDagParallelTests
 ```

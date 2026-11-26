@@ -23,6 +23,6 @@ description: "Task list for Phase 4 of nota-daw/nota#1050"
 
 ## Phase 4: Verification, Tests, Changelog & Benchmarks
 
-- [x] T009 Add `tests/Nota.SmokeTest/Phase4CowArenaSimdTests.cs` (wired in `Program.cs`) verifying CoW multi-edit isolation + `0` vs `4` thread parity, live-to-offline `ScratchArena` transition (`128` -> `8192` frames), `Eq` static/gliding/MS scalar reference parity (`< -120 dBFS`), and `SimdDispatch` verification
+- [x] T009 Add `tests/Nota.SmokeTest/TrackSnapshotArenaSimdTests.cs` (wired in `Program.cs`) verifying CoW multi-edit isolation + `0` vs `4` thread parity, live-to-offline `ScratchArena` transition (`128` -> `8192` frames), `Eq` static/gliding/MS scalar reference parity (`< -120 dBFS`), and `SimdDispatch` verification
 - [x] T010 Update `CHANGELOG.md` `[Unreleased]` with Phase 4 entry
 - [x] T011 Run `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu`, Phase 4 CoW/Eq microbenchmark, and `./scripts/bench-engine.sh -r 3`; mark tasks done (`/speckit-converge`)

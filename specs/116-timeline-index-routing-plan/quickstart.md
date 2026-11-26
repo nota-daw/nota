@@ -4,7 +4,7 @@
    ```bash
    ./scripts/build.sh
    ```
-   Verify `SCANNER SELFTEST PASSED` and `SMOKE TEST PASSED` (`Phase3TimelineRoutingTests` passing all correctness, edge-case, and MT bit-identity checks).
+   Verify `SCANNER SELFTEST PASSED` and `SMOKE TEST PASSED` (`TimelineIndexAndRoutingTests` passing all correctness, edge-case, and MT bit-identity checks).
 
 2. Run real-time perf regression gate:
    ```bash

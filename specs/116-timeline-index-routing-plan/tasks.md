@@ -26,6 +26,6 @@ description: "Task list for Phase 3 of nota-daw/nota#1050"
 
 ## Phase 4: Verification, Tests, Changelog & Benchmarks
 
-- [x] T009 Add `tests/Nota.SmokeTest/Phase3TimelineRoutingTests.cs` (wired in `Program.cs`) verifying long-timeline MIDI/Audio/Automation/CC bit-identity, track offsets, loop seams, deactivated clips, lock-free MIDI rerouting, live nested-rack CV/automation mutations, and 0 vs 4 thread parity
+- [x] T009 Add `tests/Nota.SmokeTest/TimelineIndexAndRoutingTests.cs` (wired in `Program.cs`) verifying long-timeline MIDI/Audio/Automation/CC bit-identity, track offsets, loop seams, deactivated clips, lock-free MIDI rerouting, live nested-rack CV/automation mutations, and 0 vs 4 thread parity
 - [x] T010 Update `CHANGELOG.md` `[Unreleased]` with Phase 3 entry
 - [x] T011 Run `./scripts/build.sh`, `-- --perf`, `nota_idle_cpu`, Phase 3 scaling microbenchmark, and `./scripts/bench-engine.sh -r 3` comparing vs Phase 2 & `develop` baseline; check off tasks (`/speckit-converge`)

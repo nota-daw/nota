@@ -13,6 +13,6 @@
 ## Requirement Completeness
 
 - [x] Zero ambiguous `[NEEDS CLARIFICATION]` markers remain
-- [x] Every requirement is testable (`Phase6StreamingHybridTests`, `nota_idle_cpu`, `--perf`, `bench-engine.sh`)
+- [x] Every requirement is testable (`DiskStreamingAndHybridBufferTests`, `nota_idle_cpu`, `--perf`, `bench-engine.sh`)
 - [x] Success criteria establish measurable thresholds (`0.0%` idle CPU, `>= 80%` stem RAM savings, exact offline parity, live-track bypass, clean epoch invalidation)
 - [x] Real-time audio thread (`AR-6`), single-owner DSP, and boundary/licensing rules explicitly honored

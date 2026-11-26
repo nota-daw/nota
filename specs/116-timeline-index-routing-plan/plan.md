@@ -13,7 +13,7 @@ Eliminate $O(N)$ per-block full-timeline clip/note/breakpoint scans and $O(T^2)$
 
 **Language/Version**: C++20 (native engine `nota.engine`), C# / .NET 10 (`Nota.SmokeTest`)  
 **Storage**: Immutable snapshot structures (`Graph`, `Track`, `RackCore::RackState`) + lock-free atomics (`AR-4`–`AR-8`)  
-**Testing**: `./scripts/build.sh` (`Nota.SmokeTest`, including new `Phase3TimelineRoutingTests.cs`), `-- --perf`, `tests/perf/nota_idle_cpu.cpp`, `./scripts/bench-engine.sh -r 3`, plus dedicated Phase 3 scaling microbenchmark  
+**Testing**: `./scripts/build.sh` (`Nota.SmokeTest`, including `TimelineIndexAndRoutingTests.cs`), `-- --perf`, `tests/perf/nota_idle_cpu.cpp`, `./scripts/bench-engine.sh -r 3`, plus dedicated scaling microbenchmark  
 **Target Platform**: macOS universal (`arm64` + `x86_64`), Linux, Windows  
 **Constraints**: Zero allocations/locks/blocking on audio thread (`AR-6`), 1 vs N thread bit-identity (`RenderPoolTests`), 2-line AGPL SPDX headers on all new files, hard readability gate (`#1050`)
 
@@ -64,6 +64,6 @@ src/native/nota.engine/
         ├── Engine_Automation.cpp                       (compiled lane apply + master pan lane)
         └── Engine_Modulation.cpp                       (indexed modulators + compiled CV links)
 tests/Nota.SmokeTest/
-├── Phase3TimelineRoutingTests.cs                       (NEW)
-└── Program.cs                                          (wire Phase3TimelineRoutingTests)
+├── TimelineIndexAndRoutingTests.cs                    (NEW)
+└── Program.cs                                          (wire TimelineIndexAndRoutingTests)
 ```
