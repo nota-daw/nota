@@ -104,6 +104,8 @@ public static class KeyActionCatalog
         Add("session.launchSelection", Loc.T("keys.session_launch_selection"), session, KeyScope.Session, Shortcut.None("Return"), alias: "play launch slot scene");
         Add("session.rename", Loc.T("keys.session_rename"), session, KeyScope.Session, Shortcut.None("F2"));
 
+        Add("roll.splitNotes", Loc.T("piano_roll.split_at_playhead"), roll, KeyScope.PianoRoll, Shortcut.None("I"));
+        Add("roll.joinNotes", Loc.T("piano_roll.join_notes"), roll, KeyScope.PianoRoll, Shortcut.None("N"));
         Add("roll.moveLeft", Loc.T("keys.roll_move_left"), roll, KeyScope.PianoRoll, Shortcut.None("←"), alias: "notes grid");
         Add("roll.moveRight", Loc.T("keys.roll_move_right"), roll, KeyScope.PianoRoll, Shortcut.None("→"), alias: "notes grid");
         Add("roll.transposeUp", Loc.T("keys.roll_transpose_up"), roll, KeyScope.PianoRoll, Shortcut.None("↑"), alias: "semitone pitch");

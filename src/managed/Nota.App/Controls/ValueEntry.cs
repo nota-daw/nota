@@ -75,6 +75,12 @@ internal static partial class ValueEntry
     /// <summary>Make <paramref name="control"/> typeable (and its <paramref name="readout"/>, where the
     /// box then sits). <paramref name="menu"/> false: the control shows its own right-click menu
     /// and adds <see cref="MenuItems"/> to it.</summary>
+    public static void AttachPlainReadout(TextBlock readout, Action<string> commit)
+    {
+        var field = new ValueField("", () => 0, _ => readout.Text ?? "", _ => {}) { CommitPlainText = commit };
+        Attach(readout, field, readout, menu: false);
+    }
+
     public static void Attach(Control control, ValueField field, TextBlock? readout = null, bool menu = true)
     {
         Anchor AnchorOf(ValueField _) => readout is { IsEffectivelyVisible: true }
@@ -226,7 +232,7 @@ internal static partial class ValueEntry
         if (!e.GetCurrentPoint(at).Properties.IsLeftButtonPressed) return false;
         bool alt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
         if (alt && field.AltResets && !onReadout) return false;   // the control's own ⌥-click reset runs
-        if (alt || onReadout && e.ClickCount == 2)
+        if (alt || onReadout && (field.CommitPlainText is not null || e.ClickCount == 2))
         {
             e.Handled = true;
             return true;
@@ -378,6 +384,13 @@ internal static partial class ValueEntry
             HorizontalContentAlignment = align,
             Margin = new Thickness(x, y, 0, 0),
         };
+        if (field.CommitPlainText is not null && font is not null)
+        {
+            box.Classes.Add("plain");
+            box.Foreground = font.Foreground;
+            box.Margin = new Thickness(r.X, r.Y, 0, 0);
+            box.Height = r.Height;
+        }
         if (font is null) box.Classes.Add("solid");
         // The read-out's size already carries the Text size step (or a card's fixed size):
         // copied as it is, the editor must not add the step a second time.
@@ -396,7 +409,15 @@ internal static partial class ValueEntry
             at.Visual.DetachedFromVisualTree -= gone;
             AdornerLayer.SetAdorner(at.Visual, null);
             if (font is not null && ReferenceEquals(font.Foreground, Brushes.Transparent)) font.Foreground = ink;
-            if (apply) Commit(field, box.Text ?? "");
+            if (apply)
+            {
+                string typed = box.Text ?? "";
+                if (field.CommitPlainText is { } commit)
+                {
+                    if (typed != was) commit(typed);
+                }
+                else Commit(field, typed);
+            }
         }
         _close = Close;
         box.AddHandler(InputElement.KeyDownEvent, (_, e) =>

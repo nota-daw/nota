@@ -229,6 +229,7 @@ bool keyHeldAcross(const Ctx& c, const All& all, int32_t channel, int32_t pitch,
         if (held) return;
         const double end = placementTime(c, p, p.lengthBeats);
         for (const Note& note : p.clip->notes) {
+            if (note.muted) continue;
             if (&note == self && p.order == selfOrder) continue;
             if (note.startBeat >= p.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
             const ArticulationEntry* e = c.table.resolve(note.articulation);
@@ -310,6 +311,7 @@ template <class Emit, class All> void scheduleAll(Writer& w, const Ctx& c, const
     emit([&](const Placement& p) {
         const double end = placementTime(c, p, p.lengthBeats);
         for (const Note& note : p.clip->notes) {
+            if (note.muted) continue;
             if (note.startBeat >= p.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) continue;
             const ArticulationEntry* e = c.table.resolve(note.articulation);
             if (!e || e->trigger != ArticulationTrigger::Momentary) continue;
@@ -397,7 +399,7 @@ int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool l
     for (const ArticulationEntry& e : table.entries()) maxShift = std::max(maxShift, c.trackShift + e.offsetMs * c.msToS);
     double tail = 0.0;
     for (const Note& note : slotClip.notes)
-        if (note.startBeat >= 0.0 && note.startBeat < loopBeats)
+        if (!note.muted && note.startBeat >= 0.0 && note.startBeat < loopBeats)
             tail = std::max(tail, (note.startBeat + note.lengthBeats - loopBeats) * b.spb);
     const double late = std::max(0.0, maxShift) + std::max(c.hold, tail);
     const double early = c.trackShift + c.lo; // the earliest trigger relative to its note's grid time

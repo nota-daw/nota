@@ -39,7 +39,7 @@ public sealed class ClipPropsView : UserControl
     private readonly TextBlock _selText = StripLabel(Loc.T("clip_props.no_notes_selected"));
     private readonly StackPanel _selFields = new() { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 12 };
     private int _transpose;
-    private double _strength = 0.8;
+
 
     /// <param name="mode">The Clip | Track switch (specs/059) leading the Clip group; none for
     /// a Session slot.</param>
@@ -72,13 +72,13 @@ public sealed class ClipPropsView : UserControl
             }));
         step.Height = StripField;
         step.MinWidth = 64;
-        var qButton = ClipEditorKit.Button(Loc.T("common.quantize"), () => _roll.Quantize(_strength));
+        var qButton = ClipEditorKit.Button(Loc.T("common.quantize"), _roll.Quantize);
         qButton.Height = StripField;
         qButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
         // Strength: the shell slider, its value inside (style guide § Slider: quantize strength).
         static string Pct(double v) => string.Format(NotaNum.Culture, "{0:0} %", v * 100);
-        var strength = new MiniFader(_strength, 1) { Width = 92, Default = 0.8, Text = Pct };
-        strength.ValueChanged += v => _strength = v;
+        var strength = new MiniFader(_roll.QuantizeStrength, 1) { Width = 92, Default = 0.8, Text = Pct };
+        strength.ValueChanged += v => _roll.QuantizeStrength = v;
         ValueEntry.Attach(strength, strength.EntryField(Loc.T("clip_props.strength"), Pct));
         var grid = StripGroup(Loc.T("common.quantize"), step, qButton, StripLabel(Loc.T("clip_props.strength")), strength);
 
@@ -154,28 +154,65 @@ public sealed class ClipPropsView : UserControl
         if (sel.Count == 1)
         {
             var n = sel[0];
-            Field(Loc.T("common.pitch"), PianoRollView.NoteName(n.Pitch));
-            Field(Loc.T("common.start"), Position(n.StartBeat));
-            Field(Loc.T("common.length"), string.Format(NotaNum.Culture, "{0:0.##}/16", n.LengthBeats * 4));
-            Field(Loc.T("common.velocity"), Vel(n.Velocity).ToString(NotaNum.Culture));
+            Field(Loc.T("common.pitch"), PianoRollView.NoteName(n.Pitch), PianoRollView.NoteField.Pitch);
+            Field(Loc.T("common.start"), Position(n.StartBeat), PianoRollView.NoteField.Start);
+            Field(Loc.T("common.length"), string.Format(NotaNum.Culture, "{0:0.##}/16", n.LengthBeats * 4), PianoRollView.NoteField.Length);
+            Field(Loc.T("common.velocity"), Vel(n.Velocity).ToString(NotaNum.Culture), PianoRollView.NoteField.Velocity);
         }
         else if (sel.Count > 1)
         {
             int lo = sel.Min(n => n.Pitch), hi = sel.Max(n => n.Pitch);
             int vLo = sel.Min(n => Vel(n.Velocity)), vHi = sel.Max(n => Vel(n.Velocity));
             Field(Loc.T("clip_props.notes"), sel.Count.ToString(NotaNum.Culture));
-            Field(Loc.T("common.range"), lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}");
-            Field(Loc.T("common.velocity"), vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}");
+            Field(Loc.T("common.range"), lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}", PianoRollView.NoteField.Pitch);
+            Field(Loc.T("common.velocity"), vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}", PianoRollView.NoteField.Velocity);
         }
 
-        // A label in ink 3 and its value in ink 1, as the Clip group's Start / Length.
-        void Field(string label, string value)
+        void Field(string label, string value, PianoRollView.NoteField? field = null)
         {
             var pair = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5 };
             pair.Children.Add(StripLabel(label));
-            pair.Children.Add(Mono(value, NotaType.Body));
+            var readout = Mono(value, NotaType.Body);
+            if (field is { } target)
+                ValueEntry.AttachPlainReadout(readout, typed =>
+                {
+                    if (ParseNoteValue(target, typed) is double number) _roll.EditSelectedNoteField(target, number);
+                });
+            if (field == PianoRollView.NoteField.Velocity)
+                readout.PointerWheelChanged += (_, e) =>
+                {
+                    e.Handled = true;
+                    _roll.WheelSelectionVelocity(WheelInput.Notches(e.Delta.Y),
+                        (e.KeyModifiers & Avalonia.Input.KeyModifiers.Shift) != 0);
+                };
+            pair.Children.Add(readout);
             _selFields.Children.Add(pair);
         }
+    }
+
+    private static double? ParseNoteValue(PianoRollView.NoteField field, string typed)
+    {
+        typed = typed.Trim();
+        if (field == PianoRollView.NoteField.Pitch)
+        {
+            for (int pitch = 0; pitch <= 127; pitch++)
+                if (string.Equals(typed, PianoRollView.NoteName(pitch), StringComparison.OrdinalIgnoreCase)) return pitch;
+        }
+        if (field == PianoRollView.NoteField.Start)
+        {
+            var parts = typed.Split('.');
+            if (parts.Length == 3 && int.TryParse(parts[0], out int bar)
+                && int.TryParse(parts[1], out int beat) && int.TryParse(parts[2], out int sixteenth))
+            {
+                int beatsPerBar = Meter.BeatsPerBar;
+                return bar >= 1 && beat >= 1 && beat <= beatsPerBar && sixteenth >= 1 && sixteenth <= 4
+                    ? (bar - 1d) * beatsPerBar + beat - 1 + (sixteenth - 1) / 4d : null;
+            }
+        }
+        bool sixteenths = field == PianoRollView.NoteField.Length && typed.EndsWith("/16", StringComparison.Ordinal);
+        if (sixteenths) typed = typed[..^3];
+        return double.TryParse(typed, System.Globalization.NumberStyles.Float, NotaNum.Culture, out double value)
+            ? sixteenths ? value / 4 : value : null;
     }
 
     private static int Vel(float v) => (int)Math.Round(Math.Clamp(v, 0, 1) * 127);

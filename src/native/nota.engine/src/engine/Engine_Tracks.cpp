@@ -4528,6 +4528,7 @@ Note Engine::noteFromData(const NotaNoteData& d) const {
     n.lengthBeats = d.length_beats;
     n.velocity = d.velocity;
     n.articulation = d.articulation_id > 0 ? d.articulation_id : 0;
+    n.muted = d.muted != 0;
     if (d.expr_id > 0) {
         std::lock_guard<std::mutex> lk(exprMx_);
         auto it = exprStore_.find(d.expr_id);
@@ -4546,6 +4547,7 @@ void Engine::noteToData(const Note& n, NotaNoteData& d) {
     d.velocity = n.velocity;
     d.expr_id = n.expr ? n.exprId : 0;
     d.articulation_id = n.articulation;
+    d.muted = n.muted ? 1 : 0;
 }
 
 // --- articulation maps (specs/085) ---------------------------------------------------------

@@ -122,7 +122,7 @@ public static class CommandCatalog
         C("session.stopTrack", Loc.T("commands.session_stop_track"), Loc.T("commands.session"), Shortcut.Shift("Return"), "", view: "Session"),
 
         // ---- Piano roll -------------------------------------------------------------------
-        C("roll.quantize", Loc.T("commands.quantize_notes"), Loc.T("common.piano_roll"), "", "quantise grid snap align"),
+        C("roll.quantize", Loc.T("commands.quantize_notes"), Loc.T("common.piano_roll"), Shortcut.None("Q"), "quantise grid snap align"),
         C("roll.octaveUp", Loc.T("commands.transpose_notes_up_an_octave"), Loc.T("common.piano_roll"), "", "pitch shift"),
         C("roll.octaveDown", Loc.T("commands.transpose_notes_down_an_octave"), Loc.T("common.piano_roll"), "", "pitch shift"),
         C("roll.removeOutOfScale", Loc.T("commands.remove_out_of_scale_notes"), Loc.T("common.piano_roll"), "", "key fix"),

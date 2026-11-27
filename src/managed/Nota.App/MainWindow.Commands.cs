@@ -156,7 +156,7 @@ public partial class MainWindow
         G("grid.snap", SnapGrid.ToggleSnap);
         G("grid.adaptive", SnapGrid.ToggleAdaptive);
 
-        B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.Quantize(1.0); if (_vm is not null) _vm.StatusText = Loc.T("main.commands.quantized_notes"); } }, Roll);
+        B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.QuantizeSelection(); if (roll.SelectedNotes().Count > 0 && _vm is not null) _vm.StatusText = Loc.T("main.commands.quantized_notes"); } }, Roll);
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
         B("roll.fitNotes", () => _editorRoll?.FitToNotes(), Roll);

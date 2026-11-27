@@ -140,10 +140,11 @@ internal sealed class SnapChip
         for (int i = 0; i < GridStep.Count; i++)
         {
             int idx = i;
-            Item(GridStep.Of(i, s.Triplets).Label, !s.Adaptive && s.FixedIndex == i, g => SnapGrid.PickFixed(g, idx));
+            Item(GridStep.Of(i, s.Triplets, s.Dotted).Label, !s.Adaptive && s.FixedIndex == i, g => SnapGrid.PickFixed(g, idx));
         }
         f.Add(new Separator());
         Item(Loc.T("snap_chip.triplets"), s.Triplets, SnapGrid.ToggleTriplets, MenuKit.Cmd(Key.D3));
+        if (_kind == EditorKind.PianoRoll) Item(Loc.T("snap_chip.dotted"), s.Dotted, SnapGrid.ToggleDotted);
         Item(Loc.T("snap_chip.snap_to_grid"), s.SnapOn, SnapGrid.ToggleSnap, MenuKit.Cmd(Key.D4));
         return f;
     }

@@ -1566,7 +1566,7 @@ int Engine::gatherInstrumentNotes(
                 if constexpr (Shifted)
                     shiftS = artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS
                                       : trackShiftS;
-                if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
+                if (note.muted || note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
                 auto at = [&](double clipBeat) {
                     if constexpr (Mapped) return renderSampleAtBeat(clip.startBeat + clipBeat, blockStart, spb);
                     else
@@ -2140,7 +2140,7 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     const ArticulationTable* artTable = t.articulationTable.get();
     const double trackMs = t.midiOffsetMs();
     for (const Note& note : s.midi.notes) {
-        if (note.startBeat < 0.0 || note.startBeat >= L) continue;
+        if (note.muted || note.startBeat < 0.0 || note.startBeat >= L) continue;
         const double shiftS = artTable ? (trackMs + articulationOffsetMs(artTable, note.articulation)) * msToS : trackMs * msToS;
         const double shiftBeats = shiftS / spb;
         // This note's on, off, or expression can reach the block from any pass whose shifted
@@ -2339,7 +2339,7 @@ void Engine::renderAnticipativeInstrumentBlock(Graph* g, Track& t, size_t trackI
         const double clipEnd = (clip.startBeat + clip.lengthBeats) * spb;
         const bool hasVel = !clip.velocityEnvelope.points.empty();
         auto handleNote = [&](const Note& note) {
-            if (note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
+            if (note.muted || note.startBeat >= clip.lengthBeats || note.startBeat + note.lengthBeats <= 0.0) return;
             const double shiftS =
                 artTable ? trackShiftS + articulationOffsetMs(artTable, note.articulation) * msToS : trackShiftS;
             const double onS = clipStart + std::max(0.0, note.startBeat) * spb + shiftS;

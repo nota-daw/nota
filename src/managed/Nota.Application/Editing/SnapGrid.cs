@@ -23,6 +23,8 @@ public enum GridDensity { Narrow, Medium, Wide }
 /// bar steps have no triplet form.</summary>
 public readonly record struct GridStep(int Index, bool Triplet)
 {
+    public bool Dotted { get; init; }
+
     public const int Count = 8, FirstBar = 5;
     private static readonly string[] Names = { "1/32", "1/16", "1/8", "1/4", "1/2", "1 bar", "2 bars", "4 bars" };
 
@@ -34,13 +36,13 @@ public readonly record struct GridStep(int Index, bool Triplet)
     };
 
     /// <summary>A step with the index clamped to the ladder and the triplet flag dropped on bar steps.</summary>
-    public static GridStep Of(int index, bool triplet)
+    public static GridStep Of(int index, bool triplet, bool dotted = false)
     {
         int i = Math.Clamp(index, 0, Count - 1);
-        return new GridStep(i, triplet && i < FirstBar);
+        return new GridStep(i, triplet && i < FirstBar) { Dotted = dotted && !triplet && i < FirstBar };
     }
 
-    public GridStep Normalize() => Of(Index, Triplet);
+    public GridStep Normalize() => Of(Index, Triplet, Dotted);
     [JsonIgnore] public bool IsBar => Normalize().Index >= FirstBar;
 
     /// <summary>Length in beats; bar steps follow the time signature.</summary>
@@ -49,7 +51,7 @@ public readonly record struct GridStep(int Index, bool Triplet)
         var s = Normalize();
         if (s.Index >= FirstBar) return SnapGrid.BarBeats(beatsPerBar) * (1 << (s.Index - FirstBar));
         double straight = 0.125 * (1 << s.Index);
-        return s.Triplet ? straight * 2.0 / 3.0 : straight;
+        return s.Triplet ? straight * 2.0 / 3.0 : s.Dotted ? straight * 1.5 : straight;
     }
 
     [JsonIgnore]
@@ -58,7 +60,7 @@ public readonly record struct GridStep(int Index, bool Triplet)
         get
         {
             var s = Normalize();
-            return s.Triplet ? NameOf(s.Index) + "T" : NameOf(s.Index);
+            return s.Triplet ? NameOf(s.Index) + "T" : s.Dotted ? NameOf(s.Index) + "." : NameOf(s.Index);
         }
     }
 }
@@ -72,6 +74,7 @@ public sealed record GridSetting
     public GridDensity Density { get; init; } = GridDensity.Medium;
     public int FixedIndex { get; init; } = 3;
     public bool Triplets { get; init; }
+    public bool Dotted { get; init; }
     public bool SnapOn { get; init; } = true;
 
     public static GridSetting DefaultArrangement { get; } = new() { FixedIndex = 3 };   // 1/4
@@ -103,11 +106,11 @@ public static class SnapGrid
         => s.IsBar || s.Beats(beatsPerBar) < BarBeats(beatsPerBar) - Eps;
 
     // The finest step from `from` up whose lines are at least `px` apart (clamped to 4 bars).
-    private static GridStep FinestFrom(int from, bool triplet, double pixelsPerBeat, double beatsPerBar, double px)
+    private static GridStep FinestFrom(int from, bool triplet, bool dotted, double pixelsPerBeat, double beatsPerBar, double px)
     {
         for (int i = from; i < GridStep.Count; i++)
         {
-            var s = GridStep.Of(i, triplet);
+            var s = GridStep.Of(i, triplet, dotted);
             if (!Usable(s, beatsPerBar)) continue;
             if (s.Beats(beatsPerBar) * pixelsPerBeat >= px) return s;
         }
@@ -119,18 +122,18 @@ public static class SnapGrid
     {
         if (!(pixelsPerBeat > 0))
         {
-            var q = GridStep.Of(3, s.Triplets);
+            var q = GridStep.Of(3, s.Triplets, s.Dotted);
             return new ResolvedGrid(q, q, false, s.SnapOn);
         }
         if (s.Adaptive)
         {
-            var a = FinestFrom(0, s.Triplets, pixelsPerBeat, beatsPerBar, Threshold(s.Density));
+            var a = FinestFrom(0, s.Triplets, s.Dotted, pixelsPerBeat, beatsPerBar, Threshold(s.Density));
             return new ResolvedGrid(a, a, false, s.SnapOn);
         }
-        var snap = GridStep.Of(s.FixedIndex, s.Triplets);
+        var snap = GridStep.Of(s.FixedIndex, s.Triplets, s.Dotted);
         var draw = snap.Beats(beatsPerBar) * pixelsPerBeat >= Threshold(GridDensity.Medium)
             ? snap
-            : FinestFrom(snap.Index, s.Triplets, pixelsPerBeat, beatsPerBar, Threshold(GridDensity.Medium));
+            : FinestFrom(snap.Index, s.Triplets, s.Dotted, pixelsPerBeat, beatsPerBar, Threshold(GridDensity.Medium));
         return new ResolvedGrid(snap, draw, draw.Index > snap.Index, s.SnapOn);
     }
 
@@ -192,7 +195,9 @@ public static class SnapGrid
         : s with { FixedIndex = Math.Min(GridStep.Count - 1, Math.Clamp(s.FixedIndex, 0, GridStep.Count - 1) + 1) };
 
     /// <summary>⌘3.</summary>
-    public static GridSetting ToggleTriplets(GridSetting s) => s with { Triplets = !s.Triplets };
+    public static GridSetting ToggleTriplets(GridSetting s) => s with { Triplets = !s.Triplets, Dotted = false };
+
+    public static GridSetting ToggleDotted(GridSetting s) => s with { Dotted = !s.Dotted, Triplets = false };
 
     /// <summary>⌘4.</summary>
     public static GridSetting ToggleSnap(GridSetting s) => s with { SnapOn = !s.SnapOn };

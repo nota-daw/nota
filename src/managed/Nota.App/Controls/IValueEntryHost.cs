@@ -46,6 +46,8 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
     /// <summary>The default in effect now.</summary>
     public double? CurrentDefault => DefaultNow is { } now ? now() : Default;
 
+    public Action<string>? CommitPlainText { get; init; }
+
     public bool CanReset => Reset is not null || CurrentDefault is not null;
 
     /// <summary>⌥-click on the control itself resets instead of typing (the faders whose ⌥-click
