@@ -23,6 +23,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Piano Roll (#1121)**: Drag either boundary in the ruler to resize an Arrangement MIDI clip.
 - **Piano Roll (#1122)**: Draw notes with a single click, duplicate and stretch with
   modifier drags, quantize with Q, split and join with rebindable shortcuts, mute notes,
   edit selection readouts inline, adjust velocity with the wheel, pan with the middle

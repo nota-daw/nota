@@ -3094,6 +3094,8 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
         const double delta = newStartBeat - c.startBeat; // shift notes to stay put
         for (auto& n : c.notes) n.startBeat -= delta;
         c.shiftControllers(-delta); // and controllers (a point left of the new start still sets the value there)
+        for (auto& point : c.velocityEnvelope.points) point.beat -= delta;
+        for (auto& point : c.volumeEnvelope.points) point.beat -= delta;
         c.startBeat = newStartBeat;
         c.lengthBeats = newLengthBeats;
     } else {

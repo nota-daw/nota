@@ -447,6 +447,8 @@ own window — see
     reads the clip's arrangement position (a clip at bar 9 starts at 9). A Session slot
     plays on its own loop clock, so its editor counts from the slot's start and doesn't seek.
   - Hold Cmd/Ctrl and drag a note's center to move copies of the selection.
+  - Drag either clip boundary in the Piano Roll ruler to resize an Arrangement MIDI clip.
+    Hold Alt/Option to bypass snapping, or press Escape to cancel.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - Drag the upper part of a note to adjust selected note velocities together.

@@ -3681,6 +3681,8 @@
     "preferences.note_velocity_drag_help": "Adjust velocity across the selection. Press Escape to cancel.",
     "preferences.stretch_note_gesture": "Alt/Option + drag a note edge",
     "preferences.stretch_note_help": "Stretch selected notes from the first note start and snap the last note start. For notes starting together, stretch from the opposite edge. Hold Shift to bypass snap.",
+    "preferences.midi_boundary_drag": "Drag a clip boundary in the Piano Roll ruler",
+    "preferences.midi_boundary_drag_help": "Resize the active Arrangement MIDI clip. Hold Alt or Option to bypass snapping. Press Escape to cancel.",
     "preferences.double_click_empty_grid": "Click empty grid",
     "preferences.double_click_header": "Double-click header",
     "preferences.double_click_in_an_mpe": "Double-click in an MPE lane",

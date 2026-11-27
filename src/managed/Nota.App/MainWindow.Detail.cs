@@ -791,6 +791,16 @@ public partial class MainWindow
             // replaced by a project load while this editor stayed on screen. Pushing a stale
             // (trackId, clipIndex) throws InvalidArg — verify each is still a live MIDI clip
             // first, drop the dead ones, and drop the editor when none is left.
+            CommitBoundaryTrim = (clip, start, length) =>
+            {
+                if (!ReferenceEquals(roll, _editorRoll) ||
+                    !Engine.TryGetClipInfo(clip.TrackId, clip.ClipIndex, out var current) || !current.IsMidi ||
+                    Math.Abs(current.StartBeat - clip.StartBeat) > 1e-8 ||
+                    Math.Abs(current.LengthBeats - clip.LengthBeats) > 1e-8) return;
+                Engine.TrimClip(clip.TrackId, clip.ClipIndex, start, length);
+                Timeline.Refresh();
+                ReloadEditorNotes();
+            },
             CommitClips = changed =>
             {
                 var live = LiveClips(roll, changed);

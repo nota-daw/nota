@@ -674,6 +674,7 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>The clips this roll edits; a set of one for the single-clip editor.</summary>
     public ClipSet Clips => _set;
     public OpenClip ActiveClip => _set.ActiveClip;
+    public Action<OpenClip, double, double>? CommitBoundaryTrim { get; set; }
     /// <summary>Raised when another clip becomes active (strip click, a note of it clicked or
     /// drawn into) or a clip is locked / unlocked; the header, inspector and envelopes follow.</summary>
     public event Action? ActiveClipChanged;
@@ -1899,19 +1900,58 @@ public sealed partial class PianoRollView : UserControl
     {
         private readonly PianoRollView _o;
         private bool _scrub;
-        public RulerLane(PianoRollView o) { _o = o; }
+        private OpenClip? _trimClip;
+        private IPointer? _trimPointer;
+        private int _trimEdge;
+        private double _trimGrab, _trimStart, _trimEnd;
+
+        public RulerLane(PianoRollView o) { _o = o; Focusable = true; }
+
+        private double BoundaryX(double projectBeat)
+            => Math.Clamp(_o.BeatToX(projectBeat - _o.RulerOrigin), 0, Math.Max(0, Bounds.Width - 1));
+
+        private int BoundaryHit(Point p)
+        {
+            var clip = _o.ActiveClip;
+            if (_o.CommitBoundaryTrim is null || clip.IsReference || p.Y > 7) return 0;
+            double x1 = _o.BeatToX(clip.StartBeat - _o.RulerOrigin);
+            double x2 = _o.BeatToX(clip.StartBeat + clip.LengthBeats - _o.RulerOrigin);
+            double left = x1 >= -1 && x1 <= Bounds.Width + 1 ? Math.Abs(p.X - BoundaryX(clip.StartBeat)) : double.PositiveInfinity;
+            double right = x2 >= -1 && x2 <= Bounds.Width + 1 ? Math.Abs(p.X - BoundaryX(clip.StartBeat + clip.LengthBeats)) : double.PositiveInfinity;
+            return Math.Min(left, right) > 7 ? 0 : left <= right ? -1 : 1;
+        }
+
+        private void CancelTrim()
+        {
+            var pointer = _trimPointer;
+            _trimClip = null;
+            _trimPointer = null;
+            pointer?.Capture(null);
+            InvalidateVisual();
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            if (_trimClip is not null && Keys.Owns(e, "edit.cancel"))
+            {
+                CancelTrim();
+                e.Handled = true;
+            }
+            else base.OnKeyDown(e);
+        }
 
         // Click places the playhead, a drag scrubs it (snapped to the grid), as on the
         // arrangement ruler (#50).
         protected override void OnPointerEntered(PointerEventArgs e)
         {
             base.OnPointerEntered(e);
-            UpdateCursor(e.GetPosition(this).X);
+            UpdateCursor(e.GetPosition(this));
         }
         // A hand over the ruler, ↔ on the playhead line; a Session slot can't seek, and says why.
-        private void UpdateCursor(double x)
+        private void UpdateCursor(Point p)
         {
-            Cursor = _o.Seek is not null ? (_o.OnPlayheadLine(x, PlayheadGrabPx) ? LineCursor : HandCursorShared)
+            if (BoundaryHit(p) != 0) { Cursor = LineCursor; return; }
+            Cursor = _o.Seek is not null ? (_o.OnPlayheadLine(p.X, PlayheadGrabPx) ? LineCursor : HandCursorShared)
                    : _o.IsSessionSlot ? NoCursor : Cursor.Default;
             object? tip = _o.Seek is null && _o.IsSessionSlot ? SlotSeekTip : null;
             if (!Equals(ToolTip.GetTip(this), tip)) ToolTip.SetTip(this, tip);
@@ -1919,7 +1959,25 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             base.OnPointerPressed(e);
-            if (_o.Seek is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            var p = e.GetPosition(this);
+            int edge = BoundaryHit(p);
+            if (edge != 0)
+            {
+                _o.SettlePlacement();
+                var clip = _o.ActiveClip;
+                _trimClip = clip;
+                _trimEdge = edge;
+                _trimStart = clip.StartBeat;
+                _trimEnd = clip.StartBeat + clip.LengthBeats;
+                _trimGrab = _o.XToBeat(p.X) + _o.RulerOrigin - (edge < 0 ? _trimStart : _trimEnd);
+                _trimPointer = e.Pointer;
+                Focus();
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+            if (_o.Seek is null) return;
             _scrub = true;
             e.Pointer.Capture(this);
             SeekAt(e);
@@ -1928,12 +1986,33 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             base.OnPointerMoved(e);
+            if (_trimClip is { } clip)
+            {
+                if (_o.ActiveClip != clip) { CancelTrim(); return; }
+                double beat = _o.XToBeat(e.GetPosition(this).X) + _o.RulerOrigin - _trimGrab;
+                if ((e.KeyModifiers & KeyModifiers.Alt) == 0 && _o.SnapGridState.SnapOn)
+                    beat = SnapGrid.SnapBeat(beat, _o.SnapStep, _o._beatsPerBar);
+                if (_trimEdge < 0) _trimStart = Math.Clamp(beat, 0, Math.Max(0, _trimEnd - 0.25));
+                else _trimEnd = Math.Max(_trimStart + 0.25, beat);
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
             if (_scrub) SeekAt(e);
-            else UpdateCursor(e.GetPosition(this).X);
+            else UpdateCursor(e.GetPosition(this));
         }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
             base.OnPointerReleased(e);
+            if (_trimClip is { } clip)
+            {
+                double start = _trimStart, length = _trimEnd - start;
+                CancelTrim();
+                if (_o.ActiveClip == clip && (Math.Abs(start - clip.StartBeat) > 1e-8 || Math.Abs(length - clip.LengthBeats) > 1e-8))
+                    _o.CommitBoundaryTrim?.Invoke(clip, start, length);
+                e.Handled = true;
+                return;
+            }
             if (!_scrub) return;
             _scrub = false;
             e.Pointer.Capture(null);
@@ -1941,6 +2020,9 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
         {
             _scrub = false;
+            _trimClip = null;
+            _trimPointer = null;
+            InvalidateVisual();
             base.OnPointerCaptureLost(e);
         }
         // Time display (#275): ticks at whole time steps of the arrangement, wide enough for
@@ -2005,6 +2087,27 @@ public sealed partial class PianoRollView : UserControl
                 double loopEnd = Math.Min(w, _o.BeatToX(ce));
                 double loopStart = Math.Max(0, _o.BeatToX(cs));
                 if (loopEnd > loopStart) ctx.FillRectangle(LoopStrip, new Rect(loopStart, 0, loopEnd - loopStart, 3));
+            }
+            if (_o.CommitBoundaryTrim is not null && !_o.ActiveClip.IsReference)
+            {
+                var clip = _o.ActiveClip;
+                double start = _trimClip is null ? clip.StartBeat : _trimStart;
+                double end = _trimClip is null ? clip.StartBeat + clip.LengthBeats : _trimEnd;
+                DrawBoundary(start);
+                DrawBoundary(end);
+                void DrawBoundary(double beat)
+                {
+                    double x = _o.BeatToX(beat - _o.RulerOrigin);
+                    if (_trimClip is null && (x < -1 || x > w + 1)) return;
+                    ctx.FillRectangle(NotaPalette.TextSecondary, new Rect(Math.Clamp(x - 2, 0, Math.Max(0, w - 5)), 0, 5, 7));
+                }
+                if (_trimClip is not null)
+                {
+                    var text = new NotaFormattedText(ClipEditorKit.Duration(end - start), NotaNum.Culture,
+                        FlowDirection.LeftToRight, NumFace, 9, RulerBarText);
+                    ctx.DrawText(text, new Point(8, Math.Max(7, h - 5 - text.Height)));
+                    return;
+                }
             }
             double origin = _o.RulerOrigin;
             double bpm = _o.Bpm?.Invoke() ?? 0;
