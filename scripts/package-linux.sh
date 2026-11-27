@@ -90,7 +90,7 @@ dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true
 
 # The csproj copies the native artifacts for a linux RID; copy them explicitly too
 # as a safety net.
-cp -f "${NATIVE}/libnota_engine.so" "${PUB}/"
+cp -f "${NATIVE}"/libnota_*.so "${PUB}/"
 [ -f "${NATIVE}/nota-scanworker" ] && cp -f "${NATIVE}/nota-scanworker" "${PUB}/"
 
 echo "==> Assembling AppDir…"

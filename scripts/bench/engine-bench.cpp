@@ -29,6 +29,7 @@
 #include "nota/nota_engine.h"
 
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -48,7 +49,8 @@ double processCpuSeconds() {
 }
 
 int usage() {
-    std::fprintf(stderr, "usage: engine-bench idle | engine-bench <audio|inst|keyed> <tracks> <offline|rt> <clip.wav> [block]\n");
+    std::fprintf(stderr,
+        "usage: engine-bench idle | engine-bench <audio|inst|keyed> <tracks> <offline|rt> <clip.wav> [block]\n");
     return 2;
 }
 
@@ -77,8 +79,8 @@ int main(int argc, char** argv) {
     const int tracks = std::atoi(argv[2]);
     const std::string mode = argv[3];
     const char* clip = argv[4];
-    if ((scenario != "audio" && scenario != "inst" && scenario != "keyed") || (mode != "offline" && mode != "rt" && mode != "export") ||
-        tracks <= 0)
+    if ((scenario != "audio" && scenario != "inst" && scenario != "keyed") ||
+        (mode != "offline" && mode != "rt" && mode != "export") || tracks <= 0)
         return usage();
 
     int32_t key = -1; // keyed: the first track
@@ -89,7 +91,8 @@ int main(int argc, char** argv) {
             nota_track_add_builtin_device(e, t, 2); // Reverb
             if (scenario == "keyed") {
                 if (i == 0) key = t;
-                else nota_device_set_sidechain_source(e, t, nota_track_add_builtin_device(e, t, 1), key); // Compressor
+                else
+                    nota_device_set_sidechain_source(e, t, nota_track_add_builtin_device(e, t, 1), key); // Compressor
             }
         } else {
             const int32_t t = nota_engine_add_instrument_track(e);

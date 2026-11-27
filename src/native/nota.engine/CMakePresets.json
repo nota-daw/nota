@@ -1,0 +1,102 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev",
+      "displayName": "Dev (Host Arch, C++20 + C ABI, Strict Warnings, clangd DB)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-dev",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "NOTA_UNIVERSAL_BINARY": "OFF",
+        "NOTA_ENABLE_LTO": "OFF",
+        "NOTA_BUILD_C_ABI": "ON",
+        "NOTA_BUILD_TESTS": "ON",
+        "NOTA_STRICT_WARNINGS_AS_ERRORS": "ON",
+        "NOTA_ENABLE_SANITIZERS": "OFF"
+      }
+    },
+    {
+      "name": "dev-cpp",
+      "displayName": "Dev C++ Only (Host Arch, No C ABI, Strict Warnings)",
+      "inherits": "dev",
+      "binaryDir": "${sourceDir}/build-dev-cpp",
+      "cacheVariables": {
+        "NOTA_BUILD_C_ABI": "OFF"
+      }
+    },
+    {
+      "name": "dev-asan",
+      "displayName": "Dev Sanitizers (ASan + UBSan, Strict Warnings)",
+      "inherits": "dev",
+      "binaryDir": "${sourceDir}/build-dev-asan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "NOTA_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (Universal macOS + LTO)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "NOTA_UNIVERSAL_BINARY": "ON",
+        "NOTA_ENABLE_LTO": "ON",
+        "NOTA_BUILD_C_ABI": "ON",
+        "NOTA_BUILD_TESTS": "ON",
+        "NOTA_STRICT_WARNINGS_AS_ERRORS": "ON",
+        "NOTA_ENABLE_SANITIZERS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "dev-cpp",
+      "configurePreset": "dev-cpp"
+    },
+    {
+      "name": "dev-asan",
+      "configurePreset": "dev-asan"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "dev-cpp",
+      "configurePreset": "dev-cpp",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "dev-asan",
+      "configurePreset": "dev-asan",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

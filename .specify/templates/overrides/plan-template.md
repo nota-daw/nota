@@ -14,7 +14,7 @@
 
 Consult the matching source of truth before designing:
 
-- **Engine work** → [`ARCHITECTURE.md`](../../ARCHITECTURE.md): the AR rules table is binding (AR-4 lock-free queue, AR-5 immutable snapshots, AR-6 audio-thread restrictions, AR-7 pure C ABI, AR-9 `Transport` is the only source of musical time).
+- **Engine work** → [`ARCHITECTURE.md`](../../ARCHITECTURE.md): the AR rules table is binding (AR-4 lock-free queue, AR-5 immutable snapshots, AR-6 audio-thread restrictions, AR-7 pure C ABI, AR-9 `Transport` is the only source of musical time), alongside the native modular & readability gates (`PUBLIC include/` vs `PRIVATE src/`, acyclic DAG, self-contained `< 180`-line public `Engine::*` headers passing `test_headers_compile`, split `> 400`-line devices / no `> 1,000`-line monoliths, Objective-C++ in `*_mac.mm`, zero leaked SDK headers or `juce::*` exports, RAII without raw `new`/`delete` in `modules/*` domain code, `NOTA_STRICT_WARNINGS_AS_ERRORS=ON` + `dev-asan` + clean `.clangd`, and mandatory `clang-format -i` before concluding engine edits).
 - **UI work** → [`DESIGN.md`](../../DESIGN.md) (Studio design language) and the `nota-design` skill.
 - **A built-in instrument / audio or MIDI effect** → the `nota-instrument` skill (DSP class, kind registration across C++ and C#, device-card UI).
 - **Build / packaging** → [`BUILD.md`](../../BUILD.md).

@@ -4,7 +4,9 @@
 build/
 build-*/
 .cpm-cache/
+.cache/
 out/
+CMakeUserPresets.json
 *.user
 
 # .NET
@@ -15,6 +17,7 @@ project.lock.json
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
+compile_commands.json
 
 # macOS
 .DS_Store

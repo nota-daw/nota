@@ -11,12 +11,12 @@ export PATH="/opt/homebrew/bin:$PATH"
 
 echo "==> Building native engine (universal arm64+x86_64)"
 cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build \
-  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_BUILD_TYPE=Release -DNOTA_UNIVERSAL_BINARY=ON
 cmake --build src/native/nota.engine/build
 
 echo "==> Scanner self-test"
 src/native/nota.engine/build/nota-scanner-selftest
-lipo -info src/native/nota.engine/build/libnota_engine.dylib
+lipo -info src/native/nota.engine/build/libnota_*.dylib
 
 echo "==> Building managed (.NET)"
 dotnet build Nota.sln -c Release --nologo

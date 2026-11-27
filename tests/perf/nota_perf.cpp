@@ -12,6 +12,10 @@
 //   nota_perf run <id> [seconds]        prints: id <TAB> label <TAB> wall_ms_per_s <TAB> peak
 
 #include "nota/nota_engine.h"
+#include <utility>
+#include <system_error>
+#include <ratio>
+#include <ios>
 
 #if defined(__linux__)
 #include <dlfcn.h>
@@ -50,7 +54,7 @@ namespace {
 
 constexpr double kSampleRate = 48000.0;
 constexpr int kBlock = 512;
-constexpr int kMaxKind = 64;    // probe built-in kinds 0..63; new devices are picked up automatically
+constexpr int kMaxKind = 64;     // probe built-in kinds 0..63; new devices are picked up automatically
 constexpr int kEffectCopies = 8; // instances per effect scenario, so the effect dominates the count
 
 // A 4-bar loop of 4-note chords plus 8th-note stabs: realistic polyphony.
@@ -78,8 +82,8 @@ void applySuperSaw(NotaEngine* e, int track) {
     static const char* const ids[] = {"table", "position", "osc2on", "osc2table", "osc2position", "osc2level",
         "osc2detune", "unison", "unidetune", "unispread", "cutoff", "resonance", "fil1env", "attack", "decay",
         "sustain", "release", "fxdrive", "fxchorus", "fxreverb", "gain"};
-    static const float values[] = {0, 0.9f, 1, 0, 0.9f, 0.8f, 0.62f, 1, 0.4f, 0.9f, 0.8f, 0.14f, 0.55f, 0, 0.4f,
-        0.85f, 0.28f, 0.2f, 0.26f, 0.24f, 0.72f};
+    static const float values[] = {0, 0.9f, 1, 0, 0.9f, 0.8f, 0.62f, 1, 0.4f, 0.9f, 0.8f, 0.14f, 0.55f, 0, 0.4f, 0.85f,
+        0.28f, 0.2f, 0.26f, 0.24f, 0.72f};
     const int n = nota_plugin_param_count(e, track, -1);
     for (size_t p = 0; p < sizeof ids / sizeof ids[0]; ++p)
         for (int i = 0; i < n; ++i) {
@@ -165,8 +169,9 @@ void fillFullChord(NotaEngine* e, int track, int voices) {
 // Each process writes its own file (perf-gate runs scenarios in parallel), removed once
 // the clip has loaded it.
 std::string warpTestWav() {
-    const auto path = (std::filesystem::temp_directory_path() /
-                       ("nota_perf_warp_" + std::to_string(std::random_device{}()) + ".wav")).string();
+    const auto path =
+        (std::filesystem::temp_directory_path() / ("nota_perf_warp_" + std::to_string(std::random_device{}()) + ".wav"))
+            .string();
     constexpr double kTwoPi = 6.283185307179586;
     const int sr = 48000, frames = sr * 8;
     std::vector<int16_t> pcm((size_t)frames * 2);
@@ -182,8 +187,18 @@ std::string warpTestWav() {
     auto u32 = [&](uint32_t v) { f.write(reinterpret_cast<const char*>(&v), 4); };
     auto u16 = [&](uint16_t v) { f.write(reinterpret_cast<const char*>(&v), 2); };
     const uint32_t bytes = (uint32_t)pcm.size() * 2;
-    f.write("RIFF", 4); u32(36 + bytes); f.write("WAVEfmt ", 8); u32(16); u16(1); u16(2); u32(sr); u32(sr * 4); u16(4); u16(16);
-    f.write("data", 4); u32(bytes);
+    f.write("RIFF", 4);
+    u32(36 + bytes);
+    f.write("WAVEfmt ", 8);
+    u32(16);
+    u16(1);
+    u16(2);
+    u32(sr);
+    u32(sr * 4);
+    u16(4);
+    u16(16);
+    f.write("data", 4);
+    u32(bytes);
     f.write(reinterpret_cast<const char*>(pcm.data()), bytes);
     return path;
 }
@@ -230,7 +245,8 @@ bool instrumentKindExists(int kind) {
     if (kind == 0) return true;
     NotaEngine* e = nota_engine_create();
     const int t = nota_engine_add_instrument_track(e);
-    const bool ok = nota_track_set_builtin_instrument(e, t, kind) == NOTA_OK && nota_track_instrument_kind(e, t) == kind;
+    const bool ok =
+        nota_track_set_builtin_instrument(e, t, kind) == NOTA_OK && nota_track_instrument_kind(e, t) == kind;
     nota_engine_destroy(e);
     return ok;
 }
@@ -271,7 +287,8 @@ std::vector<Scenario> scenarios() {
         std::snprintf(id, sizeof id, "effect-%02d", k);
         s.push_back({id, name + " x" + std::to_string(kEffectCopies) + " on Synth"});
     }
-    for (int n : {1, 4, 8, 16, 32}) s.push_back({"mix-" + std::to_string(n), std::to_string(n) + " tracks, all playing"});
+    for (int n : {1, 4, 8, 16, 32})
+        s.push_back({"mix-" + std::to_string(n), std::to_string(n) + " tracks, all playing"});
     s.push_back({"sparse-32", "32 tracks, 1 in 4 playing"});
     s.push_back({"silent-32", "32 tracks, no clips"});
     // Stopped after playing: the audio tracks' Reverb + Delay ring out (#449), then must cost
@@ -362,22 +379,70 @@ bool build(NotaEngine* e, const std::string& id) {
             setParamById(e, t, pid, v);
         // 16 live matrix routes (slots 7..22; 1..6 are Init's expression routes, idle here): LFOs,
         // envelopes, velocity, key and random onto cutoffs, wave, width, morph and more.
-            setParamById(e, t, "lo.m7.src", 1.0f / 63.0f); setParamById(e, t, "lo.m7.dst", 28.0f / 255.0f); setParamById(e, t, "lo.a.m7amt", 0.6f); setParamById(e, t, "lo.b.m7amt", 0.6f);
-            setParamById(e, t, "lo.m8.src", 2.0f / 63.0f); setParamById(e, t, "lo.m8.dst", 23.0f / 255.0f); setParamById(e, t, "lo.a.m8amt", 0.6f); setParamById(e, t, "lo.b.m8amt", 0.6f);
-            setParamById(e, t, "lo.m9.src", 3.0f / 63.0f); setParamById(e, t, "lo.m9.dst", 6.0f / 255.0f); setParamById(e, t, "lo.a.m9amt", 0.6f); setParamById(e, t, "lo.b.m9amt", 0.6f);
-            setParamById(e, t, "lo.m10.src", 4.0f / 63.0f); setParamById(e, t, "lo.m10.dst", 13.0f / 255.0f); setParamById(e, t, "lo.a.m10amt", 0.6f); setParamById(e, t, "lo.b.m10amt", 0.6f);
-            setParamById(e, t, "lo.m11.src", 6.0f / 63.0f); setParamById(e, t, "lo.m11.dst", 1.0f / 255.0f); setParamById(e, t, "lo.a.m11amt", 0.6f); setParamById(e, t, "lo.b.m11amt", 0.6f);
-            setParamById(e, t, "lo.m12.src", 7.0f / 63.0f); setParamById(e, t, "lo.m12.dst", 33.0f / 255.0f); setParamById(e, t, "lo.a.m12amt", 0.6f); setParamById(e, t, "lo.b.m12amt", 0.6f);
-            setParamById(e, t, "lo.m13.src", 9.0f / 63.0f); setParamById(e, t, "lo.m13.dst", 29.0f / 255.0f); setParamById(e, t, "lo.a.m13amt", 0.6f); setParamById(e, t, "lo.b.m13amt", 0.6f);
-            setParamById(e, t, "lo.m14.src", 18.0f / 63.0f); setParamById(e, t, "lo.m14.dst", 15.0f / 255.0f); setParamById(e, t, "lo.a.m14amt", 0.6f); setParamById(e, t, "lo.b.m14amt", 0.6f);
-            setParamById(e, t, "lo.m15.src", 1.0f / 63.0f); setParamById(e, t, "lo.m15.dst", 67.0f / 255.0f); setParamById(e, t, "lo.a.m15amt", 0.6f); setParamById(e, t, "lo.b.m15amt", 0.6f);
-            setParamById(e, t, "lo.m16.src", 2.0f / 63.0f); setParamById(e, t, "lo.m16.dst", 34.0f / 255.0f); setParamById(e, t, "lo.a.m16amt", 0.6f); setParamById(e, t, "lo.b.m16amt", 0.6f);
-            setParamById(e, t, "lo.m17.src", 3.0f / 63.0f); setParamById(e, t, "lo.m17.dst", 24.0f / 255.0f); setParamById(e, t, "lo.a.m17amt", 0.6f); setParamById(e, t, "lo.b.m17amt", 0.6f);
-            setParamById(e, t, "lo.m18.src", 5.0f / 63.0f); setParamById(e, t, "lo.m18.dst", 20.0f / 255.0f); setParamById(e, t, "lo.a.m18amt", 0.6f); setParamById(e, t, "lo.b.m18amt", 0.6f);
-            setParamById(e, t, "lo.m19.src", 6.0f / 63.0f); setParamById(e, t, "lo.m19.dst", 8.0f / 255.0f); setParamById(e, t, "lo.a.m19amt", 0.6f); setParamById(e, t, "lo.b.m19amt", 0.6f);
-            setParamById(e, t, "lo.m20.src", 2.0f / 63.0f); setParamById(e, t, "lo.m20.dst", 32.0f / 255.0f); setParamById(e, t, "lo.a.m20amt", 0.6f); setParamById(e, t, "lo.b.m20amt", 0.6f);
-            setParamById(e, t, "lo.m21.src", 1.0f / 63.0f); setParamById(e, t, "lo.m21.dst", 16.0f / 255.0f); setParamById(e, t, "lo.a.m21amt", 0.6f); setParamById(e, t, "lo.b.m21amt", 0.6f);
-            setParamById(e, t, "lo.m22.src", 4.0f / 63.0f); setParamById(e, t, "lo.m22.dst", 25.0f / 255.0f); setParamById(e, t, "lo.a.m22amt", 0.6f); setParamById(e, t, "lo.b.m22amt", 0.6f);
+        setParamById(e, t, "lo.m7.src", 1.0f / 63.0f);
+        setParamById(e, t, "lo.m7.dst", 28.0f / 255.0f);
+        setParamById(e, t, "lo.a.m7amt", 0.6f);
+        setParamById(e, t, "lo.b.m7amt", 0.6f);
+        setParamById(e, t, "lo.m8.src", 2.0f / 63.0f);
+        setParamById(e, t, "lo.m8.dst", 23.0f / 255.0f);
+        setParamById(e, t, "lo.a.m8amt", 0.6f);
+        setParamById(e, t, "lo.b.m8amt", 0.6f);
+        setParamById(e, t, "lo.m9.src", 3.0f / 63.0f);
+        setParamById(e, t, "lo.m9.dst", 6.0f / 255.0f);
+        setParamById(e, t, "lo.a.m9amt", 0.6f);
+        setParamById(e, t, "lo.b.m9amt", 0.6f);
+        setParamById(e, t, "lo.m10.src", 4.0f / 63.0f);
+        setParamById(e, t, "lo.m10.dst", 13.0f / 255.0f);
+        setParamById(e, t, "lo.a.m10amt", 0.6f);
+        setParamById(e, t, "lo.b.m10amt", 0.6f);
+        setParamById(e, t, "lo.m11.src", 6.0f / 63.0f);
+        setParamById(e, t, "lo.m11.dst", 1.0f / 255.0f);
+        setParamById(e, t, "lo.a.m11amt", 0.6f);
+        setParamById(e, t, "lo.b.m11amt", 0.6f);
+        setParamById(e, t, "lo.m12.src", 7.0f / 63.0f);
+        setParamById(e, t, "lo.m12.dst", 33.0f / 255.0f);
+        setParamById(e, t, "lo.a.m12amt", 0.6f);
+        setParamById(e, t, "lo.b.m12amt", 0.6f);
+        setParamById(e, t, "lo.m13.src", 9.0f / 63.0f);
+        setParamById(e, t, "lo.m13.dst", 29.0f / 255.0f);
+        setParamById(e, t, "lo.a.m13amt", 0.6f);
+        setParamById(e, t, "lo.b.m13amt", 0.6f);
+        setParamById(e, t, "lo.m14.src", 18.0f / 63.0f);
+        setParamById(e, t, "lo.m14.dst", 15.0f / 255.0f);
+        setParamById(e, t, "lo.a.m14amt", 0.6f);
+        setParamById(e, t, "lo.b.m14amt", 0.6f);
+        setParamById(e, t, "lo.m15.src", 1.0f / 63.0f);
+        setParamById(e, t, "lo.m15.dst", 67.0f / 255.0f);
+        setParamById(e, t, "lo.a.m15amt", 0.6f);
+        setParamById(e, t, "lo.b.m15amt", 0.6f);
+        setParamById(e, t, "lo.m16.src", 2.0f / 63.0f);
+        setParamById(e, t, "lo.m16.dst", 34.0f / 255.0f);
+        setParamById(e, t, "lo.a.m16amt", 0.6f);
+        setParamById(e, t, "lo.b.m16amt", 0.6f);
+        setParamById(e, t, "lo.m17.src", 3.0f / 63.0f);
+        setParamById(e, t, "lo.m17.dst", 24.0f / 255.0f);
+        setParamById(e, t, "lo.a.m17amt", 0.6f);
+        setParamById(e, t, "lo.b.m17amt", 0.6f);
+        setParamById(e, t, "lo.m18.src", 5.0f / 63.0f);
+        setParamById(e, t, "lo.m18.dst", 20.0f / 255.0f);
+        setParamById(e, t, "lo.a.m18amt", 0.6f);
+        setParamById(e, t, "lo.b.m18amt", 0.6f);
+        setParamById(e, t, "lo.m19.src", 6.0f / 63.0f);
+        setParamById(e, t, "lo.m19.dst", 8.0f / 255.0f);
+        setParamById(e, t, "lo.a.m19amt", 0.6f);
+        setParamById(e, t, "lo.b.m19amt", 0.6f);
+        setParamById(e, t, "lo.m20.src", 2.0f / 63.0f);
+        setParamById(e, t, "lo.m20.dst", 32.0f / 255.0f);
+        setParamById(e, t, "lo.a.m20amt", 0.6f);
+        setParamById(e, t, "lo.b.m20amt", 0.6f);
+        setParamById(e, t, "lo.m21.src", 1.0f / 63.0f);
+        setParamById(e, t, "lo.m21.dst", 16.0f / 255.0f);
+        setParamById(e, t, "lo.a.m21amt", 0.6f);
+        setParamById(e, t, "lo.b.m21amt", 0.6f);
+        setParamById(e, t, "lo.m22.src", 4.0f / 63.0f);
+        setParamById(e, t, "lo.m22.dst", 25.0f / 255.0f);
+        setParamById(e, t, "lo.a.m22amt", 0.6f);
+        setParamById(e, t, "lo.b.m22amt", 0.6f);
         fillFullChord(e, t, 12);
         return true;
     }
@@ -449,16 +514,15 @@ int run(const std::string& id, double seconds) {
         return 2;
     }
     if (id == "edit-warp-split") { // split the last piece 8 times, then undo them
-        // Count the split and the undo, not the 4 ms fade a split now writes. This count
-        // is tiny and already moves by a percent or two when unrelated code is added; the
-        // fade pushed it just over the gate while the wall time stayed 0.00 ms. Playing a
-        // faded split is audio-warp-split. The fade itself is in the smoke test.
-        // Resolved at runtime: this file is also compiled against the base engine, which
-        // does not export the call.
+                                   // Count the split and the undo, not the 4 ms fade a split now writes. This count
+                                   // is tiny and already moves by a percent or two when unrelated code is added; the
+                                   // fade pushed it just over the gate while the wall time stayed 0.00 ms. Playing a
+                                   // faded split is audio-warp-split. The fade itself is in the smoke test.
+                                   // Resolved at runtime: this file is also compiled against the base engine, which
+                                   // does not export the call.
 #if defined(__linux__)
         using SetSplitFades = void (*)(NotaEngine*, int);
-        if (auto set = reinterpret_cast<SetSplitFades>(dlsym(RTLD_DEFAULT, "nota_engine_set_split_fades")))
-            set(e, 0);
+        if (auto set = reinterpret_cast<SetSplitFades>(dlsym(RTLD_DEFAULT, "nota_engine_set_split_fades"))) set(e, 0);
 #endif
         constexpr int kEdits = 8;
         // Warm-up, not measured: one split + undo first, so the counted edits don't include the

@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+
+#include "model/Track.h"
+#include "core/EnginePrelude.h"
+#include "core/TempoMap.h" // IWYU pragma: keep
+#include <cstdint>
+#include <cstddef>
+#include <atomic>
+#include <algorithm>
+
+namespace nota::detail {
+
+double AudioTake::beatAtFrame(double frame) const {
+    return tempoMap && sample && sample->sourceSampleRate > 0
+               ? tempoMap->beatAt(tempoMap->secondsAt(originBeat) + frame / sample->sourceSampleRate)
+               : originBeat + frame * beatsPerFrame;
+}
+
+double AudioTake::frameAtBeat(double beat) const {
+    return tempoMap && sample && sample->sourceSampleRate > 0
+               ? (tempoMap->secondsAt(beat) - tempoMap->secondsAt(originBeat)) * sample->sourceSampleRate
+           : beatsPerFrame > 0 ? (beat - originBeat) / beatsPerFrame
+                               : 0.0;
+}
+
+float ClipAdsr::gainAt(double t, double len) const {
+    double g;
+    // No decay stage: rise straight to the sustain level. A split clears the right
+    // piece's decay, and rising to 1 before dropping to sustain would click there.
+    if (decay <= 0.0)
+        g = (attack > 0.0 && t < attack) ? static_cast<double>(sustain) * (t / attack) : static_cast<double>(sustain);
+    else if (t < attack)
+        g = attack > 0.0 ? t / attack : 0.0;
+    else if (t < attack + decay)
+        g = 1.0 - (1.0 - sustain) * ((t - attack) / decay);
+    else
+        g = sustain;
+    if (release > 0.0 && t > len - release) g *= std::max(0.0, (len - t) / release);
+    return static_cast<float>(std::clamp(g, 0.0, 1.0));
+}
+
+int64_t AudioClip::effectiveLength() const {
+    if (!sample) return 0;
+    int64_t maxLen = sample->frames - static_cast<int64_t>(sourceOffsetFrames);
+    if (lengthFrames <= 0) return maxLen;
+    return lengthFrames < maxLen ? lengthFrames : maxLen;
+}
+
+void Track::updateMidiCv(const MidiEv* evs, int n) {
+    int held = midiHeld_.load(std::memory_order_relaxed);
+    float vel = midiVel_.load(std::memory_order_relaxed);
+    float note = midiNote_.load(std::memory_order_relaxed);
+    for (int i = 0; i < n; ++i) {
+        if (evs[i].on) {
+            vel = evs[i].vel;
+            note = static_cast<float>(evs[i].pitch) / 127.0f;
+            ++held;
+        } else if (held > 0)
+            --held;
+    }
+    midiHeld_.store(held < 0 ? 0 : held, std::memory_order_relaxed);
+    midiVel_.store(vel, std::memory_order_relaxed);
+    midiNote_.store(note, std::memory_order_relaxed);
+}
+
+void Track::setMeter(float pkL, float pkR, float rmsL, float rmsR) {
+    mPeakL_.store(pkL, std::memory_order_relaxed);
+    mPeakR_.store(pkR, std::memory_order_relaxed);
+    mRmsL_.store(rmsL, std::memory_order_relaxed);
+    mRmsR_.store(rmsR, std::memory_order_relaxed);
+}
+
+void Track::setStereo(float l, float r, float lr) {
+    stereoL_.store(l, std::memory_order_relaxed);
+    stereoR_.store(r, std::memory_order_relaxed);
+    stereoLR_.store(lr, std::memory_order_relaxed);
+}
+
+void Track::stereoFold(double sqL, double sqR, double sLR, int32_t frames, float a) {
+    const double n = frames > 0 ? frames : 1;
+    auto fold = [a](std::atomic<float>& e, double mean) {
+        const float cur = e.load(std::memory_order_relaxed);
+        e.store(cur + a * (static_cast<float>(mean) - cur), std::memory_order_relaxed);
+    };
+    fold(stereoL_, sqL / n);
+    fold(stereoR_, sqR / n);
+    fold(stereoLR_, sLR / n);
+}
+
+const AudioClip* audioClipRef(const Track& t, int32_t clipIndex) {
+    if (t.type() != TrackType::Audio) return nullptr;
+    if (clipIndex >= 0)
+        return clipIndex < static_cast<int32_t>(t.clips.size()) ? &t.clips[static_cast<size_t>(clipIndex)] : nullptr;
+    const int32_t scene = sessionSceneOfClip(clipIndex);
+    if (scene < 0 || scene >= static_cast<int32_t>(t.sessionSlots.size())) return nullptr;
+    const SessionSlot& s = t.sessionSlots[static_cast<size_t>(scene)];
+    return s.hasClip && s.audio.sample ? &s.audio : nullptr;
+}
+
+AudioClip* audioClipWrite(Track& t, int32_t clipIndex) {
+    if (t.type() != TrackType::Audio) return nullptr;
+    if (clipIndex >= 0) {
+        if (clipIndex >= static_cast<int32_t>(t.clips.size())) return nullptr;
+        return &t.clips.write()[static_cast<size_t>(clipIndex)];
+    }
+    const int32_t scene = sessionSceneOfClip(clipIndex);
+    if (scene < 0 || scene >= static_cast<int32_t>(t.sessionSlots.size())) return nullptr;
+    const SessionSlot& s = t.sessionSlots[static_cast<size_t>(scene)];
+    if (!s.hasClip || !s.audio.sample) return nullptr;
+    return &t.sessionSlots.write()[static_cast<size_t>(scene)].audio;
+}
+
+} // namespace nota::detail

@@ -34,3 +34,17 @@ exempt.
   `.claude/skills/`: edit a skill there, then run `scripts/sync-agent-skills.sh`.
 - Before any pull request: `scripts/build.sh` (or the Linux/Windows siblings) must pass;
   it runs the smoke test that drives the engine end-to-end.
+- **Native engine readability & architecture gates** ([`ARCHITECTURE.md`](ARCHITECTURE.md),
+  [`.specify/memory/constitution.md`](.specify/memory/constitution.md), [`.clangd`](.clangd)):
+  keep strict `PUBLIC include/` vs `PRIVATE src/` module boundaries (`test_headers_compile`
+  green, zero leaked third-party/OS headers in `include/`, JUCE confined to `pluginhost/` +
+  `pluginscanner/src/backends/juce/` with `0` dynamic exports, Objective-C++ in `*_mac.mm` only);
+  keep public `Engine::*` domain headers `< 180` lines and split `> 400`-line built-in devices
+  into focused `Params`/`Dsp`/`Device` files (no `> 1,000`-line monoliths); use OOP registries
+  rather than `switch` factories and RAII without raw `new`/`delete` in `modules/*` domain/API
+  code; pass `NOTA_STRICT_WARNINGS_AS_ERRORS=ON` across `dev`/`dev-cpp`/`dev-asan`/`release`
+  with zero `clangd` missing/unused-include diagnostics.
+- **Mandatory `clang-format` gate**: before finishing any edit to native engine, perf, or
+  benchmark code (`src/native/nota.engine/`, `tests/perf/`, `scripts/bench/`), unconditionally
+  run `clang-format -i` (using root [`.clang-format`](.clang-format)) on all modified
+  C/C++/ObjC++ files.

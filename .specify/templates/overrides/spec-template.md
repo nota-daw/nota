@@ -152,7 +152,8 @@ expectations), [`BUILD.md`](../../BUILD.md), [`DESIGN.md`](../../DESIGN.md),
 - [ ] Every new source file will carry the AGPL-3.0-only SPDX header (two lines, see CONTRIBUTING.md)
 - [ ] No new dependency — or: license checked, AGPL-compatible, `LICENSES/third-party.md` row planned
 - [ ] Audio-thread impact considered: no alloc / lock / I/O on the audio thread (AR-6), command queue for data in (AR-4), immutable snapshots for structural edits (AR-5)
-- [ ] Managed/native crossings go through the pure C ABI in `nota_engine.h` only (AR-7); no JUCE outside `pluginhost/`
+- [ ] Managed/native crossings go through the pure C ABI in `src/native/nota.engine/include/nota/nota_engine.h` only (AR-7); JUCE confined to `modules/pluginhost/` and `modules/pluginscanner/src/backends/juce/` (`0` dynamic exports)
+- [ ] Engine readability & architecture gates (when touching native code): `PUBLIC include/` vs `PRIVATE src/` isolation (`test_headers_compile`), `< 180`-line self-contained `Engine::*` headers, split `> 400`-line devices / no `> 1,000`-line monoliths, `*_mac.mm` for ObjC++, strict C++20 (`NOTA_STRICT_WARNINGS_AS_ERRORS=ON`, `dev-asan`), clean `.clangd`, and mandatory `clang-format -i` on all modified C/C++/ObjC++ files before finishing
 - [ ] Smoke-test impact assessed: engine behaviour change → extend `tests/Nota.SmokeTest`
 - [ ] User-visible change → `CHANGELOG.md` `[Unreleased]` entry planned (and FEATURES.md / user docs via the nota-features / nota-docs skills when working with an agent that has them)
 - [ ] UI change → follows `DESIGN.md` (Studio design language)

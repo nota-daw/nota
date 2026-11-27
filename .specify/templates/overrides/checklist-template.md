@@ -19,8 +19,12 @@
   - Implementation details from tasks.md
 
   For Nota, always consider a category covering: audio-thread safety (AR-4/5/6),
-  the C ABI boundary (AR-7) and JUCE containment, AGPL headers and dependency
-  licensing, smoke-test coverage, and CHANGELOG / docs sync.
+  the C ABI boundary (AR-7) and JUCE containment (`modules/pluginhost/` and
+  `modules/pluginscanner/src/backends/juce/`), native modular boundaries (`PUBLIC include/` vs
+  `PRIVATE src/`, `< 180`-line public `Engine::*` headers, split `> 400`-line devices / no
+  `> 1,000`-line monoliths, `*_mac.mm`, strict C++20 `-Werror` + `dev-asan`, clean `.clangd`,
+  mandatory `clang-format`), AGPL headers and dependency licensing, smoke-test coverage, and
+  CHANGELOG / docs sync.
 
   DO NOT keep these sample items in the generated checklist file.
   ============================================================================

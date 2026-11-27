@@ -95,9 +95,18 @@ The short version:
   live graph in place.
 - **Only a pure C ABI crosses the managed/native boundary** (AR-7). No C++ types, no
   exceptions. Extend `nota_engine.h` rather than working around it.
-- **No JUCE outside `pluginhost/`.** The core engine's JUCE-freedom is both an
-  architectural and a licensing constraint.
+- **No JUCE outside `modules/pluginhost/` and `modules/pluginscanner/src/backends/juce/`.** Both
+  keep `juce::*` symbols hidden (`0` dynamic JUCE exports); the core engine's JUCE-freedom is
+  both an architectural and a licensing constraint.
 - **`Transport` is the only source of musical time** (AR-9).
+- **Native modular boundaries, readability & formatting gates**: follow the module DAG and file
+  conventions in [`ARCHITECTURE.md`](ARCHITECTURE.md#native-module-readability-and-formatting-gates)
+  (`PUBLIC include/` vs `PRIVATE src/`, standalone `< 180`-line public `Engine::*` headers,
+  split `> 400`-line devices / no `> 1,000`-line monoliths, Objective-C++ in `*_mac.mm`, RAII
+  without raw `new`/`delete` in `modules/*` domain code, zero warnings under
+  `NOTA_STRICT_WARNINGS_AS_ERRORS=ON` + `dev-asan` + `clangd`). **Unconditionally run
+  `clang-format -i` (root [`.clang-format`](.clang-format)) on every modified native C/C++/ObjC++
+  file before finishing an engine edit.**
 
 ## Spec-driven workflow
 
@@ -228,6 +237,10 @@ default, say), say why in the PR; a maintainer accepts it by adding the
 - One logical change per pull request.
 - Match the style of the code around you. Comment headers explain *why* a file exists,
   not what each line does — keep that convention.
+- For native C++ engine changes (`src/native/nota.engine/`, `tests/perf/`, `scripts/bench/`),
+  run `clang-format -i` (using root [`.clang-format`](.clang-format)) on all modified files,
+  keep `clangd` missing/unused-include checks clean ([`.clangd`](.clangd)), and verify
+  `NOTA_STRICT_WARNINGS_AS_ERRORS=ON` + `test_headers_compile` + `dev-asan`.
 - If you change engine behaviour, extend the smoke test to cover it.
 - If you change user-visible behaviour, add a `CHANGELOG.md` entry.
 - Say which platforms you actually built and tested on.

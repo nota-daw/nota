@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+CompileFlags:
+  CompilationDatabase: src/native/nota.engine
+  Remove:
+    - -flto
+    - -flto=thin
+
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+  Includes:
+    IgnoreHeader:
+      - ".*/_deps/.*"
+      - ".*/_cpm/.*"
+      - ".*/build[^/]*/.*"
+      - ".*/sys/_types/.*"
+      - ".*/_types/.*"
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - cppcoreguidelines-init-variables
+      - cppcoreguidelines-pro-type-cstyle-cast
+      - cppcoreguidelines-slicing
+      - modernize-avoid-bind
+      - modernize-use-emplace
+      - modernize-use-equals-default
+      - modernize-use-nullptr
+      - modernize-use-override
+      - modernize-use-using
+      - performance-for-range-copy
+      - performance-move-const-arg
+      - performance-unnecessary-value-param
+    Remove:
+      - bugprone-easily-swappable-parameters
+      - bugprone-implicit-widening-of-multiplication-result
+      - bugprone-narrowing-conversions
+      - bugprone-branch-clone
+      - bugprone-macro-parentheses
+      - bugprone-swapped-arguments
+
+Completion:
+  AllScopes: true
+  HeaderInsertion: Never
+
+---
+If:
+  PathMatch: (tests/perf|scripts/bench)/.*
+CompileFlags:
+  CompilationDatabase: None
+  Add:
+    - -std=c++20
+    - -I../../src/native/nota.engine/include
+    - -Wall
+    - -Wextra
+
+---
+If:
+  PathMatch: src/native/nota\.engine/include/.*\.h
+CompileFlags:
+  Remove:
+    - -Wnon-virtual-dtor
+    - -Wold-style-cast
+    - -Woverloaded-virtual
+Diagnostics:
+  ClangTidy:
+    Remove:
+      - modernize-*
+      - cppcoreguidelines-*
+      - performance-*
+
+---
+If:
+  PathMatch: .*/(_deps|_cpm|build[^/]*)/.*
+Diagnostics:
+  Suppress: "*"

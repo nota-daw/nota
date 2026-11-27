@@ -21,7 +21,7 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions
 
-- **Engine (C++)**: `src/native/nota.engine/` (C ABI surface: `include/nota_engine.h`; JUCE only in `pluginhost/`)
+- **Engine (C++)**: `src/native/nota.engine/` (public C ABI: `include/nota/nota_engine.h`; modular shared libraries under `modules/{math,media,dsp,devices,pluginscanner,pluginhost,io,engine,c_abi}/`; JUCE confined to `modules/pluginhost/` and `modules/pluginscanner/src/backends/juce/`, Objective-C++ in `*_mac.mm`)
 - **Managed app (C#)**: `src/managed/<Project>/`
 - **UI (Avalonia)**: `src/managed/Nota.Presentation/`
 - **Tests**: `tests/Nota.SmokeTest/` — the end-to-end gate every PR must pass
@@ -260,3 +260,4 @@ With multiple developers:
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+- **Engine final gates** (whenever native code under `src/native/nota.engine/`, `tests/perf/`, or `scripts/bench/` is edited): unconditionally run `clang-format -i` (root `.clang-format`) on all modified C/C++/ObjC++ files before concluding; verify `< 180`-line self-contained `Engine::*` public headers (`test_headers_compile`), `> 400`-line device decomposition (no `> 1,000`-line monoliths), `NOTA_STRICT_WARNINGS_AS_ERRORS=ON` + `dev-asan`, and clean `clangd` include diagnostics.
