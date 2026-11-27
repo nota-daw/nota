@@ -448,7 +448,7 @@ float FluxSynth::noise() {
     rng_ ^= rng_ << 13;
     rng_ ^= rng_ >> 17;
     rng_ ^= rng_ << 5;
-    return (rng_ & 0xFFFFFF) / static_cast<float>(0x1000000);
+    return static_cast<float>(rng_ & 0xFFFFFFu) / static_cast<float>(0x1000000);
 }
 
 FluxSynth::Voice* FluxSynth::findFreeVoice() {

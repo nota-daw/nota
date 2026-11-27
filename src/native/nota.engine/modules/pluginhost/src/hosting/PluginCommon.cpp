@@ -149,21 +149,21 @@ std::string paramTextImpl(juce::AudioPluginInstance* p, int32_t i) {
 float paramDefaultImpl(juce::AudioPluginInstance* p, int32_t i) {
     if (p == nullptr) return 0.0f;
     const auto& params = p->getParameters();
-    if (i < 0 || i >= params.size()) return 0.0f;
+    if (i < 0 || i >= params.size() || params[i] == nullptr) return 0.0f;
     return params[i]->getDefaultValue();
 }
 
 float paramGetImpl(juce::AudioPluginInstance* p, int32_t i) {
     if (p == nullptr) return 0.0f;
     const auto& params = p->getParameters();
-    if (i < 0 || i >= params.size()) return 0.0f;
+    if (i < 0 || i >= params.size() || params[i] == nullptr) return 0.0f;
     return params[i]->getValue();
 }
 
 void paramSetImpl(juce::AudioPluginInstance* p, int32_t i, float v) {
     if (p == nullptr) return;
     const auto& params = p->getParameters();
-    if (i < 0 || i >= params.size()) return;
+    if (i < 0 || i >= params.size() || params[i] == nullptr) return;
     params[i]->setValue(juce::jlimit(0.0f, 1.0f, v));
 }
 

@@ -455,7 +455,8 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
         const int32_t routeSlot = (audible || keying || feeding) ? ctx.cachedRouteSlot(li, t.id()) : -1;
         w.route = routeSlot >= 0 ? eng.routeBusNext_[static_cast<size_t>(routeSlot)].data() : nullptr;
         w.anySend = false;
-        for (int b = 0; b < ctx.numReturns; ++b) {
+        const int nRet = std::min(ctx.numReturns, kMaxReturns);
+        for (int b = 0; b < nRet; ++b) {
             w.sends[b] = t.send(b);
             if (w.sends[b] != 0.0f) w.anySend = true;
         }

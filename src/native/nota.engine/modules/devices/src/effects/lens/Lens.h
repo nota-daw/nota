@@ -301,9 +301,10 @@ class Lens : public Device {
     }
     const char* sourceName() const {
         const bool ms = get(MidSide) >= 0.5f;
-        static const char* lr[3] = {"L+R", "L", "R"};
-        static const char* msn[3] = {"Mid", "Mid", "Side"};
-        return (ms ? msn : lr)[step(get(Source), 3)];
+        static const char* const lr[3] = {"L+R", "L", "R"};
+        static const char* const msn[3] = {"Mid", "Mid", "Side"};
+        const char* const* const names = ms ? msn : lr;
+        return names[step(get(Source), 3)];
     }
 
     static double db(double lin) { return 20.0 * std::log10(std::max(1e-10, lin)); }

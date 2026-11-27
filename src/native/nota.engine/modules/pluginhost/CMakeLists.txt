@@ -139,4 +139,22 @@ if(NOTA_BUILD_RENDER_PROBE)
         juce::juce_recommended_config_flags)
     target_compile_definitions(nota-render-probe PRIVATE JUCE_USE_CURL=0
         JUCE_WEB_BROWSER=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    if(TARGET nota-render-probe_VST3)
+        add_custom_command(TARGET nota-render-probe_VST3 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>"
+            COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>/VST3"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>/VST3"
+                "${CMAKE_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>/VST3"
+        )
+    endif()
+    if(APPLE AND TARGET nota-render-probe_AU)
+        add_custom_command(TARGET nota-render-probe_AU POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>"
+            COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>/AU"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>/AU"
+                "${CMAKE_BINARY_DIR}/nota-render-probe_artefacts/$<CONFIG>/AU"
+        )
+    endif()
 endif()

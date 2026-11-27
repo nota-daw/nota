@@ -52,7 +52,7 @@ std::string isoTimestampNow() {
     localtime_r(&t, &tmBuf);
 #endif
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
-    char buf[40];
+    char buf[64];
     std::snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d.%03lld", tmBuf.tm_year + 1900, tmBuf.tm_mon + 1,
         tmBuf.tm_mday, tmBuf.tm_hour, tmBuf.tm_min, tmBuf.tm_sec, static_cast<long long>(ms));
     return std::string(buf);

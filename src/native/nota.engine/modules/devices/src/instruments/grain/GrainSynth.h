@@ -189,7 +189,7 @@ class GrainSynth final : public Instrument, public dsp::capabilities::ISampleIns
         rng_ ^= rng_ << 13;
         rng_ ^= rng_ >> 17;
         rng_ ^= rng_ << 5;
-        return (rng_ & 0xFFFFFF) / 16777216.0f;
+        return static_cast<float>(rng_ & 0xFFFFFFu) / 16777216.0f;
     }
 
     static double svf(double& s1, double& s2, double in, double g, double a1, double k, int type);

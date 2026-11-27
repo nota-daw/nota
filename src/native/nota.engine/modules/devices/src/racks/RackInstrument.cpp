@@ -39,8 +39,9 @@ bool evBefore(const MidiEv& a, const MidiEv& b) {
 // it keeps the signature; adding, removing or replacing one changes it.
 template <class Chain> uint64_t midiSig(const Chain& c) {
     if (c.midiDevices.empty()) return 0;
-    uint64_t h = 1469598103934665603ull ^ static_cast<uint64_t>(c.midiDevices.size());
-    for (const auto& d : c.midiDevices) h = (h ^ reinterpret_cast<uintptr_t>(d.get())) * 1099511628211ull;
+    uint64_t h = UINT64_C(1469598103934665603) ^ static_cast<uint64_t>(c.midiDevices.size());
+    for (const auto& d : c.midiDevices)
+        h = (h ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(d.get()))) * UINT64_C(1099511628211);
     return h | 1; // never 0
 }
 } // namespace
@@ -64,11 +65,11 @@ void RackInstrument::syncChains() {
     if (!st) return;
     auto& m = *mono_;
     const int32_t n = static_cast<int32_t>(st->chains.size());
-    uint64_t h = 1469598103934665603ull ^ static_cast<uint64_t>(n);
+    uint64_t h = UINT64_C(1469598103934665603) ^ static_cast<uint64_t>(n);
     for (int32_t c = 0; c < n; ++c) {
         const auto& ch = st->chains[static_cast<size_t>(c)];
-        h = (h ^ reinterpret_cast<uintptr_t>(ch.instrument.get())) * 1099511628211ull;
-        h = (h ^ (c < kMaxMidiChains ? midiSig(ch) : 0)) * 1099511628211ull;
+        h = (h ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(ch.instrument.get()))) * UINT64_C(1099511628211);
+        h = (h ^ (c < kMaxMidiChains ? midiSig(ch) : UINT64_C(0))) * UINT64_C(1099511628211);
     }
     if (h == m.structure) return;
     const bool first = m.structure == 0;

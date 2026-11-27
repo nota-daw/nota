@@ -100,7 +100,7 @@ double AudioThreadPool::workersCpuSeconds() const {
         clockid_t clock;
         timespec ts{};
         if (pthread_getcpuclockid(t.native_handle(), &clock) == 0 && clock_gettime(clock, &ts) == 0)
-            total += ts.tv_sec + ts.tv_nsec * 1e-9;
+            total += static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1e-9;
 #endif
     }
     return total;

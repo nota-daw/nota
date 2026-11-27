@@ -426,7 +426,8 @@ int scheduleSlotArticulations(const MidiClip& slotClip, double loopBeats, bool l
     if (hi < lo) { return finish(w, out, dropped, &b, carried); }
     auto passes = [&](long from) {
         return [&slotClip, loopS, loopBeats, from, hi](auto&& f) {
-            for (long k = from; k <= hi; ++k) f(Placement{&slotClip, k * loopS, loopBeats, k, false});
+            for (long k = from; k <= hi; ++k)
+                f(Placement{&slotClip, static_cast<double>(k) * loopS, loopBeats, k, false});
         };
     };
     // Decisions look one pass further back, so a pass's first point knows what the pass before left in force.

@@ -437,7 +437,8 @@ int32_t nota_session_slots_to_arrangement(
 
 int32_t nota_clips_last_placed(NotaEngine* e, int32_t* out_track_ids, int32_t* out_clip_indices, int32_t cap) {
     if (!e) return 0;
-    const auto& placed = nota::c_abi::eng(e).tracks().lastPlacedClips();
+    const auto tracks = nota::c_abi::eng(e).tracks();
+    const auto& placed = tracks.lastPlacedClips();
     const int32_t n = static_cast<int32_t>(placed.size());
     if (out_track_ids && out_clip_indices && cap > 0) {
         const int32_t m = std::min(n, cap);

@@ -235,10 +235,12 @@ bool HybridBufferController::isTrackAnticipativeEligible(
             if (blocked) return false;
         }
     }
-    for (const auto& d : t.devices)
-        if (d && (deviceHasDynamicKeyOrNonParallel(*d) || d->editorOpen() ||
-                     (d->asRack() && d->asRack()->chainsHaveOpenEditor(false))))
+    for (const auto& d : t.devices) {
+        if (!d) continue;
+        const auto* rack = d->asRack();
+        if (deviceHasDynamicKeyOrNonParallel(*d) || d->editorOpen() || (rack && rack->chainsHaveOpenEditor(false)))
             return false;
+    }
     return true;
 }
 

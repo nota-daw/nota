@@ -167,6 +167,7 @@ bool runBuiltinFxSelfTest() {
 
     bool p4Ok = [&]() -> bool {
         for (int bins : {17, 513}) {
+            if (bins <= 0) return false;
             std::vector<float> ar0(static_cast<size_t>(bins), 0.125f);
             std::vector<float> ai0(static_cast<size_t>(bins), -0.25f);
             std::vector<float> ar1 = ar0, ai1 = ai0, arRef = ar0, aiRef = ai0;

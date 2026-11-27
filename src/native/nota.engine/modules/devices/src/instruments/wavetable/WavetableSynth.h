@@ -402,7 +402,7 @@ class WavetableSynth final : public Instrument, public dsp::capabilities::IWavet
     }
     float frand() {
         rng_ = rng_ * 1664525u + 1013904223u;
-        return (rng_ >> 8) / 16777216.0f;
+        return static_cast<float>(rng_ >> 8) / 16777216.0f;
     }
     Voice* findFreeVoice() {
         for (auto& v : voices_)

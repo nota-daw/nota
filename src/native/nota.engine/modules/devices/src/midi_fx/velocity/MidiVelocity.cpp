@@ -99,7 +99,7 @@ void MidiVelocity::process(
             float v = lo + shaped * (hi - lo);
             if (rnd > 0.0f) {
                 rng_ = rng_ * 1664525u + 1013904223u;
-                float u = (rng_ >> 8) / 16777216.0f; // 0..1
+                float u = static_cast<float>(rng_ >> 8) / 16777216.0f; // 0..1
                 float dev = rnd * kRandomSpan / 127.0f;
                 float r = dir == 1 ? u * dev : dir == 2 ? -u * dev : (u * 2.0f - 1.0f) * dev;
                 v += r;

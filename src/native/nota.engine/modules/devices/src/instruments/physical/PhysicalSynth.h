@@ -223,7 +223,7 @@ class PhysicalSynth final : public Instrument {
         rng_ ^= rng_ << 13;
         rng_ ^= rng_ >> 17;
         rng_ ^= rng_ << 5;
-        return (rng_ & 0xFFFFFF) / 8388608.0f - 1.0f;
+        return static_cast<float>(rng_ & 0xFFFFFFu) / 8388608.0f - 1.0f;
     }
 
     // TPT state-variable filter for the noise exciter. type: 0 LP, 1 BP, 2 HP.
