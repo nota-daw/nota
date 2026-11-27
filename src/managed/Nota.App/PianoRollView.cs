@@ -3007,11 +3007,14 @@ public sealed partial class PianoRollView : UserControl
             _drag = Mode.Stretch;
             double lastStart = _orig.Values.Max(n => n.start);
             bool distinctStarts = lastStart - start > 1e-9;
-            // A selection with distinct starts stretches between note-ons. A left
-            // edge pull still expands outward, while the first note-on stays put.
-            _stretchAnchor = distinctStarts || edge > 0 ? start : end;
-            _stretchEdge = distinctStarts ? lastStart : edge < 0 ? start : end;
-            _stretchDragDirection = distinctStarts && edge < 0 ? -1 : 1;
+            double grabbedStart = _orig[_primary].start;
+            bool fromFirst = distinctStarts && grabbedStart - start <= 1e-9;
+            // Use note-ons as anchors. A shared start has no note-on span,
+            // so its longest note supplies the duration reference instead.
+            _stretchAnchor = fromFirst ? lastStart : start;
+            _stretchEdge = distinctStarts ? (fromFirst ? start : lastStart) : end;
+            bool fromLast = distinctStarts && lastStart - grabbedStart <= 1e-9;
+            _stretchDragDirection = edge < 0 && !fromFirst && !fromLast ? -1 : 1;
             _stretchPressBeat = pressBeat;
             _stretchMin = 1e-9;
             _stretchMax = double.PositiveInfinity;

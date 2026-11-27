@@ -35,4 +35,4 @@ Defer empty-grid creation until pointer release confirms a click. Crossing the
 drag threshold routes to the existing marquee path. Guard the second click of a
 double-click sequence that began on empty space. Reuse note placement defaults
 and commit handling. Update the Piano Roll hint and Shortcuts gesture descriptions.
-Refinement: with distinct starts, anchor the first note-on and snap the last note-on. Keep opposite-edge length scaling when all starts coincide.
+Refinement: grabbing the first note fixes the last note-on and snaps the first. Grabbing the last fixes the first note-on and snaps the last. When starts coincide, keep their shared start fixed and use the longest duration as the scaling reference.
