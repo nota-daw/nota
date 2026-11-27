@@ -6,7 +6,6 @@
 #include "Chamber.h"
 #include "common/DeviceMath.h"
 #include "nota/dsp/primitives/Convolution.h"
-#include <signalsmith-linear/fft.h>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -183,7 +182,7 @@ class ConvKernel {
     // latency equals `offset` in the zero-latency layout, so the stages line up exactly.
     struct Stage {
         int B = 0, P = 0, nIn = 0, nK = 0;
-        signalsmith::linear::RealFFT<float> fft;
+        nota::math::RealFft fft;
         std::vector<float> Hr, Hi;       // [nK][P][B], pre-scaled by 1/2B
         std::vector<float> Xr, Xi;       // [nIn][P][B] frequency-domain delay line
         std::vector<uint8_t> live;       // [nIn][P] slot holds non-zero input
@@ -196,7 +195,7 @@ class ConvKernel {
             P = std::max(1, p);
             nIn = nInArg;
             nK = nKArg;
-            fft.resize(static_cast<size_t>(2 * B));
+            fft.resize(2 * B);
             const size_t spec = static_cast<size_t>(P) * static_cast<size_t>(B);
             Hr.assign(spec * static_cast<size_t>(nK), 0.0f);
             Hi.assign(spec * static_cast<size_t>(nK), 0.0f);
@@ -220,7 +219,7 @@ class ConvKernel {
                                     static_cast<size_t>(B)];
                     float* hi = &Hi[(static_cast<size_t>(k) * static_cast<size_t>(P) + static_cast<size_t>(j)) *
                                     static_cast<size_t>(B)];
-                    fft.fft(time.data(), hr, hi);
+                    fft.forward(time.data(), hr, hi);
                     for (int i = 0; i < B; ++i) {
                         hr[i] *= sc;
                         hi[i] *= sc;
@@ -311,7 +310,7 @@ class ConvKernel {
                 std::fill(time.begin() + B, time.end(), 0.0f);
                 const size_t o = (static_cast<size_t>(c) * static_cast<size_t>(P) + static_cast<size_t>(pos)) *
                                  static_cast<size_t>(B);
-                fft.fft(time.data(), &Xr[o], &Xi[o]);
+                fft.forward(time.data(), &Xr[o], &Xi[o]);
             }
             bool any[2] = {false, false};
             if (liveSlots > 0) {
@@ -345,7 +344,7 @@ class ConvKernel {
                 float* ob = &out[static_cast<size_t>(o) * static_cast<size_t>(B)];
                 float* ov = &ovl[static_cast<size_t>(o) * static_cast<size_t>(B)];
                 if (any[o]) {
-                    fft.ifft(&ar[static_cast<size_t>(o) * static_cast<size_t>(B)],
+                    fft.inverse(&ar[static_cast<size_t>(o) * static_cast<size_t>(B)],
                         &ai[static_cast<size_t>(o) * static_cast<size_t>(B)], time.data());
                     for (int k = 0; k < B; ++k) {
                         ob[k] = time[static_cast<size_t>(k)] + ov[k];

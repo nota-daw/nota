@@ -88,7 +88,7 @@ void MidiRack::cutAll(const RackState& st, MidiEv* out, int& nOut, int maxOut) {
     auto& rt = *rt_;
     for (int32_t p = 0; p < 128; ++p) {
         while (rt.held[p] > 0) {
-            if (nOut < maxOut) out[nOut++] = MidiEv{0, false, p, 0.0f};
+            if (nOut < maxOut) out[nOut++] = MidiEv{0, false, p, 0.0f, 0.0f};
             if (rackMerge()) rt.held[p] = 0;
             else
                 --rt.held[p];
@@ -134,7 +134,7 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
     if (rt.bypassed) {
         for (int32_t p = 0; p < 128; ++p)
             for (; rt.rawHeld[p] > 0; --rt.rawHeld[p])
-                if (nOut < maxOut) out[nOut++] = MidiEv{0, false, p, 0.0f};
+                if (nOut < maxOut) out[nOut++] = MidiEv{0, false, p, 0.0f, 0.0f};
         rt.bypassed = false;
     }
 

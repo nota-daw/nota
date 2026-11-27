@@ -13,8 +13,6 @@
 #include "common/DeviceMath.h"
 #include "nota/dsp/primitives/BiquadCascade.h"
 
-#include <signalsmith-linear/fft.h>
-
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -160,7 +158,7 @@ class DynamicEq : public Device {
     std::atomic<uint32_t> ringW_{0};
     int fftN_ = 0;
     mutable std::mutex mx_;
-    mutable signalsmith::linear::RealFFT<float> fft_;
+    mutable math::RealFft fft_;
     std::vector<float> win_;
     mutable std::vector<float> tBuf_;
     mutable std::vector<std::complex<float>> fBuf_;

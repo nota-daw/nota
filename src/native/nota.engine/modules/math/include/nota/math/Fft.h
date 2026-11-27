@@ -15,7 +15,8 @@ namespace nota::math {
 
 class NOTA_MATH_API RealFft {
   public:
-    explicit RealFft(int32_t size = 0);
+    RealFft() noexcept;
+    explicit RealFft(int32_t size);
     ~RealFft();
 
     RealFft(RealFft&&) noexcept;

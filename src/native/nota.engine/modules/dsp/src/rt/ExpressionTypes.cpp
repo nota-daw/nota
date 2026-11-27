@@ -2,20 +2,9 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 #include "nota/dsp/rt/ExpressionTypes.h"
-#include <cstdint>
 
 namespace nota::dsp {
 
-void GlobalExpr::offsets(float bendRangeSemis, float out[kExprDims]) const noexcept {
-    out[ExprBend] = wheel * bendRangeSemis;
-    out[ExprPressure] = pressure;
-    out[ExprSlide] = slide - 0.5f;
-}
-
-void VoiceExpr::set(int32_t dim, float v, const float add[kExprDims]) noexcept {
-    if (dim < 0 || dim >= kExprDims) return;
-    tgt[dim] = v;
-    if (fresh) cur[dim] = v + add[dim];
-}
+// Anchor TU for expression header symbol generation when linked standalone.
 
 } // namespace nota::dsp

@@ -24,7 +24,7 @@ void Color::setSampleRate(double sr, int32_t) {
         config.size = kFftSizes[static_cast<size_t>(index)];
         config.hop = config.size / 4;
         config.bins = config.size / 2;
-        config.fft.resize(static_cast<size_t>(config.size));
+        config.fft.resize(config.size);
         for (int i = 0; i < config.size; ++i)
             config.window[static_cast<size_t>(i)] = float(std::sqrt(.5 - .5 * std::cos(tau * i / config.size)));
         for (int k = 0; k < config.bins; ++k)
@@ -219,7 +219,7 @@ void Color::analyseDry(uint64_t end) {
             time_[static_cast<size_t>(i)] =
                 bandDelay_[(start + static_cast<uint64_t>(i)) % kMaxWindow].mid[static_cast<size_t>(ch)] *
                 config.window[static_cast<size_t>(i)];
-        config.fft.fft(time_.data(), fftBins_.data());
+        config.fft.forwardPacked(time_.data(), fftBins_.data());
         for (int k = 1; k < config.bins; ++k)
             dryMagnitude_[static_cast<size_t>(k)] += std::norm(fftBins_[static_cast<size_t>(k)]);
     }
@@ -235,7 +235,7 @@ void Color::publishLine(
             time_[static_cast<size_t>(i)] =
                 history[(sample_ + static_cast<uint64_t>(i)) % kScopeWindow][static_cast<size_t>(ch)] *
                 config.window[static_cast<size_t>(i)];
-        config.fft.fft(time_.data(), fftBins_.data());
+        config.fft.forwardPacked(time_.data(), fftBins_.data());
         for (int k = 1; k < kScopeWindow / 2; ++k)
             power[static_cast<size_t>(k)] += std::norm(fftBins_[static_cast<size_t>(k)]);
     }

@@ -16,7 +16,6 @@
 #include <chrono>
 #include <atomic>
 #include <algorithm>
-#include <signalsmith-linear/fft.h>
 #include <vector>
 #include <utility>
 #include <thread>

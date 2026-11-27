@@ -153,7 +153,7 @@ void MidiChord::process(
         }
 
         // A retriggered key first releases what it played before.
-        if (keys_[e.pitch].n > 0) releaseKey({e.off, false, e.pitch, 0.0f}, absEv, emit);
+        if (keys_[e.pitch].n > 0) releaseKey({e.off, false, e.pitch, 0.0f, 0.0f}, absEv, emit);
 
         // Build the chord for this key: root + active shifts, deduplicated, low → high.
         int pit[kMaxOut];

@@ -156,8 +156,12 @@ bool playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
     bool liveDone = false;
     bool wroteAudio = false;
     auto renderChunk = [&](float* out, int32_t count) {
+        // Sample outputAlwaysSilent() before render(): a zero-hangover instrument whose release
+        // finishes mid-block transitions to idle during render(), yet this block still emitted
+        // the end of its tail and must not be discarded as silent.
+        const bool preSilent = inst.outputAlwaysSilent();
         inst.render(out, count);
-        if (!inst.outputAlwaysSilent()) wroteAudio = true;
+        if (!preSilent || !inst.outputAlwaysSilent()) wroteAudio = true;
     };
     auto renderTo = [&](int32_t to) {
         if (to <= cursor) return;

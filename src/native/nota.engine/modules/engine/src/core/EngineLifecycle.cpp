@@ -195,7 +195,7 @@ void EngineRuntime::ensureRenderScratch(size_t tracks, int32_t minFrames) {
     s->returnScratch.assign(static_cast<size_t>(kMaxReturns) * static_cast<size_t>(frameCap) * 2, 0.0f);
     s->workerPlanar.resize(workerSlots);
     for (auto& buf : s->workerPlanar) buf.ensureFrames(frameCap);
-    s->blockMidi.assign(cap, std::vector<MidiEv>(1024));
+    s->blockMidi.assign(cap, std::vector<MidiEv>(1024, MidiEv{}));
     s->blockMidiN.assign(cap, 0);
     s->blockMidiStart.resize(cap);
     s->blockExpr.assign(cap, std::vector<ExprEv>(kMaxBlockExpr));

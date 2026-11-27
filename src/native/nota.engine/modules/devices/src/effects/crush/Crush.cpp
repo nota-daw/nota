@@ -59,7 +59,7 @@ void Crush::setSampleRate(double sr, int32_t /*maxBlock*/) {
     ringOut_.assign(ring, 0.0f);
     ringMask_ = static_cast<uint32_t>(ring - 1);
     ringW_.store(0, std::memory_order_relaxed);
-    fft_.resize(static_cast<size_t>(fftN_));
+    fft_.resize(fftN_);
     win_.assign(static_cast<size_t>(fftN_), 0.0f);
     tIn_.assign(static_cast<size_t>(fftN_), 0.0f);
     tOut_.assign(static_cast<size_t>(fftN_), 0.0f);
@@ -518,8 +518,8 @@ bool Crush::analyse() const {
         tIn_[static_cast<size_t>(i)] = ringIn_[k] * win_[static_cast<size_t>(i)];
         tOut_[static_cast<size_t>(i)] = ringOut_[k] * win_[static_cast<size_t>(i)];
     }
-    fft_.fft(tIn_.data(), fIn_.data());
-    fft_.fft(tOut_.data(), fOut_.data());
+    fft_.forwardPacked(tIn_.data(), fIn_.data());
+    fft_.forwardPacked(tOut_.data(), fOut_.data());
     const int half = n / 2;
 
     // Level-match the input to the output on the input's strongest bins (the mode's gain,

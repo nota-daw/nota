@@ -111,7 +111,7 @@ void EngineRuntime::renderAnticipativeInstrumentBlock(Graph* g, Track& t, size_t
                 midiScratch[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
                     static_cast<float>((offS - onS) / spb)};
             if (offS >= blockStart && offS < blockStart + frames && n < 1024)
-                midiScratch[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
+                midiScratch[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f, 0.0f};
             if (note.expr && clipActive)
                 noteExprEvents(note, clipStart + note.startBeat * spb + shiftS - blockStart, offS - blockStart, frames,
                     spb, exprScratch, xn, kMaxBlockExpr);

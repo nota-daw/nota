@@ -79,7 +79,7 @@ void DynamicEq::setSampleRate(double sr, int32_t /*maxBlock*/) {
     ring_.assign(ring, 0.0f);
     ringMask_ = static_cast<uint32_t>(ring - 1);
     ringW_.store(0, std::memory_order_relaxed);
-    fft_.resize(static_cast<size_t>(fftN_));
+    fft_.resize(fftN_);
     win_.assign(static_cast<size_t>(fftN_), 0.0f);
     tBuf_.assign(static_cast<size_t>(fftN_), 0.0f);
     fBuf_.assign(static_cast<size_t>(fftN_) / 2, {});
@@ -531,7 +531,7 @@ bool DynamicEq::analyse() const {
     for (int i = 0; i < n; ++i)
         tBuf_[static_cast<size_t>(i)] =
             ring_[(start + static_cast<uint32_t>(i)) & ringMask_] * win_[static_cast<size_t>(i)];
-    fft_.fft(tBuf_.data(), fBuf_.data());
+    fft_.forwardPacked(tBuf_.data(), fBuf_.data());
     const int half = n / 2;
     const double binHz = sr_ / n;
     const double ref = 0.25 * static_cast<double>(n) * n * 0.25; // Hann: a full-scale sine's bin power

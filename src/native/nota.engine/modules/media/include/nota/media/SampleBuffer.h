@@ -50,16 +50,19 @@ struct NOTA_MEDIA_API SampleBuffer {
             r = 0.0f;
             return;
         }
-        if (!samples.empty()) {
+        if (!samples.empty()) [[likely]] {
             const float* p = &samples[static_cast<size_t>(frame) * static_cast<size_t>(channels)];
             l = p[0];
             r = channels == 1 ? l : p[1];
             return;
         }
-        readStereoFromSource(frame, l, r);
+        if (source) {
+            source->readStereo(frame, l, r);
+            return;
+        }
+        l = 0.0f;
+        r = 0.0f;
     }
-
-    void readStereoFromSource(int64_t frame, float& l, float& r) const;
 
     void readStereoFast(int64_t frame, int32_t& slotHint, bool allowSyncFill, float& l, float& r) const noexcept {
         if (frame < 0 || frame >= frames || channels <= 0) {
@@ -67,7 +70,7 @@ struct NOTA_MEDIA_API SampleBuffer {
             r = 0.0f;
             return;
         }
-        if (!samples.empty()) {
+        if (!samples.empty()) [[likely]] {
             const float* p = &samples[static_cast<size_t>(frame) * static_cast<size_t>(channels)];
             l = p[0];
             r = channels == 1 ? l : p[1];

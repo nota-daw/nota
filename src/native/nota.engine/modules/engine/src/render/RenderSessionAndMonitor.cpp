@@ -83,7 +83,7 @@ void EngineRuntime::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, d
                 evs[n++] = {static_cast<int32_t>((onAbs - p) * spb + shiftS), true, note.pitch, note.velocity * velGain,
                     static_cast<float>(note.lengthBeats)};
             if (offIn && n < 1024)
-                evs[n++] = {static_cast<int32_t>((offAbs - p) * spb + shiftS), false, note.pitch, 0.0f};
+                evs[n++] = {static_cast<int32_t>((offAbs - p) * spb + shiftS), false, note.pitch, 0.0f, 0.0f};
             if (note.expr)
                 noteExprEvents(
                     note, (onAbs - p) * spb + shiftS, (offAbs - p) * spb + shiftS, frames, spb, xev, xn, kMaxBlockExpr);

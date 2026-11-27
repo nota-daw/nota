@@ -45,16 +45,17 @@ inline ChainRest chainRest(const Track& t) noexcept {
     return r;
 }
 
-inline bool trackRequiresActiveProcessing(const Track& t) noexcept {
-    if (!dsp::anyOpenPluginEditor() && !dsp::anyNeverSleepDevice()) return false;
+inline bool trackRequiresActiveProcessing(const Track& t, bool anyOpenEditor = dsp::anyOpenPluginEditor(),
+    bool anyNeverSleep = dsp::anyNeverSleepDevice()) noexcept {
+    if (!anyOpenEditor && !anyNeverSleep) return false;
     if (t.instrument && !t.instrument->bypassed() && t.instrument->requiresActiveProcessing()) return true;
     for (const auto& d : t.devices)
         if (d && !d->bypassed() && d->requiresActiveProcessing()) return true;
     return false;
 }
 
-inline bool trackHasOpenEditor(const Track& t) noexcept {
-    if (!dsp::anyOpenPluginEditor()) return false;
+inline bool trackHasOpenEditor(const Track& t, bool anyOpenEditor = dsp::anyOpenPluginEditor()) noexcept {
+    if (!anyOpenEditor) return false;
     if (t.instrument && !t.instrument->bypassed()) {
         if (t.instrument->editorOpen()) return true;
         if (const auto* r = t.instrument->asRack(); r && r->chainsHaveOpenEditor(true)) return true;
@@ -73,14 +74,16 @@ inline bool midiEffectsIdle(const Track& t) noexcept {
     return true;
 }
 
-inline bool canSkipInactiveBus(Track& t) noexcept {
-    return t.tailQuiet() < 0 && chainRest(t) == ChainRest::Settled && !trackRequiresActiveProcessing(t);
+inline bool canSkipInactiveBus(Track& t, bool anyOpenEditor, bool anyNeverSleep) noexcept {
+    return t.tailQuiet() < 0 && chainRest(t) == ChainRest::Settled &&
+           !trackRequiresActiveProcessing(t, anyOpenEditor, anyNeverSleep);
 }
 
 inline void settleInactiveBus(Track& t, const float* buf, int32_t frames, double sr, float tailFloor,
-    double tailQuietSec, double tailMaxQuietSec) noexcept {
+    double tailQuietSec, double tailMaxQuietSec, bool anyOpenEditor, bool anyNeverSleep) noexcept {
     int64_t& quiet = t.tailQuiet();
-    if (simd_audio::peakAbs(buf, frames * 2) > tailFloor || trackRequiresActiveProcessing(t)) {
+    if (simd_audio::peakAbs(buf, frames * 2) > tailFloor ||
+        trackRequiresActiveProcessing(t, anyOpenEditor, anyNeverSleep)) {
         quiet = 0;
         return;
     }
@@ -145,6 +148,8 @@ struct RenderGraphExecutor::MixContext {
     bool arrangementActive = true;
     bool offline = true;
     bool parallelOk = false;
+    bool anyOpenEditor = false;
+    bool anyNeverSleep = false;
     float stereoA = 0.0f;
     float panLawStep = 0.0f;
     int32_t recSrc = 0;

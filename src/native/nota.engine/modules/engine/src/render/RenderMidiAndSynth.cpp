@@ -70,11 +70,12 @@ int EngineRuntime::gatherInstrumentNotes(
                 if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
                     evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel,
                         static_cast<float>((offS - onS) / spb)};
-                if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024) evs[n++] = {0, false, note.pitch, 0.0f};
+                if (seamOffs_ && onS < seamEnd && offS >= seamEnd && n < 1024)
+                    evs[n++] = {0, false, note.pitch, 0.0f, 0.0f};
                 if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
-                    evs[n++] = {0, true, note.pitch, vel};
+                    evs[n++] = {0, true, note.pitch, vel, 0.0f};
                 if (offS >= blockStart && offS < blockStart + frames && n < 1024)
-                    evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f};
+                    evs[n++] = {static_cast<int32_t>(offS - blockStart), false, note.pitch, 0.0f, 0.0f};
                 if (xev && note.expr && clipActive)
                     noteExprEvents(note, at(note.startBeat) + shiftS - blockStart, offS - blockStart, frames, spb, xev,
                         *xn, kMaxBlockExpr, tmap, tsr, tplay, clip.startBeat + note.startBeat, shiftS);
@@ -148,7 +149,7 @@ int EngineRuntime::gatherInstrumentNotes(
     for (int k = 0; k < 16; ++k) {
         if (releaseTrack_[k] != t.id()) continue;
         for (int p = 0; p < 128 && n < 1024; ++p)
-            if ((releasePitches_[k][p >> 5] >> (p & 31)) & 1u && !liveDown_[p]) evs[n++] = {0, false, p, 0.0f};
+            if ((releasePitches_[k][p >> 5] >> (p & 31)) & 1u && !liveDown_[p]) evs[n++] = {0, false, p, 0.0f, 0.0f};
         for (auto& w : releasePitches_[k]) w = 0;
         releaseTrack_[k] = -1;
     }
@@ -171,7 +172,7 @@ int EngineRuntime::liveNotesFor(const Track& t, bool untargeted, bool targeted, 
                              held->source[le.pitch] == le.source && held->channel[le.pitch] == le.channel;
         if (le.trackId >= 0 ? !targeted || le.trackId != t.id() : !untargeted || (!passesMidiInput(t, le) && !heldOff))
             continue;
-        evs[n++] = {0, le.on, le.pitch, le.velocity};
+        evs[n++] = {0, le.on, le.pitch, le.velocity, 0.0f};
         if (!held || le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
         const uint64_t bit = 1ull << (le.pitch & 63);
         if (le.on) {
@@ -191,7 +192,7 @@ int EngineRuntime::liveNotesFor(const Track& t, bool untargeted, bool targeted, 
                 uint64_t bits = held->bits[h];
                 held->bits[h] = 0;
                 while (bits && n < 1024) {
-                    evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
+                    evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f, 0.0f};
                     bits &= bits - 1;
                 }
             }
@@ -217,7 +218,7 @@ int EngineRuntime::releaseRouted(Track::LiveHeld& held, MidiEv* evs, int n) {
     for (int h = 0; h < 2; ++h) {
         uint64_t& bits = held.routedBits[h];
         while (bits && n < 1024) { // a full buffer keeps the rest for the next block
-            evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
+            evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f, 0.0f};
             bits &= bits - 1;
         }
     }
@@ -267,7 +268,7 @@ int EngineRuntime::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, 
     // already receives these at sample accuracy (segmented render below), so shaping
     // the offsets here is all it takes. Off-events keep their time (drum one-shots
     // ignore note length). Delays that would spill past the block clamp to its end.
-    if (auto* dr = dynamic_cast<DrumRack*>(t.instrument.get())) {
+    if (auto* dr = t.instrument ? t.instrument->asDrumRack() : nullptr) {
         const float sw = dr->swing(), hz = dr->humanize();
         if ((sw > 0.0f || hz > 0.0f) && spb > 0.0) {
             static thread_local uint32_t rng = 0x9E3779B9u; // tracks may run on the render pool

@@ -42,7 +42,11 @@ struct NOTA_DSP_API GlobalExpr {
         slide = 0.5f;
     }
 
-    void offsets(float bendRangeSemis, float out[kExprDims]) const noexcept;
+    void offsets(float bendRangeSemis, float out[kExprDims]) const noexcept {
+        out[ExprBend] = wheel * bendRangeSemis;
+        out[ExprPressure] = pressure;
+        out[ExprSlide] = slide - 0.5f;
+    }
 };
 
 struct NOTA_DSP_API VoiceExpr {
@@ -58,7 +62,11 @@ struct NOTA_DSP_API VoiceExpr {
         fresh = true;
     }
 
-    void set(int32_t dim, float v, const float add[kExprDims]) noexcept;
+    void set(int32_t dim, float v, const float add[kExprDims]) noexcept {
+        if (dim < 0 || dim >= kExprDims) return;
+        tgt[dim] = v;
+        if (fresh) cur[dim] = v + add[dim];
+    }
 
     void tick(const float add[kExprDims], float coef) noexcept {
         fresh = false;

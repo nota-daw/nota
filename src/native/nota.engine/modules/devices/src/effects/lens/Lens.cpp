@@ -461,7 +461,7 @@ void Lens::ensureAnalyzed() const {
 void Lens::analyzeSpectrum(double dt) const {
     const int n = fftSizeOf(get(FftSize));
     if (n != fftN_) {
-        fft_.resize(static_cast<size_t>(n));
+        fft_.resize(n);
         freq_.assign(static_cast<size_t>(n) / 2, {});
         time_.assign(static_cast<size_t>(n), 0.0f);
         win_.assign(static_cast<size_t>(n), 0.0f);
@@ -490,7 +490,7 @@ void Lens::analyzeSpectrum(double dt) const {
     mRmsDb_ = static_cast<float>(db(std::sqrt(sumSq / n)));
     mLevelDb_ = static_cast<float>(db(peakLin));
 
-    fft_.fft(time_.data(), freq_.data());
+    fft_.forwardPacked(time_.data(), freq_.data());
     const int bins = n / 2;
     const double ref = winSum_ * 0.5; // full-scale sine → 0 dBFS
     const double alpha = 1.0 / std::max(1.0, std::round(1.0 + get(Average) * 15.0));

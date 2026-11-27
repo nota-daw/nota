@@ -34,8 +34,6 @@
 
 #include "common/DeviceMath.h"
 
-#include <signalsmith-linear/fft.h>
-
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -321,7 +319,7 @@ class Utility : public Device {
     mutable std::mutex mx_;
     int fftN_ = 0;
     double winSum_ = 0.0;
-    mutable signalsmith::linear::RealFFT<float> fft_;
+    mutable math::RealFft fft_;
     std::vector<float> win_;
     mutable std::vector<float> tl_, tr_;
     mutable std::vector<std::complex<float>> fl_, fr_;

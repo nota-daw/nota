@@ -239,7 +239,7 @@ void Arpeggiator::pushOff(int32_t pitch, double beat, MidiEv* out, int& nOut, in
     cancelOff(pitch);
     if (nOffs_ < kMaxPending) offBuf_[nOffs_++] = {pitch, beat};
     else if (nOut < maxOut)
-        out[nOut++] = {0, false, pitch, 0.0f}; // table full: off now
+        out[nOut++] = {0, false, pitch, 0.0f, 0.0f}; // table full: off now
 }
 
 void Arpeggiator::cancelOff(int32_t pitch) {
@@ -255,7 +255,7 @@ void Arpeggiator::firePendingOns(MidiEv* out, int& nOut, int maxOut, double b0, 
     for (int i = 0; i < nOns_;) {
         if (onBuf_[i].onBeat < b1) {
             if (onBuf_[i].onBeat >= b0 && nOut < maxOut) {
-                out[nOut++] = {off(onBuf_[i].onBeat - b0, spb, frames), true, onBuf_[i].pitch, onBuf_[i].vel};
+                out[nOut++] = {off(onBuf_[i].onBeat - b0, spb, frames), true, onBuf_[i].pitch, onBuf_[i].vel, 0.0f};
                 pushOff(onBuf_[i].pitch, onBuf_[i].offBeat, out, nOut, maxOut);
             }
             for (int j = i; j < nOns_ - 1; ++j) onBuf_[j] = onBuf_[j + 1];
@@ -270,7 +270,7 @@ void Arpeggiator::firePendingOffs(
     for (int i = 0; i < nOffs_;) {
         if (offBuf_[i].beat < b1) {
             if (offBuf_[i].beat >= b0 && nOut < maxOut)
-                out[nOut++] = {off(offBuf_[i].beat - b0, spb, frames), false, offBuf_[i].pitch, 0.0f};
+                out[nOut++] = {off(offBuf_[i].beat - b0, spb, frames), false, offBuf_[i].pitch, 0.0f, 0.0f};
             for (int j = i; j < nOffs_ - 1; ++j) offBuf_[j] = offBuf_[j + 1];
             nOffs_--;
         } else
@@ -321,7 +321,7 @@ void Arpeggiator::place(int pitch, float vel, double onBeat, double offBeat, dou
     if (pitch < 0 || pitch > 127) return;
     vel = std::clamp(vel, 0.0f, 1.0f);
     if (onBeat >= b0 && onBeat < b1) {
-        if (nOut < maxOut) out[nOut++] = {off(onBeat - b0, spb, frames), true, pitch, vel};
+        if (nOut < maxOut) out[nOut++] = {off(onBeat - b0, spb, frames), true, pitch, vel, 0.0f};
         pushOff(pitch, offBeat, out, nOut, maxOut);
     } else if (onBeat >= b1) {
         pushOn(pitch, vel, onBeat, offBeat);

@@ -97,7 +97,7 @@ void MidiNoteLength::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, 
     const double b1 = b0 + frames / spb;
     if (bypassed()) {
         // Release what we still hold, then pass through untouched.
-        for (int i = 0; i < nPending_ && nOut < maxOut; ++i) out[nOut++] = {0, false, pending_[i].pitch, 0.0f};
+        for (int i = 0; i < nPending_ && nOut < maxOut; ++i) out[nOut++] = {0, false, pending_[i].pitch, 0.0f, 0.0f};
         nPending_ = 0;
         nHeld_ = 0;
         nSound_ = 0;
@@ -188,7 +188,7 @@ void MidiNoteLength::start(int32_t pitch, float vel, double beat, double b0, dou
         else
             ++k;
     }
-    if (nOut < maxOut) out[nOut++] = {at(beat, b0, spb, frames), true, pitch, vel};
+    if (nOut < maxOut) out[nOut++] = {at(beat, b0, spb, frames), true, pitch, vel, 0.0f};
     sounding_.fetch_add(1, std::memory_order_relaxed);
     if (nSound_ < kMaxPending) sound_[nSound_++] = {pitch, beat};
 }
@@ -203,7 +203,7 @@ void MidiNoteLength::emitOff(
     int k, double beat, double b0, double spb, int32_t frames, MidiEv* out, int& nOut, int maxOut) {
     const Off p = pending_[k];
     pending_[k] = pending_[--nPending_];
-    if (nOut < maxOut) out[nOut++] = {at(beat, b0, spb, frames), false, p.pitch, 0.0f};
+    if (nOut < maxOut) out[nOut++] = {at(beat, b0, spb, frames), false, p.pitch, 0.0f, 0.0f};
     lastOutPitch_.store(p.pitch, std::memory_order_relaxed);
     lastOutLen_.store(static_cast<float>(std::max(0.0, beat - p.on)), std::memory_order_relaxed);
     finished_.fetch_add(1, std::memory_order_relaxed);

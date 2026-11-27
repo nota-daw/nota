@@ -42,14 +42,6 @@ void SampleBuffer::computeBlockPeakAndMeanSq(const float* interleaved, int32_t c
     outMeanSq = static_cast<float>(sq / static_cast<double>(frameCount));
 }
 
-void SampleBuffer::readStereoFromSource(int64_t frame, float& l, float& r) const {
-    if (source) {
-        source->readStereo(frame, l, r);
-        return;
-    }
-    l = r = 0.0f;
-}
-
 int64_t SampleBuffer::readAllInterleaved(float* out, int64_t capFloats) const {
     if (!samples.empty()) {
         const int64_t total = static_cast<int64_t>(samples.size());

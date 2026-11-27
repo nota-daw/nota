@@ -124,7 +124,7 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
         const auto t0 = !ctx.offline ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         w.wid = wid;
         float* base = eng.leafBase(i, stride);
-        const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc);
+        const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc && !w.t->pdc->isIdle());
         w.copyPost = hasFxOrPdc;
         const bool dryAudio = eng.renderLeafDry(
             *w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb, ctx.playing, ctx.ti, ctx.arrangementActive, i);
@@ -146,7 +146,7 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
             if (!w.t || w.path == LeafPath::Skip || w.level != L) continue;
             float* base = eng.leafBase(li, stride);
             if (!w.eligible && !w.preRendered) {
-                const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc);
+                const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc && !w.t->pdc->isIdle());
                 w.copyPost = hasFxOrPdc;
                 const bool dryAudio = eng.renderLeafDry(*w.t, base, w, ctx.g, ctx.frames, ctx.blockStart, ctx.spb,
                     ctx.playing, ctx.ti, ctx.arrangementActive, li);
@@ -250,7 +250,7 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
         bool parallelDsp = false;
         bool drySilent = false;
         bool postSilent = false;
-        const bool hasFxOrPdc = !t.devices.empty() || (!w.frozenActive && t.pdc);
+        const bool hasFxOrPdc = !t.devices.empty() || (!w.frozenActive && t.pdc && !t.pdc->isIdle());
         if ((w.eligible && ctx.parallelOk) || w.preRendered) {
             float* base = eng.leafBase(li, stride);
             pre = base;
@@ -286,7 +286,9 @@ void RenderGraphExecutor::reduceLeavesAndMeterInputs(MixContext& ctx, const int3
 
         if (w.path == LeafPath::Tail) {
             int64_t& quiet = t.tailQuiet();
-            if (simd_audio::peakAbs(post, ctx.frames * 2) > kTailFloor || trackRequiresActiveProcessing(t)) quiet = 0;
+            if (simd_audio::peakAbs(post, ctx.frames * 2) > kTailFloor ||
+                trackRequiresActiveProcessing(t, ctx.anyOpenEditor, ctx.anyNeverSleep))
+                quiet = 0;
             else
                 quiet += ctx.frames;
             if (quiet > 0) {
@@ -479,7 +481,7 @@ void RenderGraphExecutor::runGroupWaves(MixContext& ctx) {
             }
             const bool busActive = eng.busState_.groups.isActive(static_cast<size_t>(gi));
             if (busActive) t.tailQuiet() = 0;
-            else if (canSkipInactiveBus(t)) {
+            else if (canSkipInactiveBus(t, ctx.anyOpenEditor, ctx.anyNeverSleep)) {
                 t.setMeter(0, 0, 0, 0);
                 ctx.markFresh(t.id());
                 continue;
@@ -545,7 +547,8 @@ void RenderGraphExecutor::runGroupWaves(MixContext& ctx) {
                 }
 
                 if (!bw.busActive)
-                    settleInactiveBus(t, buf, ctx.frames, ctx.sr, kTailFloor, kTailQuietSeconds, kTailMaxQuietSeconds);
+                    settleInactiveBus(t, buf, ctx.frames, ctx.sr, kTailFloor, kTailQuietSeconds, kTailMaxQuietSeconds,
+                        ctx.anyOpenEditor, ctx.anyNeverSleep);
                 if (ctx.cueOn && t.cue()) simd_audio::addStereoScaled(eng.cueSeg_, buf, 1.0f, 1.0f, ctx.frames);
                 if (t.mute()) {
                     t.setMeter(0, 0, 0, 0);
@@ -610,7 +613,7 @@ void RenderGraphExecutor::runReturnWaves(MixContext& ctx) {
         }
         const bool busActive = eng.busState_.returns.isActive(static_cast<size_t>(bus));
         if (busActive) t.tailQuiet() = 0;
-        else if (canSkipInactiveBus(t)) {
+        else if (canSkipInactiveBus(t, ctx.anyOpenEditor, ctx.anyNeverSleep)) {
             t.setMeter(0, 0, 0, 0);
             t.stereoFold(0, 0, 0, ctx.frames, ctx.stereoA);
             ctx.markFresh(t.id());
@@ -679,7 +682,8 @@ void RenderGraphExecutor::runReturnWaves(MixContext& ctx) {
             }
 
             if (!bw.busActive)
-                settleInactiveBus(t, buf, ctx.frames, ctx.sr, kTailFloor, kTailQuietSeconds, kTailMaxQuietSeconds);
+                settleInactiveBus(t, buf, ctx.frames, ctx.sr, kTailFloor, kTailQuietSeconds, kTailMaxQuietSeconds,
+                    ctx.anyOpenEditor, ctx.anyNeverSleep);
             if (bw.cue) simd_audio::addStereoScaled(eng.cueSeg_, buf, 1.0f, 1.0f, ctx.frames);
             if (t.mute()) {
                 t.setMeter(0, 0, 0, 0);

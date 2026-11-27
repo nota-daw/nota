@@ -56,7 +56,8 @@ bool EngineRuntime::timedEventsSelfTest() {
     };
     constexpr int32_t frames = 64;
     // Off before on at a shared offset (midiEvLess order); the last note-off sits on the block's end.
-    const MidiEv evs[] = {{0, true, 60, 1.0f}, {10, false, 60, 0.0f}, {10, true, 62, 1.0f}, {frames, false, 62, 0.0f}};
+    const MidiEv evs[] = {{0, true, 60, 1.0f, 0.0f}, {10, false, 60, 0.0f, 0.0f}, {10, true, 62, 1.0f, 0.0f},
+        {frames, false, 62, 0.0f, 0.0f}};
     const ExprEv xev[] = {{20, -1, kCtlDimBase + 1, 0.5f}};
     float dst[frames * 2] = {};
     auto run = [&](Probe& p) {
@@ -278,7 +279,7 @@ int32_t EngineRuntime::articulationSelfTest() {
     };
     Probe p;
     if (p.takesArticulations()) return 19; // the default is no: a built-in never gets keyswitches
-    const MidiEv evs[] = {{100, true, 60, 0.5f}};
+    const MidiEv evs[] = {{100, true, 60, 0.5f, 0.0f}};
     const ArtEv aev[] = {{100, 0, ArtEvKind::KeyOn, 0, 24, 1}, {100, 1, ArtEvKind::Control, 5, 58, 81},
         {100, 2, ArtEvKind::Program, 0, 12, 0}};
     float dst[B * 2] = {};
@@ -691,7 +692,7 @@ int32_t EngineRuntime::articulationSelfTest() {
         rack->addChainInstrument(builtin);
         if (rack->addChainMidiDevice(pc, 4) < 0) return 39; // Velocity: a pass-through MIDI effect
         if (!rack->takesBlockMidi() || !rack->takesArticulations()) return 39;
-        const MidiEv on[] = {{100, true, 60, 0.5f}};
+        const MidiEv on[] = {{100, true, 60, 0.5f, 0.0f}};
         const ArtEv ks[] = {{100, 0, ArtEvKind::KeyOn, 2, 24, 100}};
         playEvents(*rack, dst, B, on, 1, nullptr, 0, ks, 1, 0.0, spb, true, [] {});
         const auto plugOn = [&](int32_t pitch) {

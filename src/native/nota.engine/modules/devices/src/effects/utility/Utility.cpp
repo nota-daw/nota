@@ -54,7 +54,7 @@ void Utility::setSampleRate(double sr, int32_t /*maxBlock*/) {
     ringL_.assign(ring, 0.0f);
     ringR_.assign(ring, 0.0f);
     ringMask_ = static_cast<uint32_t>(ring - 1);
-    fft_.resize(static_cast<size_t>(fftN_));
+    fft_.resize(fftN_);
     win_.assign(static_cast<size_t>(fftN_), 0.0f);
     tl_.assign(static_cast<size_t>(fftN_), 0.0f);
     tr_.assign(static_cast<size_t>(fftN_), 0.0f);
@@ -742,8 +742,8 @@ void Utility::frame(uint32_t end, double (&pl)[kBands], double (&pr)[kBands], do
         tl_[static_cast<size_t>(i)] = ringL_[k] * win_[static_cast<size_t>(i)];
         tr_[static_cast<size_t>(i)] = ringR_[k] * win_[static_cast<size_t>(i)];
     }
-    fft_.fft(tl_.data(), fl_.data());
-    fft_.fft(tr_.data(), fr_.data());
+    fft_.forwardPacked(tl_.data(), fl_.data());
+    fft_.forwardPacked(tr_.data(), fr_.data());
     const double binHz = sr_ / n;
     for (int b = 0; b < kBands; ++b) {
         const double lo = kBandLo * std::pow(kBandHi / kBandLo, static_cast<double>(b) / kBands);

@@ -20,6 +20,7 @@ struct RealFft::Impl {
     explicit Impl(int32_t n) : fft(n > 0 ? static_cast<size_t>(n) : 0), size(std::max(0, n)) {}
 };
 
+RealFft::RealFft() noexcept = default;
 RealFft::RealFft(int32_t size) : impl_(std::make_unique<Impl>(size)) {}
 RealFft::~RealFft() = default;
 RealFft::RealFft(RealFft&&) noexcept = default;

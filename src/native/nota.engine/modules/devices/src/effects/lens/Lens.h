@@ -30,8 +30,6 @@
 
 #include "common/DeviceMath.h"
 
-#include <signalsmith-linear/fft.h>
-
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -371,7 +369,7 @@ class Lens : public Device {
 
     // Analysis state — message thread only, under mx_.
     mutable std::mutex mx_;
-    mutable signalsmith::linear::RealFFT<float> fft_;
+    mutable math::RealFft fft_;
     mutable std::vector<std::complex<float>> freq_;
     mutable std::vector<float> time_, win_, avg_, binDb_, smTmp_;
     mutable std::vector<float> curve_, peak_, peakAge_, trace_, rawWin_, wfRow_, keyTrace_, sync_;

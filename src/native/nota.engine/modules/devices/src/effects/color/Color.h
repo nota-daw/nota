@@ -7,7 +7,6 @@
 #include <cstddef>
 #include <atomic>
 #include "nota/dsp/primitives/BiquadCascade.h"
-#include <signalsmith-linear/fft.h>
 #include <array>
 #include <complex>
 #include <memory>
@@ -78,7 +77,7 @@ class Color final : public Device {
     static constexpr int kFirstMidi = 36, kLastMidi = 151, kBankCapacity = 80, kSpectrumBins = 512;
     using Stereo = std::array<float, 2>;
     using Complex = std::complex<float>;
-    using FFT = signalsmith::linear::RealFFT<float>;
+    using FFT = nota::math::RealFft;
     using Magnitudes = std::array<float, kMaxBins + 1>;
     using ScopeHistory = std::array<Stereo, kScopeWindow>;
     using ScopeLevels = std::array<std::atomic<float>, kSpectrumBins>;

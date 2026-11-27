@@ -137,7 +137,7 @@ void MidiRandom::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int 
                 skipped_[p] = 0;
                 continue;
             } // the off of a skipped note
-            MidiEv off{e.off, false, std::clamp(p + offset_[p], 0, 127), e.vel};
+            MidiEv off{e.off, false, std::clamp(p + offset_[p], 0, 127), e.vel, 0.0f};
             if (delay_[p] > 0) enqueue(blockStart + e.off + delay_[p], off);
             else
                 push(out, nOut, maxOut, off);

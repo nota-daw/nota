@@ -94,15 +94,6 @@ void Color::StereoFilter::tune(dsp::BiquadCoeffs coeff) {
     for (auto& section : channel) section.c = coeff;
 }
 
-Color::Stereo Color::StereoFilter::run(Stereo in) {
-    return {float(channel[0].run(in[0])), float(channel[1].run(in[1]))};
-}
-
-Color::Stereo Color::BassSpectrum::Line::filter(Stereo sample) {
-    for (auto& section : lowpass) sample = section.run(sample);
-    return sample;
-}
-
 void Color::BassSpectrum::prepare(double sr, const ViewEdges& edges) {
     // Keep the decimated rate low enough to fit 180 ms in the FFT and high enough
     // to leave a wide anti-alias transition above the 400 Hz display band.
@@ -148,16 +139,6 @@ void Color::BassSpectrum::reset() {
     refresh = true;
 }
 
-void Color::BassSpectrum::push(Stereo drySample, Stereo tunedSample) {
-    const Stereo dryFiltered = dry.filter(drySample);
-    const Stereo tunedFiltered = tuned.filter(tunedSample);
-    if (--untilNext != 0) return;
-    dry.history[static_cast<size_t>(write)] = dryFiltered;
-    tuned.history[static_cast<size_t>(write)] = tunedFiltered;
-    write = (write + 1) % kFftSize;
-    untilNext = stride;
-}
-
 void Color::BassSpectrum::analyse(Line& line, const ViewEdges& edges) {
     power.fill(0);
     const int start = write + kFftSize - windowSize;
@@ -166,7 +147,7 @@ void Color::BassSpectrum::analyse(Line& line, const ViewEdges& edges) {
             time[static_cast<size_t>(i)] =
                 line.history[static_cast<size_t>((start + i) % kFftSize)][static_cast<size_t>(ch)] *
                 window[static_cast<size_t>(i)];
-        fft.fft(time.data(), bins.data());
+        fft.forwardPacked(time.data(), bins.data());
         for (int k = 1; k < kFftBins; ++k) power[static_cast<size_t>(k)] += std::norm(bins[static_cast<size_t>(k)]);
     }
     for (int i = 0; i < viewBins; ++i)
@@ -216,60 +197,6 @@ void Color::Bank::tune(
     }
 }
 
-Color::Stereo Color::Bank::run(Stereo in) {
-#if defined(NOTA_SIMD_NEON) || defined(NOTA_SIMD_SSE)
-#if defined(NOTA_SIMD_NEON)
-    auto x = vcvt_f64_f32(vld1_f32(in.data()));
-#else
-    auto x = _mm_setr_pd(in[0], in[1]);
-#endif
-    // Each note's two DF2T sections share coefficients and keep independent L/R histories.
-    for (int i = 0; i < count; ++i) {
-        auto& note = notes[static_cast<size_t>(active[static_cast<size_t>(i)])];
-        const auto& c = note.coeffs;
-        for (auto& stage : note.sections) {
-#if defined(NOTA_SIMD_NEON)
-            const auto y = vfmaq_n_f64(vld1q_f64(stage.z1.data()), x, c.b0);
-            const auto z1 = vfmaq_n_f64(vmulq_n_f64(y, -c.a1), x, c.b1);
-            const auto z2 = vfmaq_n_f64(vmulq_n_f64(y, -c.a2), x, c.b2);
-            vst1q_f64(stage.z1.data(), vaddq_f64(z1, vld1q_f64(stage.z2.data())));
-            vst1q_f64(stage.z2.data(), z2);
-            x = y;
-#else
-            const auto y = _mm_add_pd(_mm_mul_pd(_mm_set1_pd(c.b0), x), _mm_load_pd(stage.z1.data()));
-            const auto z1 = _mm_sub_pd(_mm_mul_pd(_mm_set1_pd(c.b1), x), _mm_mul_pd(_mm_set1_pd(c.a1), y));
-            const auto z2 = _mm_sub_pd(_mm_mul_pd(_mm_set1_pd(c.b2), x), _mm_mul_pd(_mm_set1_pd(c.a2), y));
-            _mm_store_pd(stage.z1.data(), _mm_add_pd(z1, _mm_load_pd(stage.z2.data())));
-            _mm_store_pd(stage.z2.data(), z2);
-            x = y;
-#endif
-        }
-    }
-#if defined(NOTA_SIMD_NEON)
-    vst1_f32(in.data(), vcvt_f32_f64(x));
-    return in;
-#else
-    const auto result = _mm_cvtpd_ps(x);
-    return {_mm_cvtss_f32(result), _mm_cvtss_f32(_mm_shuffle_ps(result, result, _MM_SHUFFLE(1, 1, 1, 1)))};
-#endif
-#else
-    const auto process = [](const dsp::BiquadCoeffs& c, Section& state, int ch, double x) {
-        dsp::BiquadSection section{c, state.z1[ch], state.z2[ch]};
-        const double y = section.run(x);
-        state.z1[ch] = section.z1;
-        state.z2[ch] = section.z2;
-        return y;
-    };
-    double left = in[0], right = in[1];
-    for (int i = 0; i < count; ++i) {
-        auto& note = notes[active[i]];
-        left = process(note.coeffs, note.sections[1], 0, process(note.coeffs, note.sections[0], 0, left));
-        right = process(note.coeffs, note.sections[1], 1, process(note.coeffs, note.sections[0], 1, right));
-    }
-    return {float(left), float(right)};
-#endif
-}
-
 void Color::Shifter::reset() {
     input.fill({});
     output.fill({});
@@ -277,14 +204,6 @@ void Color::Shifter::reset() {
     rmsSum = lastRms = onsetEnvelope = 0;
     rmsPosition = refractory = 0;
     firstFrame = true;
-}
-
-void Color::Shifter::push(Stereo in, uint64_t sample) {
-    input[sample % kMaxWindow] = in;
-    const float power = .5f * (in[0] * in[0] + in[1] * in[1]);
-    rmsSum += double(power) - rmsHistory[static_cast<size_t>(rmsPosition)];
-    rmsHistory[static_cast<size_t>(rmsPosition)] = power;
-    rmsPosition = (rmsPosition + 1) % int(rmsHistory.size());
 }
 
 void Color::Shifter::analyse(Color& effect, uint64_t end) {
@@ -299,13 +218,18 @@ void Color::Shifter::analyse(Color& effect, uint64_t end) {
         --refractory;
 
     const uint64_t start = end + kMaxWindow - static_cast<uint64_t>(config.size);
+#if defined(__clang__)
+#pragma clang loop unroll(disable)
+#elif defined(__GNUC__)
+#pragma GCC unroll 1
+#endif
     for (int ch = 0; ch < 2; ++ch) {
         for (int i = 0; i < config.size; ++i)
             effect.time_[static_cast<size_t>(i)] =
                 input[(start + static_cast<uint64_t>(i)) % kMaxWindow][static_cast<size_t>(ch)] *
                 config.window[static_cast<size_t>(i)];
         auto& bins = spectrum[static_cast<size_t>(ch)];
-        config.fft.fft(effect.time_.data(), bins.data());
+        config.fft.forwardPacked(effect.time_.data(), bins.data());
         bins[0] = {bins[0].real(), 0}; // Packed Nyquist is outside the correction band.
         for (int k = 1; k < config.bins; ++k) {
             const double phase = std::arg(bins[static_cast<size_t>(k)]);
@@ -357,7 +281,7 @@ void Color::Shifter::synthesize(Color& effect, uint64_t end, const Magnitudes* g
                     (*gain)[static_cast<size_t>(bin)], (*gain)[static_cast<size_t>(bin + 1)], float(destination - bin));
             }
         }
-        config.fft.ifft(bins.data(), effect.time_.data());
+        config.fft.inversePacked(bins.data(), effect.time_.data());
         for (int i = 0; i < config.size; ++i)
             effect.time_[static_cast<size_t>(i)] *= config.window[static_cast<size_t>(i)];
         for (int i = 0; i < length; ++i) {
@@ -370,13 +294,6 @@ void Color::Shifter::synthesize(Color& effect, uint64_t end, const Magnitudes* g
             output[(end + static_cast<uint64_t>(i)) % kRing][static_cast<size_t>(ch)] += value * normalization;
         }
     }
-}
-
-Color::Stereo Color::Shifter::pop(uint64_t sample) {
-    auto& slot = output[sample % kRing];
-    const Stereo value = slot;
-    slot = {};
-    return value;
 }
 
 void Color::Path::reset(int newMask) {
@@ -468,59 +385,11 @@ void Color::Path::frame(Color& effect, uint64_t end, const Magnitudes* dry) {
     if (up) shift[1].synthesize(effect, end, dry ? &gains : nullptr);
 }
 
-Color::Stereo Color::Path::process(
-    Color& effect, Stereo mid, Stereo dry, float transient, Stereo dynamics, uint64_t sample, Stereo& tuned) {
-    tuned = {};
-    if (!active()) return dry;
-    if (down) {
-        const Stereo source = shared.run(mid);
-        shift[0].push(downInput.run(source), sample);
-        Stereo correction = shift[0].pop(sample);
-        if (up) {
-            shift[1].push(upInput.run(source), sample);
-            const Stereo raised = shift[1].pop(sample);
-            for (int ch = 0; ch < 2; ++ch) correction[static_cast<size_t>(ch)] += raised[static_cast<size_t>(ch)];
-        }
-        for (int ch = 0; ch < 2; ++ch) correction[static_cast<size_t>(ch)] *= 1.6f * dynamics[static_cast<size_t>(ch)];
-        tuned = correctionLow.run(correctionHigh.run(correction));
-    }
-    Stereo input{dry[0] + tuned[0], dry[1] + tuned[1]};
-    Stereo wet = reject.run(input);
-    for (auto& value : wet) value *= notchGain;
-    const double r = effect.resonance_;
-    resonanceBlend = approach(resonanceBlend, r > 0 ? 1.f : 0.f, effect.blendStep_);
-    if (resonator.count && resonanceBlend > 0) {
-        resonanceGain = resonanceGainTarget + effect.makeupPole_ * (resonanceGain - resonanceGainTarget);
-        const Stereo resonated = resonator.run(wet);
-        for (int ch = 0; ch < 2; ++ch)
-            wet[static_cast<size_t>(ch)] = std::lerp(
-                wet[static_cast<size_t>(ch)], resonated[static_cast<size_t>(ch)] * resonanceGain, resonanceBlend);
-    }
-    for (int ch = 0; ch < 2; ++ch) {
-        tuned[static_cast<size_t>(ch)] *= effect.amount_ * (1 - transient);
-        wet[static_cast<size_t>(ch)] =
-            std::lerp(dry[static_cast<size_t>(ch)], wet[static_cast<size_t>(ch)], effect.amount_ * (1 - transient));
-    }
-    return wet;
-}
-
 void Color::SpectralGate::reset() {
     input.fill({});
     output.fill({});
     gain.fill(0);
     firstFrame = true;
-}
-
-Color::OutputFrame Color::SpectralGate::push(const OutputFrame& frame, uint64_t sample, int window) {
-    auto& slot = input[sample & (static_cast<uint64_t>(window - 1))];
-    auto delayed = slot;
-    slot = frame;
-    auto& gated = output[sample % kRing];
-    for (int ch = 0; ch < 2; ++ch)
-        delayed.wet[static_cast<size_t>(ch)] =
-            std::lerp(delayed.wet[static_cast<size_t>(ch)], gated[static_cast<size_t>(ch)], delayed.gatedFraction);
-    gated = {};
-    return delayed;
 }
 
 void Color::SpectralGate::analyse(Color& effect, uint64_t end) {
@@ -538,7 +407,7 @@ void Color::SpectralGate::analyse(Color& effect, uint64_t end) {
         for (int i = 0; i < config.size; ++i)
             time[static_cast<size_t>(i)] =
                 sampleAt(i).dry[static_cast<size_t>(ch)] * config.window[static_cast<size_t>(i)];
-        config.fft.fft(time.data(), bins.data());
+        config.fft.forwardPacked(time.data(), bins.data());
         // RealFFT packs DC and Nyquist together. Neither has a negative-frequency partner.
         power[0] += .25f * bins[0].real() * bins[0].real();
         power[static_cast<size_t>(config.bins)] += .25f * bins[0].imag() * bins[0].imag();
@@ -562,10 +431,10 @@ void Color::SpectralGate::analyse(Color& effect, uint64_t end) {
         for (int i = 0; i < config.size; ++i)
             time[static_cast<size_t>(i)] =
                 sampleAt(i).wet[static_cast<size_t>(ch)] * config.window[static_cast<size_t>(i)];
-        config.fft.fft(time.data(), bins.data());
+        config.fft.forwardPacked(time.data(), bins.data());
         bins[0] = {bins[0].real() * gain[0], bins[0].imag() * gain[static_cast<size_t>(config.bins)]};
         for (int k = 1; k < config.bins; ++k) bins[static_cast<size_t>(k)] *= gain[static_cast<size_t>(k)];
-        config.fft.ifft(bins.data(), time.data());
+        config.fft.inversePacked(bins.data(), time.data());
         for (int i = 0; i < config.size; ++i)
             output[(end + static_cast<uint64_t>(i)) % kRing][static_cast<size_t>(ch)] +=
                 time[static_cast<size_t>(i)] * config.window[static_cast<size_t>(i)] * normalization;

@@ -108,5 +108,4 @@ target_link_libraries(nota_devices
 target_include_directories(nota_devices
     SYSTEM PRIVATE
         ${hiir_SOURCE_DIR}
-        ${signalsmith_linear_SOURCE_DIR}/include
 )

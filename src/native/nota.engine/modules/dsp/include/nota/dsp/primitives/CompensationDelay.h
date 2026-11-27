@@ -20,10 +20,20 @@ class NOTA_DSP_API CompensationDelay {
 
     void setDelay(int32_t samples, bool resetIfChanged = false);
     int32_t delay() const noexcept { return delay_.load(std::memory_order_relaxed); }
-    bool isIdle() const NOTA_RT_SAFE;
-    void process(float* buf, int32_t frames) NOTA_RT_SAFE;
+    bool isIdle() const NOTA_RT_SAFE {
+        return !ready_.load(std::memory_order_acquire) || delay_.load(std::memory_order_relaxed) <= 0;
+    }
+    void process(float* buf, int32_t frames) NOTA_RT_SAFE {
+        if (!ready_.load(std::memory_order_acquire)) [[likely]]
+            return;
+        const int32_t d = delay_.load(std::memory_order_relaxed);
+        if (d <= 0 || buf == nullptr || frames <= 0) [[likely]]
+            return;
+        processActive(buf, frames, d);
+    }
 
   private:
+    NOTA_NOINLINE void processActive(float* buf, int32_t frames, int32_t delaySamples) NOTA_RT_SAFE;
     std::vector<float> ring_;
     int32_t cap_ = 0;
     int32_t pos_ = 0;

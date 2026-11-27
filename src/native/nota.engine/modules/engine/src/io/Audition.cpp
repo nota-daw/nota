@@ -212,7 +212,7 @@ int64_t AuditionRig::render(
                 std::max(on + 1, static_cast<int64_t>(std::llround((n.startBeat + n.lengthBeats) * spb)));
             timeline.push_back(
                 {on, {0, true, n.pitch, std::clamp(n.velocity, 0.0f, 1.0f), static_cast<float>(n.lengthBeats)}});
-            timeline.push_back({off, {0, false, n.pitch, 0.0f}});
+            timeline.push_back({off, {0, false, n.pitch, 0.0f, 0.0f}});
         }
     std::stable_sort(timeline.begin(), timeline.end(),
         [](const At& a, const At& b) { return a.frame < b.frame || (a.frame == b.frame && !a.ev.on && b.ev.on); });

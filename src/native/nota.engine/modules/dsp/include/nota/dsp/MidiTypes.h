@@ -8,16 +8,21 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 namespace nota::dsp {
 
+// Trivially default-constructible on purpose: the audio render loop keeps a
+// 1024-entry array of these on the stack for every instrument track every block,
+// and default member initializers would zero ~20 KB per call.
 struct MidiEv {
-    int32_t off = 0;
-    bool on = false;
-    int32_t pitch = 0;
-    float vel = 0.0f;
-    float dur = 0.0f;
+    int32_t off;
+    bool on;
+    int32_t pitch;
+    float vel;
+    float dur;
 };
+static_assert(std::is_trivially_default_constructible_v<MidiEv>);
 
 struct MidiKeyNotes {
     int32_t mask = 0;

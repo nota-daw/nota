@@ -151,7 +151,7 @@ bool RenderGraphExecutor::instrumentHasBlockInput(const MixContext& ctx, const T
 
 bool RenderGraphExecutor::instrumentLeafCanSkip(
     const MixContext& ctx, const Track& t, size_t trackPos, bool capturing) {
-    if (capturing || trackRequiresActiveProcessing(t)) return false;
+    if (capturing || trackRequiresActiveProcessing(t, ctx.anyOpenEditor, ctx.anyNeverSleep)) return false;
     if (t.instrument) {
         if (t.instrument->bypassed()) {
             if (!t.instrument->offSettled.load(std::memory_order_relaxed)) return false;
@@ -363,7 +363,7 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
             sessionActive =
                 !frozenActive && !capturing && !monitoring && sp->playing.load(std::memory_order_relaxed) >= 0;
         }
-        const bool keepEditorAlive = !frozenActive && trackHasOpenEditor(t);
+        const bool keepEditorAlive = !frozenActive && trackHasOpenEditor(t, ctx.anyOpenEditor);
         if (!audible && !capturing && !feeding && !keying && !cueing && !keepEditorAlive) {
             if (sessionActive) {
                 if (t.instrument && !t.sessionSilentReleased) {
@@ -411,7 +411,8 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
             path = LeafPath::Instrument;
         } else if (ctx.playing && ctx.arrangementActive) {
             path = LeafPath::AudioClips;
-        } else if (trackRequiresActiveProcessing(t) || (t.tailQuiet() >= 0 && hasLiveDevice(t))) {
+        } else if (trackRequiresActiveProcessing(t, ctx.anyOpenEditor, ctx.anyNeverSleep) ||
+                   (t.tailQuiet() >= 0 && hasLiveDevice(t))) {
             path = LeafPath::Tail;
         } else {
             t.tailQuiet() = -1;
@@ -582,7 +583,7 @@ void RenderGraphExecutor::processDeviceChain(EngineRuntime& eng, Graph* g, Track
     dsp::PlanarStereoBuffer* overridePlanar) {
     if (!frozenActive && !t.devices.empty())
         runLeafDeviceList(eng, g, t, buf, wid, frames, blockStart, spb, playing, ti, overridePlanar);
-    if (!frozenActive && t.pdc) t.pdc->process(buf, frames);
+    if (!frozenActive && t.pdc && !t.pdc->isIdle()) t.pdc->process(buf, frames);
 }
 
 void RenderGraphExecutor::mixGraph(EngineRuntime& eng, Graph* g, float* out, int32_t frames, double blockStart,
@@ -630,6 +631,8 @@ void RenderGraphExecutor::mixGraph(EngineRuntime& eng, Graph* g, float* out, int
     ctx.cueOn = eng.cueSeg_ != nullptr;
     ctx.arrangementActive = eng.arrangementActive_.load(std::memory_order_relaxed);
     ctx.offline = !eng.deviceBlock_;
+    ctx.anyOpenEditor = dsp::anyOpenPluginEditor();
+    ctx.anyNeverSleep = dsp::anyNeverSleepDevice();
     ctx.stereoA = eng.cachedStereoBlockStep(frames, srLaw);
     ctx.panLawStep = static_cast<float>(1.0 / (0.010 * srLaw));
     ctx.capTrackId = eng.freezeCaptureTrackId_.load(std::memory_order_relaxed);

@@ -79,6 +79,10 @@ function(nota_apply_common_target_settings TARGET)
         target_compile_options(${TARGET} PRIVATE -fno-math-errno)
     endif()
 
+    if(UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(${TARGET} PRIVATE -fno-semantic-interposition)
+    endif()
+
     if(NOTA_ENABLE_LTO AND (MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
         check_ipo_supported(RESULT _nota_ipo_ok OUTPUT _nota_ipo_err LANGUAGES C CXX)
         if(_nota_ipo_ok)

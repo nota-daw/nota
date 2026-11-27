@@ -18,7 +18,6 @@
 
 #include <cmath>
 #include <algorithm>
-#include <signalsmith-linear/fft.h>
 
 namespace nota {
 namespace chamber {

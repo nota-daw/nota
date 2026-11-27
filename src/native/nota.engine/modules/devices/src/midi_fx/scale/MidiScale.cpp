@@ -121,7 +121,8 @@ void MidiScale::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int m
             release(e, emit);
             continue;
         }
-        if (outFor_[e.pitch] >= 0) release({e.off, false, e.pitch, 0.0f}, emit); // a retriggered key lets go first
+        if (outFor_[e.pitch] >= 0)
+            release({e.off, false, e.pitch, 0.0f, 0.0f}, emit); // a retriggered key lets go first
 
         int p = e.pitch;
         if (!bypass) {

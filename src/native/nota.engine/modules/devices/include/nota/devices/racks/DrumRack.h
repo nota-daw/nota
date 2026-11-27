@@ -21,6 +21,9 @@ class NOTA_DEVICES_API DrumRack final : public RackInstrument {
   public:
     ~DrumRack() override;
 
+    DrumRack* asDrumRack() noexcept override { return this; }
+    const DrumRack* asDrumRack() const noexcept override { return this; }
+
     int32_t kind() const override { return 4; }
     const char* displayName() const override { return "Nota Drum Rack"; }
     bool handlesSustain() const override { return true; }

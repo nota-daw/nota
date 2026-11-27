@@ -27,19 +27,12 @@ void CompensationDelay::setDelay(int32_t samples, bool resetIfChanged) {
     if (resetIfChanged && samples != previous) resetGeneration_.fetch_add(1u, std::memory_order_release);
 }
 
-bool CompensationDelay::isIdle() const NOTA_RT_SAFE {
-    return !ready_.load(std::memory_order_acquire) || delay_.load(std::memory_order_relaxed) <= 0;
-}
-
-void CompensationDelay::process(float* buf, int32_t frames) NOTA_RT_SAFE {
-    if (!ready_.load(std::memory_order_acquire)) return;
+void CompensationDelay::processActive(float* buf, int32_t frames, int32_t d) NOTA_RT_SAFE {
     const uint32_t generation = resetGeneration_.load(std::memory_order_acquire);
     if (generation != renderGeneration_) {
         renderGeneration_ = generation;
         validFrames_ = 0;
     }
-    const int32_t d = delay_.load(std::memory_order_relaxed);
-    if (d <= 0 || buf == nullptr || frames <= 0) return;
     const int32_t missing = std::clamp(d - validFrames_, 0, frames);
     for (int32_t i = 0; i < missing; ++i) {
         const std::size_t p = static_cast<std::size_t>(pos_);

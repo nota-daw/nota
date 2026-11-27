@@ -99,7 +99,7 @@ struct Color::PreShifter {
         const int size =
             static_cast<int>(std::clamp(std::bit_ceil(unsigned(std::lround(.036 * sampleRate))), 512u, 8192u));
         latency.store(size, std::memory_order_relaxed);
-        fft.resize(static_cast<size_t>(size));
+        fft.resize(size);
         delay.resize(static_cast<size_t>(size));
         window.resize(static_cast<size_t>(size));
         time.resize(static_cast<size_t>(size));
@@ -155,7 +155,7 @@ struct Color::PreShifter {
                     delay[(position + static_cast<uint64_t>(i)) & (static_cast<uint64_t>(size - 1))]
                         .bands.mid[static_cast<size_t>(ch)] *
                     window[static_cast<size_t>(i)];
-            fft.fft(time.data(), spectrum.data());
+            fft.forwardPacked(time.data(), spectrum.data());
             spectrum[0] = {}; // DC and Nyquist are outside the processed band.
             for (int k = 1; k < bins; ++k) {
                 const double phase = std::arg(spectrum[static_cast<size_t>(k)]);
@@ -173,7 +173,7 @@ struct Color::PreShifter {
                                            float(synthesisPhase[static_cast<size_t>(ch)][static_cast<size_t>(k)]))
                                      : Complex{};
             }
-            fft.ifft(spectrum.data(), time.data());
+            fft.inversePacked(spectrum.data(), time.data());
             for (int i = 0; i < size; ++i) time[static_cast<size_t>(i)] *= window[static_cast<size_t>(i)];
             for (int i = 0, length = int(std::ceil(size / ratio)); i < length; ++i) {
                 const double read = i * ratio;
@@ -203,5 +203,141 @@ struct Color::PreShifter {
     float pole = 0, cents = 0, blend = 0;
     bool snap = true, first = true;
 };
+
+inline Color::Stereo Color::StereoFilter::run(Stereo in) {
+    return {float(channel[0].run(in[0])), float(channel[1].run(in[1]))};
+}
+
+inline Color::Stereo Color::BassSpectrum::Line::filter(Stereo sample) {
+    for (auto& section : lowpass) sample = section.run(sample);
+    return sample;
+}
+
+inline void Color::BassSpectrum::push(Stereo drySample, Stereo tunedSample) {
+    const Stereo dryFiltered = dry.filter(drySample);
+    const Stereo tunedFiltered = tuned.filter(tunedSample);
+    if (--untilNext != 0) return;
+    dry.history[static_cast<size_t>(write)] = dryFiltered;
+    tuned.history[static_cast<size_t>(write)] = tunedFiltered;
+    write = (write + 1) % kFftSize;
+    untilNext = stride;
+}
+
+inline Color::Stereo Color::Bank::run(Stereo in) {
+#if defined(NOTA_SIMD_NEON) || defined(NOTA_SIMD_SSE)
+#if defined(NOTA_SIMD_NEON)
+    auto x = vcvt_f64_f32(vld1_f32(in.data()));
+#else
+    auto x = _mm_setr_pd(in[0], in[1]);
+#endif
+    // Each note's two DF2T sections share coefficients and keep independent L/R histories.
+    for (int i = 0; i < count; ++i) {
+        auto& note = notes[static_cast<size_t>(active[static_cast<size_t>(i)])];
+        const auto& c = note.coeffs;
+        for (auto& stage : note.sections) {
+#if defined(NOTA_SIMD_NEON)
+            const auto y = vfmaq_n_f64(vld1q_f64(stage.z1.data()), x, c.b0);
+            const auto z1 = vfmaq_n_f64(vmulq_n_f64(y, -c.a1), x, c.b1);
+            const auto z2 = vfmaq_n_f64(vmulq_n_f64(y, -c.a2), x, c.b2);
+            vst1q_f64(stage.z1.data(), vaddq_f64(z1, vld1q_f64(stage.z2.data())));
+            vst1q_f64(stage.z2.data(), z2);
+            x = y;
+#else
+            const auto y = _mm_add_pd(_mm_mul_pd(_mm_set1_pd(c.b0), x), _mm_load_pd(stage.z1.data()));
+            const auto z1 = _mm_sub_pd(_mm_mul_pd(_mm_set1_pd(c.b1), x), _mm_mul_pd(_mm_set1_pd(c.a1), y));
+            const auto z2 = _mm_sub_pd(_mm_mul_pd(_mm_set1_pd(c.b2), x), _mm_mul_pd(_mm_set1_pd(c.a2), y));
+            _mm_store_pd(stage.z1.data(), _mm_add_pd(z1, _mm_load_pd(stage.z2.data())));
+            _mm_store_pd(stage.z2.data(), z2);
+            x = y;
+#endif
+        }
+    }
+#if defined(NOTA_SIMD_NEON)
+    vst1_f32(in.data(), vcvt_f32_f64(x));
+    return in;
+#else
+    const auto result = _mm_cvtpd_ps(x);
+    return {_mm_cvtss_f32(result), _mm_cvtss_f32(_mm_shuffle_ps(result, result, _MM_SHUFFLE(1, 1, 1, 1)))};
+#endif
+#else
+    const auto process = [](const dsp::BiquadCoeffs& c, Section& state, int ch, double x) {
+        dsp::BiquadSection section{c, state.z1[ch], state.z2[ch]};
+        const double y = section.run(x);
+        state.z1[ch] = section.z1;
+        state.z2[ch] = section.z2;
+        return y;
+    };
+    double left = in[0], right = in[1];
+    for (int i = 0; i < count; ++i) {
+        auto& note = notes[active[i]];
+        left = process(note.coeffs, note.sections[1], 0, process(note.coeffs, note.sections[0], 0, left));
+        right = process(note.coeffs, note.sections[1], 1, process(note.coeffs, note.sections[0], 1, right));
+    }
+    return {float(left), float(right)};
+#endif
+}
+
+inline void Color::Shifter::push(Stereo in, uint64_t sample) {
+    input[sample % kMaxWindow] = in;
+    const float power = .5f * (in[0] * in[0] + in[1] * in[1]);
+    rmsSum += double(power) - rmsHistory[static_cast<size_t>(rmsPosition)];
+    rmsHistory[static_cast<size_t>(rmsPosition)] = power;
+    rmsPosition = (rmsPosition + 1) % int(rmsHistory.size());
+}
+
+inline Color::Stereo Color::Shifter::pop(uint64_t sample) {
+    auto& slot = output[sample % kRing];
+    const Stereo value = slot;
+    slot = {};
+    return value;
+}
+
+inline Color::Stereo Color::Path::process(
+    Color& effect, Stereo mid, Stereo dry, float transient, Stereo dynamics, uint64_t sample, Stereo& tuned) {
+    tuned = {};
+    if (!active()) return dry;
+    if (down) {
+        const Stereo source = shared.run(mid);
+        shift[0].push(downInput.run(source), sample);
+        Stereo correction = shift[0].pop(sample);
+        if (up) {
+            shift[1].push(upInput.run(source), sample);
+            const Stereo raised = shift[1].pop(sample);
+            for (int ch = 0; ch < 2; ++ch) correction[static_cast<size_t>(ch)] += raised[static_cast<size_t>(ch)];
+        }
+        for (int ch = 0; ch < 2; ++ch) correction[static_cast<size_t>(ch)] *= 1.6f * dynamics[static_cast<size_t>(ch)];
+        tuned = correctionLow.run(correctionHigh.run(correction));
+    }
+    Stereo input{dry[0] + tuned[0], dry[1] + tuned[1]};
+    Stereo wet = reject.run(input);
+    for (auto& value : wet) value *= notchGain;
+    const double r = effect.resonance_;
+    resonanceBlend = approach(resonanceBlend, r > 0 ? 1.f : 0.f, effect.blendStep_);
+    if (resonator.count && resonanceBlend > 0) {
+        resonanceGain = resonanceGainTarget + effect.makeupPole_ * (resonanceGain - resonanceGainTarget);
+        const Stereo resonated = resonator.run(wet);
+        for (int ch = 0; ch < 2; ++ch)
+            wet[static_cast<size_t>(ch)] = std::lerp(
+                wet[static_cast<size_t>(ch)], resonated[static_cast<size_t>(ch)] * resonanceGain, resonanceBlend);
+    }
+    for (int ch = 0; ch < 2; ++ch) {
+        tuned[static_cast<size_t>(ch)] *= effect.amount_ * (1 - transient);
+        wet[static_cast<size_t>(ch)] =
+            std::lerp(dry[static_cast<size_t>(ch)], wet[static_cast<size_t>(ch)], effect.amount_ * (1 - transient));
+    }
+    return wet;
+}
+
+inline Color::OutputFrame Color::SpectralGate::push(const OutputFrame& frame, uint64_t sample, int window) {
+    auto& slot = input[sample & (static_cast<uint64_t>(window - 1))];
+    auto delayed = slot;
+    slot = frame;
+    auto& gated = output[sample % kRing];
+    for (int ch = 0; ch < 2; ++ch)
+        delayed.wet[static_cast<size_t>(ch)] =
+            std::lerp(delayed.wet[static_cast<size_t>(ch)], gated[static_cast<size_t>(ch)], delayed.gatedFraction);
+    gated = {};
+    return delayed;
+}
 
 } // namespace nota
