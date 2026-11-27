@@ -805,13 +805,40 @@ public partial class MainWindow
             {
                 var live = LiveClips(roll, changed);
                 if (live is null) return;
+                bool expanded = false;
                 Engine.BeginUndoGroup();
                 try
                 {
-                    foreach (var cn in live) Engine.SetClipNotes(cn.TrackId, cn.ClipIndex, cn.Notes.ToArray());
+                    foreach (var cn in live)
+                    {
+                        var notes = cn.Notes.ToArray();
+                        if (roll.AutoExpand && Engine.TryGetClipInfo(cn.TrackId, cn.ClipIndex, out var info))
+                        {
+                            var prior = Engine.GetClipNotes(cn.TrackId, cn.ClipIndex).ToHashSet();
+                            double start = 0, end = info.LengthBeats;
+                            foreach (var note in notes)
+                            {
+                                if (prior.Contains(note)) continue;
+                                start = Math.Min(start, note.StartBeat);
+                                end = Math.Max(end, note.StartBeat + note.LengthBeats);
+                            }
+                            start = Math.Max(-info.StartBeat, start);
+                            if (start < -1e-9 || end > info.LengthBeats + 1e-9)
+                            {
+                                Engine.TrimClip(cn.TrackId, cn.ClipIndex, info.StartBeat + start, end - start);
+                                for (int i = 0; i < notes.Length; i++) notes[i].StartBeat -= start;
+                                expanded = true;
+                            }
+                        }
+                        Engine.SetClipNotes(cn.TrackId, cn.ClipIndex, notes);
+                    }
                 }
                 finally { Engine.EndUndoGroup(); }
                 Timeline.Refresh();
+                if (expanded) Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(roll, _editorRoll)) ReloadEditorNotes();
+                });
             },
             // Live drag stream: push every frame with no undo checkpoint so playback follows the
             // note instantly (the roll seeds one undo step at the gesture start).

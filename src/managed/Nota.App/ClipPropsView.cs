@@ -60,6 +60,13 @@ public sealed class ClipPropsView : UserControl
         clipItems.Add(StripLabel(Loc.T("common.start"))); clipItems.Add(Sized(StripValue(_startText), 58));
         clipItems.Add(StripLabel(Loc.T("common.length"))); clipItems.Add(Sized(StripValue(_lengthText), 58));
         clipItems.Add(loop);
+        if (roll.CanAutoExpand)
+        {
+            Action sync = () => { };
+            var expand = SwitchRow(Loc.T("clip_props.auto_expand_midi"), () => roll.AutoExpand,
+                () => { roll.SetAutoExpand(!roll.AutoExpand); sync(); }, out sync);
+            clipItems.Add(expand);
+        }
         var clip = StripGroup(Loc.T("common.clip"), clipItems.ToArray());
 
         // Quantize — its own step (not the snap grid, which follows the zoom), one-tap

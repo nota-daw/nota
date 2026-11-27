@@ -253,7 +253,7 @@ public sealed partial class PianoRollView : UserControl
     private double NewNoteLen(double start, int slot)
     {
         double len = double.IsNaN(s_lastLen) ? MinNoteLen : Math.Max(MinNoteLen, s_lastLen);
-        return Math.Max(MinNoteLen, Math.Min(len, _set.EditorEnd(slot) - start));
+        return AutoExpand ? len : Math.Max(MinNoteLen, Math.Min(len, _set.EditorEnd(slot) - start));
     }
 
     /// <summary>The clip a note drawn at <paramref name="beat"/> goes into (specs/029 FR-007):
@@ -261,6 +261,7 @@ public sealed partial class PianoRollView : UserControl
     /// clip's track that does; −1 when none does (nothing is drawn).</summary>
     private int DrawTarget(double beat)
     {
+        if (AutoExpand && _set.IsEditable(_set.Active) && beat >= -_set.Origin) return _set.Active;
         if (_set.Contains(_set.Active, beat)) return _set.Active;
         int track = _set.ActiveClip.TrackId;
         for (int k = 0; k < _set.Count; k++)
@@ -659,7 +660,15 @@ public sealed partial class PianoRollView : UserControl
     internal double SnapBeat(double b)
     {
         var g = SnapGridState;
-        return g.SnapOn ? SnapGrid.SnapBeat(b, g.Snap.Beats(_beatsPerBar), _beatsPerBar) : b;
+        if (!g.SnapOn) return b;
+        double step = g.Snap.Beats(_beatsPerBar);
+        if (AutoExpand && b < 0)
+        {
+            double period = Math.Max(_beatsPerBar, step);
+            double offset = Math.Ceiling(-b / period) * period;
+            return SnapGrid.SnapBeat(b + offset, step, _beatsPerBar) - offset;
+        }
+        return SnapGrid.SnapBeat(b, step, _beatsPerBar);
     }
 
     /// <summary>The step in effect changed (zoom, time signature, the setting) — the header
@@ -675,6 +684,14 @@ public sealed partial class PianoRollView : UserControl
     public ClipSet Clips => _set;
     public OpenClip ActiveClip => _set.ActiveClip;
     public Action<OpenClip, double, double>? CommitBoundaryTrim { get; set; }
+    internal bool CanAutoExpand => CommitBoundaryTrim is not null && LaneSettings is not null;
+    internal bool AutoExpand => CanAutoExpand && LaneSettings!.Current.AutoExpandMidiClip;
+    internal void SetAutoExpand(bool enabled)
+    {
+        if (!CanAutoExpand) return;
+        LaneSettings!.Current.AutoExpandMidiClip = enabled;
+        LaneSettings.Save();
+    }
     /// <summary>Raised when another clip becomes active (strip click, a note of it clicked or
     /// drawn into) or a clip is locked / unlocked; the header, inspector and envelopes follow.</summary>
     public event Action? ActiveClipChanged;
@@ -983,10 +1000,10 @@ public sealed partial class PianoRollView : UserControl
             // dropped, as a paste past the clip's end is, instead of piling up at the edge.
             var n = _notes[i];
             n.StartBeat += shift;
-            int slot = _set.ShiftTarget(_owner[i], n.StartBeat);
+            int slot = AutoExpand ? _owner[i] : _set.ShiftTarget(_owner[i], n.StartBeat);
             if (slot < 0) continue;
             double end = _set.EditorEnd(slot);
-            if (n.StartBeat + n.LengthBeats > end) n.LengthBeats = Math.Max(MinNoteLen, end - n.StartBeat);
+            if (!AutoExpand && n.StartBeat + n.LengthBeats > end) n.LengthBeats = Math.Max(MinNoteLen, end - n.StartBeat);
             copies.Add(n);
             copyOwners.Add(slot);
         }
@@ -1390,8 +1407,8 @@ public sealed partial class PianoRollView : UserControl
             var (slot, at) = _set.PasteTarget(c.TrackId, c.ClipIndex, c.Note.StartBeat);
             double end = _set.EditorEnd(slot);
             n.StartBeat = at;
-            if (n.StartBeat >= end - 1e-9) continue;                     // past the clip end → skip
-            if (n.StartBeat + n.LengthBeats > end)                         // trim a note that overruns
+            if (!AutoExpand && n.StartBeat >= end - 1e-9) continue;                     // past the clip end → skip
+            if (!AutoExpand && n.StartBeat + n.LengthBeats > end)          // trim a note that overruns
                 n.LengthBeats = Math.Max(MinNoteLen, end - n.StartBeat);
             AddNote(n, slot);
         }
@@ -1412,7 +1429,7 @@ public sealed partial class PianoRollView : UserControl
         foreach (int i in sel)
         {
             var (start, len, owner) = at(i);
-            var (rs, re) = _set.Reach(owner);
+            var (rs, re) = AutoExpand ? (-_set.Origin, double.MaxValue) : _set.Reach(owner);
             lo = Math.Max(lo, rs - start);
             hi = Math.Min(hi, endsInside ? re - (start + len) : Math.Max(0, re - MinNoteLen - start));
         }
@@ -1449,7 +1466,7 @@ public sealed partial class PianoRollView : UserControl
         foreach (int i in sel)
         {
             var n = _notes[i]; n.StartBeat += db; n.Pitch = octave ? n.Pitch + dp : _rows.Step(n.Pitch, dp); _notes[i] = n;
-            _owner[i] = _set.OwnerAfterMove(_owner[i], n.StartBeat);
+            if (!AutoExpand) _owner[i] = _set.OwnerAfterMove(_owner[i], n.StartBeat);
             if (edge < 0 || (dp > 0 ? n.Pitch > edge : n.Pitch < edge)) edge = n.Pitch;
         }
         _placementPending = true;
@@ -1477,7 +1494,7 @@ public sealed partial class PianoRollView : UserControl
     {
         if (_selection.Count == 0) return false;
         double step = SnapGridState.SnapOn ? SnapStep : MinNoteLen;
-        if (!NoteOverwrite.ResizeBy(_notes, _selection, dir * step, MinNoteLen, i => _set.EditorEnd(_owner[i]))) return false;
+        if (!NoteOverwrite.ResizeBy(_notes, _selection, dir * step, MinNoteLen, i => AutoExpand ? double.MaxValue : _set.EditorEnd(_owner[i]))) return false;
         _placementPending = true;
         Invalidate(); CommitNotes(); Changed?.Invoke();
         return true;
@@ -2673,7 +2690,7 @@ public sealed partial class PianoRollView : UserControl
                         _preDrag.Clear(); _preDrag.AddRange(_o._notes);
                         _preDragOwners.Clear(); _preDragOwners.AddRange(_o._owner);
                         _dragMoved = false;
-                        _liveStarted = true;
+                        _liveStarted = !_o.AutoExpand;
                         _drag = Mode.Place;
                         AnchorPlace(p, PlaceKind(e.KeyModifiers));
                         _lastGrid = p;
@@ -2904,7 +2921,7 @@ public sealed partial class PianoRollView : UserControl
                         n.Pitch = scaleShift is int semitones
                             ? kv.Value.pitch + semitones : _o._rows.Step(kv.Value.pitch, dRows);
                         _o._notes[kv.Key] = n;
-                        _o._owner[kv.Key] = _o._set.OwnerAfterMove(kv.Value.owner, n.StartBeat);
+                        if (!_o.AutoExpand) _o._owner[kv.Key] = _o._set.OwnerAfterMove(kv.Value.owner, n.StartBeat);
                     }
                     _dragMoved = true;
                     PushLive();
@@ -2946,7 +2963,7 @@ public sealed partial class PianoRollView : UserControl
                 double dStart = Snap(XToBeat(p.X) - _edgeGrab) - pr.start;
                 foreach (var v in _orig.Values)
                 {
-                    double floor = _o._set.EditorStart(v.owner) - v.start;
+                    double floor = (_o.AutoExpand ? -_o._set.Origin : _o._set.EditorStart(v.owner)) - v.start;
                     dStart = Math.Clamp(dStart, floor, Math.Max(floor, v.len - _o.MinNoteLen));
                 }
                 foreach (var kv in _orig)
@@ -3024,8 +3041,8 @@ public sealed partial class PianoRollView : UserControl
                 double left = _stretchAnchor - n.start;
                 double right = n.start + n.len - _stretchAnchor;
                 if (left > 0)
-                    _stretchMax = Math.Min(_stretchMax, Math.Max(1, (_stretchAnchor - _o._set.EditorStart(n.owner)) / left));
-                if (right > 0)
+                    _stretchMax = Math.Min(_stretchMax, Math.Max(1, (_stretchAnchor - (_o.AutoExpand ? -_o._set.Origin : _o._set.EditorStart(n.owner))) / left));
+                if (right > 0 && !_o.AutoExpand)
                     _stretchMax = Math.Min(_stretchMax, Math.Max(1, (_o._set.EditorEnd(n.owner) - _stretchAnchor) / right));
             }
         }
@@ -3092,7 +3109,7 @@ public sealed partial class PianoRollView : UserControl
         // Playback follows the preview. On release, restore the original engine state before committing.
         private void PushLive()
         {
-            if (_drag == Mode.Duplicate || !_o.HasLivePath) return;   // commit on release
+            if (_drag == Mode.Duplicate || _o.AutoExpand || !_o.HasLivePath) return;   // commit on release
             _liveStarted = true;
             _o.PushLive(_o._notes, _o._owner);
         }
@@ -3202,7 +3219,7 @@ public sealed partial class PianoRollView : UserControl
         {
             if (!new Rect(Bounds.Size).Contains(p)) return;
             double raw = XToBeat(p.X);
-            double at = Math.Max(0, offGrid ? raw : _o.SnapBeat(raw));
+            double at = Math.Max(_o.AutoExpand ? -_o._set.Origin : 0, offGrid ? raw : _o.SnapBeat(raw));
             int slot = _o.DrawTarget(at);
             if (slot < 0) return;
             if (slot != _o._set.Active) _o.SetActiveClip(slot);

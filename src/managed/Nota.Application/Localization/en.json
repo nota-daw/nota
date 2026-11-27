@@ -572,6 +572,7 @@
     "clip_editor.track_clip": "Track {0} clip",
     "clip_props.beat": "beat",
     "clip_props.beats": "beats",
+    "clip_props.auto_expand_midi": "Auto expand",
     "clip_props.clips_always_loop": "Clips always loop",
     "clip_props.double_click_add_or_delete": "Click empty space to add · double-click a note to delete · drag to select",
     "clip_props.no_notes_selected": "No notes selected",

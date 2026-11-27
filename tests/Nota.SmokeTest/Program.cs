@@ -49,6 +49,25 @@ void CheckMidiClipTrim()
         trim.TrimClip(track, clip, 4, 4);
         Check(trim.GetMidiClipEnvelope(track, clip, Nota.Application.MidiClipEnvelope.Volume)[0].Beat == 0.5,
             "MIDI re-extension restores hidden envelope timing");
+        trim.BeginUndoGroup();
+        try
+        {
+            trim.TrimClip(track, clip, 3, 6);
+            trim.SetClipNotes(track, clip,
+                [new Nota.Application.NotaNote(60, 1.5, 2, 0.8f), new Nota.Application.NotaNote(64, 0, 6, 0.8f)]);
+        }
+        finally { trim.EndUndoGroup(); }
+        Check(trim.TryGetClipInfo(track, clip, out var expanded) && expanded.StartBeat == 3 && expanded.LengthBeats == 6
+            && trim.GetClipNotes(track, clip).Any(note => note.StartBeat + note.LengthBeats == 6),
+            "MIDI expansion contains the entire edited note");
+        trim.Undo();
+        Check(trim.TryGetClipInfo(track, clip, out var before) && before.StartBeat == 4 && before.LengthBeats == 4
+            && trim.GetClipNotes(track, clip).Single().StartBeat == 0.5,
+            "MIDI expansion undoes bounds and notes together");
+        trim.Redo();
+        Check(trim.TryGetClipInfo(track, clip, out var after) && after.StartBeat == 3 && after.LengthBeats == 6
+            && trim.GetClipNotes(track, clip).Length == 2,
+            "MIDI expansion redoes bounds and notes together");
     }
 }
 
