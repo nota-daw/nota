@@ -1221,6 +1221,9 @@ public partial class MainWindow
         // Every open clip, as the engine now holds it (undo/redo, recording); clips that are
         // gone leave the set, and their lengths/starts are re-read.
         var roll = _editorRoll;
+        // The first click and any shaping drag share a commit. Keep the preview
+        // until that gesture ends so a recording refresh cannot replace it.
+        if (roll.HasPendingDraw) return;
         SyncTrackClips(roll);   // a track-mode editor takes clips that appeared or were re-indexed (undo, record)
         if (!PruneDeadClips(roll)) return;
         var set = roll.Clips;

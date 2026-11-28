@@ -1278,6 +1278,7 @@ public sealed partial class PianoRollView : UserControl
     }
 
     internal void FlushPendingDraw() => _gridControl.FlushPendingDraw();
+    internal bool HasPendingDraw => _gridControl.HasPendingDraw;
 
     /// <summary>Streams notes to the engine with no undo checkpoint.</summary>
     private void PushLive(IReadOnlyList<NotaNote> notes, IReadOnlyList<int> owners)
@@ -2079,11 +2080,11 @@ public sealed partial class PianoRollView : UserControl
                 if (st * pxPerSec >= chars * charW + 16) { stepS = st; break; }
             }
             double t0 = RulerLabels.Seconds(origin + _o.ScrollBeats, bpm), t1 = RulerLabels.Seconds(origin + viewEnd, bpm);
-            for (long k = (long)Math.Floor(t0 / stepS); k * stepS <= t1 + 1e-9; k++)
+            for (long k = Math.Max(0, (long)Math.Floor(t0 / stepS)); k * stepS <= t1 + 1e-9; k++)
             {
                 double t = k * stepS;
                 double b = RulerLabels.BeatsAt(t, bpm) - origin;
-                if (b < -1e-9) continue;
+                if (b < _o.MinScrollBeats - 1e-9) continue;
                 double x = _o.BeatToX(b);
                 ctx.DrawLine(BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
                 if (b >= _o._lengthBeats - 1e-9) continue;
@@ -2153,7 +2154,8 @@ public sealed partial class PianoRollView : UserControl
                 // Label every beat while there is room for "12.4", else bars only. Ticks stay on
                 // the editor's own grid; the labels read where each sits in the arrangement.
                 double step = ppb >= 30 ? 1 : _o._beatsPerBar;
-                double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
+                double firstGridBeat = Math.Ceiling(_o.MinScrollBeats / step) * step;
+                double startB = Math.Max(firstGridBeat, Math.Floor(_o.ScrollBeats / step) * step);
                 for (int k = 0; ; k++)
                 {
                     double b = startB + k * step;
@@ -3244,6 +3246,7 @@ public sealed partial class PianoRollView : UserControl
             => Math.Abs(p.X - _emptyPress.X) >= ClickSlop || Math.Abs(p.Y - _emptyPress.Y) >= ClickSlop;
 
         private DispatcherTimer? _pendingDraw;
+        internal bool HasPendingDraw => _pendingDraw is not null;
 
         internal bool ClearPendingDraw()
         {
