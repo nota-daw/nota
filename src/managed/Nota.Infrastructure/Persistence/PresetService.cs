@@ -38,15 +38,13 @@ public static class PresetService
                 doc.StateBase64 = Convert.ToBase64String(engine.GetPluginState(trackId, -1));
                 return string.IsNullOrEmpty(doc.PluginId) ? null : doc;
             }
-            // Built-in instrument: capture the normalized plugin-params by id (+ a Mosaic's program). Skip kinds whose
-            // state isn't fully recallable from params alone — Grain (10) needs the sample and
-            // the Instrument/Drum racks (3/4) their chains. The Sampler (1) saves its sound —
+            // Built-in instrument: capture normalized plugin params by id (+ a Mosaic program).
+            // Racks additionally carry their complete structural state blob. The Sampler (1) saves its sound —
             // envelope, filter, pitch, loop, voices — and applying it keeps whatever sample is
             // loaded (like its factory presets). Rhythm (12) saves its kit — every voice's
             // sound, the groove and the bus — and applying it keeps the steps, the loaded
             // samples and their regions. Everything else (Synth, Physical, Aurora, Volt, Bass,
             // Pendulum, Operator, Flux, …) is a param-only synth and saves cleanly.
-            if (ik is 3 or 4 or 10) return null;
             {
                 int pc = engine.PluginParamCount(trackId, -1);
                 if (pc <= 0) return null;
@@ -66,6 +64,17 @@ public static class PresetService
                 // Nota Twin: its sequencer patterns travel with the sound (a params-free state blob).
                 if (ik == Nota.Application.Twin.TwinMatrix.Kind && Nota.Application.Twin.TwinPatterns.FromState(engine.GetPluginState(trackId, -1)) is { } pats)
                     doc.StateBase64 = Convert.ToBase64String(Nota.Application.Twin.TwinPatterns.StateWithPatterns(pats));
+                if (ik is 3 or 4)
+                {
+                    doc.StateBase64 = Convert.ToBase64String(engine.GetPluginState(trackId, -1));
+                    doc.RackGrainSamples = CaptureRackGrainSamples(engine, trackId, -1);
+                }
+                if (ik == 10 && engine.TryGetGrainInfo(trackId, out var grain))
+                {
+                    doc.GrainRootNote = grain.RootNote;
+                    if (grain.SampleId != 0 && engine.SampleSource(grain.SampleId) is { Length: > 0 } source)
+                        doc.GrainSample = source;
+                }
                 return doc;
             }
         }
@@ -81,6 +90,7 @@ public static class PresetService
                 if (engine.DeviceParamName(trackId, deviceIndex, i) is var pn && DeviceView.IsSoundParam(pn))
                     doc.NamedParams[pn] = engine.DeviceGetParam(trackId, deviceIndex, i);
             if (bk == EqKind) doc.BandText = CaptureBandText(engine, trackId, deviceIndex);
+            if (bk == 5) doc.StateBase64 = Convert.ToBase64String(engine.GetPluginState(trackId, deviceIndex));
             return doc;
         }
 
@@ -257,6 +267,7 @@ public static class PresetService
                     ApplyEffectPositional(doc, engine, targetTrackId, di, pc);
                 LegacyRange(doc, engine, targetTrackId, di);
                 if (doc.BuiltinKind == EqKind) ApplyBandText(doc.BandText, engine, targetTrackId, di);
+                if (doc.BuiltinKind == 5) ApplyState(engine, targetTrackId, di, doc.StateBase64);
                 return "";
             }
             case "builtin-midi-effect":
@@ -283,6 +294,8 @@ public static class PresetService
                 {
                     1 => engine.AddSamplerInstrumentTrack(),
                     2 => engine.AddPhysicalSynthTrack(),
+                    3 => engine.AddInstrumentRackTrack(),
+                    4 => engine.AddDrumRackTrack(),
                     5 => engine.AddWavetableSynthTrack(),
                     6 => engine.AddVoltSynthTrack(),
                     7 => engine.AddBassSynthTrack(),
@@ -310,8 +323,13 @@ public static class PresetService
                 }
                 LoadTwinPatterns(doc, engine, t);
                 if (doc.BuiltinKind == 5) return LoadAuroraTables(doc, engine, t, undoable: false);
+                if (doc.BuiltinKind is 3 or 4)
+                {
+                    ApplyState(engine, t, -1, doc.StateBase64);
+                    return LoadRackGrainSamples(doc, engine, t);
+                }
                 string mw = LoadMosaicProgram(doc, engine, t);
-                return mw.Length > 0 ? mw : LoadGrainSource(doc, engine, t);
+                return mw.Length > 0 ? mw : LoadGrainSample(doc, engine, t);
             }
             case "plugin-effect":
             {
@@ -345,6 +363,44 @@ public static class PresetService
         var path = Grain.GrainSourceLibrary.Ensure(doc.GrainSource);
         if (src is null || path is null) return Loc.F("persistence.preset.couldnt_prepare_the_sample", doc.GrainSource);
         return engine.SetTrackGrainSample(trackId, path, src.Root) ? "" : Loc.F("persistence.preset.couldnt_load_the_sample", src.Name);
+    }
+
+    private static string LoadGrainSample(PresetDocument doc, IAudioEngine engine, int trackId)
+    {
+        if (doc.BuiltinKind != 10 || string.IsNullOrEmpty(doc.GrainSample)) return LoadGrainSource(doc, engine, trackId);
+        return File.Exists(doc.GrainSample) && engine.SetTrackGrainSample(trackId, doc.GrainSample, doc.GrainRootNote ?? 60)
+            ? "" : Loc.F("persistence.preset.couldnt_load_the_sample", Path.GetFileName(doc.GrainSample));
+    }
+
+    private static List<RackGrainSample>? CaptureRackGrainSamples(IAudioEngine engine, int trackId, int deviceIndex)
+    {
+        List<RackGrainSample>? samples = null;
+        Capture(deviceIndex);
+        return samples;
+
+        void Capture(int rack)
+        {
+            for (int chain = 0, count = engine.RackDevChainCount(trackId, rack); chain < count; chain++)
+            {
+                if (engine.RackDevChainGrainInfo(trackId, rack, chain, out var grain) && grain.SampleId != 0
+                    && engine.SampleSource(grain.SampleId) is { Length: > 0 } source)
+                    (samples ??= new()).Add(new RackGrainSample { DeviceIndex = rack, Chain = chain, Sample = source, RootNote = grain.RootNote });
+
+                int kind = engine.RackDevChainInstrumentKind(trackId, rack, chain);
+                if (kind is 3 or 4) Capture(Nota.Application.RackMacroMapping.NestedRackBase - chain);
+            }
+        }
+    }
+
+    private static string LoadRackGrainSamples(PresetDocument doc, IAudioEngine engine, int trackId)
+    {
+        if (doc.RackGrainSamples is not { Count: > 0 }) return "";
+        foreach (var grain in doc.RackGrainSamples)
+        {
+            if (!File.Exists(grain.Sample) || !engine.RackDevChainGrainSetSample(trackId, grain.DeviceIndex, grain.Chain, grain.Sample, grain.RootNote))
+                return Loc.F("persistence.preset.couldnt_load_the_sample", Path.GetFileName(grain.Sample));
+        }
+        return "";
     }
 
     // A built-in instrument's parameters in place: the named ones, every other one back to its
@@ -530,11 +586,22 @@ public static class PresetService
             }
             case "builtin-instrument":
             {
+                int kind = engine.TrackInstrumentKind(trackId);
+                if (kind is 3 or 4 && doc.BuiltinKind == kind)
+                {
+                    engine.BeginUndoGroup();
+                    try
+                    {
+                        if (!string.IsNullOrEmpty(doc.StateBase64) && engine.RackDevCheckpoint(trackId, -1)) ApplyState(engine, trackId, -1, doc.StateBase64);
+                        return LoadRackGrainSamples(doc, engine, trackId);
+                    }
+                    finally { engine.EndUndoGroup(); }
+                }
                 int pc = engine.PluginParamCount(trackId, -1);
                 // The Sampler's trim and loop points belong to the loaded sample, not the
                 // sound: a preset that doesn't name them leaves them where they are. Likewise
                 // a Rhythm voice's sample region (v{n}_start / _length / _reverse).
-                int kind = engine.TrackInstrumentKind(trackId);
+                kind = engine.TrackInstrumentKind(trackId);
                 bool sampler = kind == 1, rhythm = kind == 12;
                 for (int i = 0; i < pc; i++)
                 {
@@ -547,12 +614,17 @@ public static class PresetService
                     engine.PluginParamSet(trackId, -1, i, v);
                 }
                 if (kind == Nota.Application.Twin.TwinMatrix.Kind) LoadTwinPatterns(doc, engine, trackId, undoable: true);
-                return kind == 10 ? LoadGrainSource(doc, engine, trackId)
+                return kind == 10 ? LoadGrainSample(doc, engine, trackId)
                      : kind == MosaicModel.Kind ? LoadMosaicProgram(doc, engine, trackId) : "";
             }
             case "builtin-effect":
             {
                 if (deviceIndex < 0) return Loc.T("persistence.preset.not_an_effect");
+                if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == 5 && doc.BuiltinKind == 5)
+                {
+                    if (!string.IsNullOrEmpty(doc.StateBase64) && engine.RackDevCheckpoint(trackId, deviceIndex)) ApplyState(engine, trackId, deviceIndex, doc.StateBase64);
+                    return "";
+                }
                 int pc = engine.DeviceParamCount(trackId, deviceIndex);
                 if (EffectNamed(doc, engine.TrackDeviceBuiltinKind(trackId, deviceIndex)) is { Count: > 0 } named)
                 {

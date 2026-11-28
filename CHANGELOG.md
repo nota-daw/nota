@@ -51,6 +51,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Fixed
 - **Scrollbars stay thin and themed on hover (#1113)**: Replaced Avalonia `FluentTheme`'s `ScrollBar` template with a dedicated Nota `ControlTheme` in `NotaTheme.axaml` (9 px track with 0 minimum constraints, 5 px rounded pill thumb, transparent track with no arrow buttons, and hidden `ScrollViewer` corner separator), so hovering or expanding a scrollbar only transitions the thumb colour instead of widening to 16 px with unstyled Fluent track, arrow, and thumb fills.
 - **Open VST3 and AudioUnit plugin editor keep-awake (#1050)**: Native VST3 and AudioUnit plugin UIs no longer freeze when the plugin goes silent, sits on a stopped audio track, muted track, group/return bus, or nested rack, or runs inside the Hybrid anticipative pool (`SilenceGate::holdAwake_`, lock-free `EditorHost::open_`, track/bus/rack active-editor propagation, and live Hybrid bypass without overwriting `PluginSleepMode`).
+- **Presets:** Drum Rack, Instrument Rack and Audio Effect Rack now save and recall their
+  complete chains, devices, macros and mappings; Nota Grain user presets also restore their
+  referenced sample and root note (#1044).
 
 ## [0.61.1] — 2026-11-24
 

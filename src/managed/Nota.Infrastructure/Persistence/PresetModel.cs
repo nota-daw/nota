@@ -38,6 +38,17 @@ public sealed class PresetDocument
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? GrainSource { get; set; }
 
+    /// <summary>Nota Grain user presets: a sample-source path and root note. The audio stays
+    /// external, like a Mosaic program's sample references; null means no loaded sample.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GrainSample { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? GrainRootNote { get; set; }
+
+    /// <summary>External sources used by Nota Grain instruments in an Instrument or Drum Rack.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<RackGrainSample>? RackGrainSamples { get; set; }
+
     /// <summary>Nota Mosaic factory presets: the factory multisample (MosaicSources id) the
     /// preset renders on first use and loads. Null = none.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -65,6 +76,15 @@ public sealed class PresetDocument
 
     /// <summary>Forward-compat: unknown fields from newer versions round-trip.</summary>
     [JsonExtensionData] public System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+}
+
+public sealed class RackGrainSample
+{
+    /// <summary>Rack address: -1 for the outer rack, or NestedRackBase minus its outer chain.</summary>
+    public int DeviceIndex { get; set; } = -1;
+    public int Chain { get; set; }
+    public string Sample { get; set; } = "";
+    public int RootNote { get; set; } = 60;
 }
 
 /// <summary>One EQ-8 band's label and note in a preset (band 1..8).</summary>

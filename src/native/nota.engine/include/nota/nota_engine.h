@@ -2590,6 +2590,8 @@ NOTA_API int64_t     nota_rackdev_chain_id(const NotaEngine* engine, int32_t tra
 /* Load an audio file into chain `chain`'s Nota Grain (kind 10) with its root note; one undo step.
  * NOTA_OK, or NOTA_ERR_INVALID_ARG when the chain holds no Grain or the file can't be decoded. */
 NOTA_API NotaResult  nota_rackdev_chain_grain_set_sample(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, const char* path, int32_t root_note);
+/* 1 and the Grain's sample id/root note in `out`, or 0 when the chain holds no Nota Grain. */
+NOTA_API int32_t     nota_rackdev_chain_grain_info(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, NotaSamplerInfo* out);
 /* 1 when the clipboard holds an audio effect keyed from another track. */
 NOTA_API int32_t     nota_device_clipboard_sidechain(const NotaEngine* engine);
 /* Instrument Rack mono (specs/040): one note at a time, last-note priority; the rack's glide
