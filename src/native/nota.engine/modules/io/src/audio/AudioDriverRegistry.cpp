@@ -33,8 +33,8 @@ std::shared_ptr<const IAudioDriver> resolveActiveDriver(AudioSystem system) {
 } // namespace
 
 AudioDriverRegistry& AudioDriverRegistry::instance() {
-    static AudioDriverRegistry* reg = new AudioDriverRegistry();
-    return *reg;
+    static AudioDriverRegistry reg;
+    return reg;
 }
 
 void AudioDriverRegistry::registerDriver(std::shared_ptr<const IAudioDriver> driver) {

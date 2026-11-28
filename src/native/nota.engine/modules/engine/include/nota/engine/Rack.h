@@ -9,18 +9,16 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <utility>
 
 namespace nota {
 
 class NOTA_ENGINE_CORE_API Engine::Macro {
   public:
     Macro() = default;
-    Macro(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t macroIndex) noexcept
-        : impl_(std::move(impl)), trackId_(trackId), deviceIndex_(deviceIndex), index_(macroIndex) {}
+    Macro(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t macroIndex) noexcept;
 
     int32_t trackId() const noexcept { return trackId_; }
-    int32_t deviceIndex() const noexcept { return deviceIndex_; }
+    int32_t deviceIndex() const noexcept;
     int32_t index() const noexcept { return index_; }
     bool isValid() const noexcept;
     explicit operator bool() const noexcept { return isValid(); }
@@ -31,20 +29,25 @@ class NOTA_ENGINE_CORE_API Engine::Macro {
     void setName(const std::string& name);
 
   private:
+    friend class Rack;
+    Macro(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t macroIndex,
+        uint64_t deviceId) noexcept;
+    bool resolve(std::shared_ptr<Engine::Impl>& outImpl, int32_t& outDevIdx) const noexcept;
+
     std::weak_ptr<Engine::Impl> impl_;
     int32_t trackId_ = -1;
     int32_t deviceIndex_ = -1;
     int32_t index_ = -1;
+    uint64_t deviceId_ = 0;
 };
 
 class NOTA_ENGINE_CORE_API Engine::Rack {
   public:
     Rack() = default;
-    Rack(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex) noexcept
-        : impl_(std::move(impl)), trackId_(trackId), deviceIndex_(deviceIndex) {}
+    Rack(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex) noexcept;
 
     int32_t trackId() const noexcept { return trackId_; }
-    int32_t deviceIndex() const noexcept { return deviceIndex_; }
+    int32_t deviceIndex() const noexcept;
     bool isValid() const noexcept;
     explicit operator bool() const noexcept { return isValid(); }
 
@@ -99,9 +102,14 @@ class NOTA_ENGINE_CORE_API Engine::Rack {
     float humanize() const;
 
   private:
+    friend class Device;
+    Rack(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, uint64_t deviceId) noexcept;
+    bool resolve(std::shared_ptr<Engine::Impl>& outImpl, int32_t& outDevIdx) const noexcept;
+
     std::weak_ptr<Engine::Impl> impl_;
     int32_t trackId_ = -1;
     int32_t deviceIndex_ = -1;
+    uint64_t deviceId_ = 0;
 };
 
 } // namespace nota

@@ -79,14 +79,28 @@ std::string reasonText(LoadReason r, const std::string& arg) {
 } // namespace
 
 PluginLoader& PluginLoader::instance() {
-    static PluginLoader* loader = new PluginLoader();
-    return *loader;
+    static PluginLoader loader;
+    return loader;
 }
 
 PluginLoader::PluginLoader() {
     readLeftoverRecord();
     thread_ = std::thread([this] { run(); });
-    thread_.detach();
+}
+
+PluginLoader::~PluginLoader() {
+    bool hung = false;
+    {
+        const std::lock_guard<std::mutex> lock(mx_);
+        stop_ = true;
+        hung = stuck_;
+    }
+    cv_.notify_all();
+    if (thread_.joinable()) {
+        if (hung) thread_.detach();
+        else
+            thread_.join();
+    }
 }
 
 std::chrono::milliseconds PluginLoader::timeout() {
@@ -141,7 +155,8 @@ void PluginLoader::run() {
         uint32_t attempt = 0;
         {
             std::unique_lock<std::mutex> lock(mx_);
-            cv_.wait(lock, [this] { return !queue_.empty() && loaded_.empty() && !finishing_; });
+            cv_.wait(lock, [this] { return stop_ || (!queue_.empty() && loaded_.empty() && !finishing_); });
+            if (stop_) break;
             t = queue_.front();
             queue_.pop_front();
             attempt = t->attempt_;

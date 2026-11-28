@@ -147,7 +147,7 @@ void controlThread(std::shared_ptr<ComAsioDriver::Shared> sh) {
 
 } // namespace
 
-ComAsioDriver::ComAsioDriver()
+ComAsioDriver::ComAsioDriver(ConstructTag)
     : sh_(std::make_shared<Shared>()), exited_(sh_->exited.get_future()), thread_(controlThread, sh_) {}
 
 ComAsioDriver::~ComAsioDriver() {
@@ -189,7 +189,7 @@ std::unique_ptr<ComAsioDriver> ComAsioDriver::create(const std::string& clsid, b
         error = "bad CLSID";
         return nullptr;
     }
-    std::unique_ptr<ComAsioDriver> d(new ComAsioDriver());
+    auto d = std::make_unique<ComAsioDriver>(ConstructTag{});
     auto hr = std::make_shared<HRESULT>(E_FAIL);
     if (!d->call(
             [sh = d->sh_, id, hr] {

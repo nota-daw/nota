@@ -11,7 +11,6 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace nota {
@@ -20,11 +19,10 @@ class NOTA_ENGINE_CORE_API Engine::Device {
   public:
     Device() = default;
     Device(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex,
-        engine::DeviceFamily family = engine::DeviceFamily::AudioEffect) noexcept
-        : impl_(std::move(impl)), trackId_(trackId), index_(deviceIndex), family_(family) {}
+        engine::DeviceFamily family = engine::DeviceFamily::AudioEffect) noexcept;
 
     int32_t trackId() const noexcept { return trackId_; }
-    int32_t index() const noexcept { return index_; }
+    int32_t index() const noexcept;
     engine::DeviceFamily family() const noexcept { return family_; }
     bool isValid() const noexcept;
     explicit operator bool() const noexcept { return isValid(); }
@@ -113,19 +111,22 @@ class NOTA_ENGINE_CORE_API Engine::Device {
     Rack asRack() const;
 
   private:
+    Device(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, engine::DeviceFamily family,
+        uint64_t deviceId) noexcept;
+    bool resolve(std::shared_ptr<Engine::Impl>& outImpl, int32_t& outIndex) const noexcept;
+
     std::weak_ptr<Engine::Impl> impl_;
     int32_t trackId_ = -1;
     int32_t index_ = -1;
     engine::DeviceFamily family_ = engine::DeviceFamily::AudioEffect;
+    uint64_t deviceId_ = 0;
 };
 
 class NOTA_ENGINE_CORE_API Engine::Parameter {
   public:
     Parameter() = default;
     Parameter(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t paramIndex,
-        engine::DeviceFamily family = engine::DeviceFamily::AudioEffect, bool pluginParam = false) noexcept
-        : impl_(std::move(impl)), trackId_(trackId), deviceIndex_(deviceIndex), paramIndex_(paramIndex),
-          family_(family), plugin_(pluginParam) {}
+        engine::DeviceFamily family = engine::DeviceFamily::AudioEffect, bool pluginParam = false) noexcept;
 
     bool isValid() const noexcept;
     explicit operator bool() const noexcept { return isValid(); }
@@ -144,12 +145,18 @@ class NOTA_ENGINE_CORE_API Engine::Parameter {
     bool isModulated() const;
 
   private:
+    friend class Device;
+    Parameter(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t paramIndex,
+        engine::DeviceFamily family, bool pluginParam, uint64_t deviceId) noexcept;
+    bool resolve(std::shared_ptr<Engine::Impl>& outImpl, int32_t& outDevIdx) const noexcept;
+
     std::weak_ptr<Engine::Impl> impl_;
     int32_t trackId_ = -1;
     int32_t deviceIndex_ = -1;
     int32_t paramIndex_ = -1;
     engine::DeviceFamily family_ = engine::DeviceFamily::AudioEffect;
     bool plugin_ = false;
+    uint64_t deviceId_ = 0;
 };
 
 } // namespace nota

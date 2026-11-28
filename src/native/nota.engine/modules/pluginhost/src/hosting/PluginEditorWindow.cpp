@@ -55,8 +55,13 @@ PluginEditorWindow::PluginEditorWindow(juce::AudioPluginInstance& p)
     setSize(400, 300);
     juce::AudioProcessorEditor* ui = nullptr;
     if (p.hasEditor()) ui = p.createEditorAndMakeActive();
-    if (ui == nullptr) ui = new juce::GenericAudioProcessorEditor(p);
-    setContentOwned(ui, true);
+    if (ui != nullptr) {
+        setContentOwned(ui, true);
+    } else {
+        genericEditor_ = std::make_unique<juce::GenericAudioProcessorEditor>(p);
+        ui = genericEditor_.get();
+        setContentNonOwned(ui, true);
+    }
     setResizable(ui->isResizable(), false);
     setTopLeftPosition(80, 80);
     juce::Process::makeForegroundProcess();
@@ -138,10 +143,7 @@ void PluginEditorWindow::installKeyMonitor() {
 
 void PluginEditorWindow::removeKeyMonitor() {
 #if defined(__APPLE__)
-    if (keyMonitor_ != nullptr) {
-        mac::removeEditorKeyMonitor(keyMonitor_);
-        keyMonitor_ = nullptr;
-    }
+    keyMonitor_.reset();
 #endif
 }
 

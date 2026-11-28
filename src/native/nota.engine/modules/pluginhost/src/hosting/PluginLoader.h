@@ -101,6 +101,7 @@ class PluginLoader {
 
   private:
     PluginLoader();
+    ~PluginLoader();
     void run();
     void enqueue(const std::shared_ptr<LoadTicket>& t);
     void fail(LoadTicket& t, LoadReason reason, std::string arg = {});
@@ -123,6 +124,7 @@ class PluginLoader {
     std::vector<std::shared_ptr<LoadTicket>> loaded_;
     bool finishing_ = false;
     bool stuck_ = false;
+    bool stop_ = false;
 
     int autoloadScope_ = 0;
     std::set<std::string> frozenIds_;

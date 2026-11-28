@@ -12,6 +12,7 @@
 #include "nota/dsp/Instrument.h"
 #include "nota/dsp/Device.h"
 
+#include <atomic>
 #include <cstdint>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -33,29 +34,48 @@ namespace {
 class SpikeWindow final : public juce::DocumentWindow {
   public:
     SpikeWindow()
-        : juce::DocumentWindow("Nota — JUCE spike", juce::Colours::darkgrey, juce::DocumentWindow::allButtons) {
-        auto* label = new juce::Label({}, "JUCE window alive alongside Avalonia.\nM3-0 run-loop spike OK.");
-        label->setJustificationType(juce::Justification::centred);
-        setContentOwned(label, true);
+        : juce::DocumentWindow("Nota — JUCE spike", juce::Colours::darkgrey, juce::DocumentWindow::allButtons),
+          label_({}, "JUCE window alive alongside Avalonia.\nM3-0 run-loop spike OK.") {
+        label_.setJustificationType(juce::Justification::centred);
+        label_.setSize(380, 140);
+        setContentNonOwned(&label_, true);
         setUsingNativeTitleBar(true);
         centreWithSize(380, 140);
         setResizable(true, false);
         setVisible(true);
     }
 
+    ~SpikeWindow() override { clearContentComponent(); }
+
     void closeButtonPressed() override { setVisible(false); }
+
+  private:
+    juce::Label label_;
 };
 
-juce::ScopedJuceInitialiser_GUI* g_juceGui = nullptr;
-std::unique_ptr<SpikeWindow> g_spikeWindow;
+std::atomic<bool> g_juceGuiReady{false};
 std::mutex g_guiMutex;
 
 void ensureJuceGui() {
     const std::lock_guard<std::mutex> lock(g_guiMutex);
-    if (g_juceGui == nullptr) g_juceGui = new juce::ScopedJuceInitialiser_GUI();
+    // Prime JUCE's DeletedAtShutdown registry before constructing juceGui so LIFO teardown destroys
+    // juceGui first (running deleteAll()) before the registry storage itself is destroyed.
+    if (!g_juceGuiReady.load(std::memory_order_relaxed)) {
+        struct DeletedAtShutdownPrimer final : juce::DeletedAtShutdown {};
+        const DeletedAtShutdownPrimer primer;
+        (void)primer;
+    }
+    static juce::ScopedJuceInitialiser_GUI juceGui;
+    (void)juceGui;
+    g_juceGuiReady.store(true, std::memory_order_release);
 #if defined(__APPLE__)
     detail::mac::cacheCurrentApplication();
 #endif
+}
+
+SpikeWindow* sharedSpikeWindow() {
+    static std::unique_ptr<SpikeWindow> win = std::make_unique<SpikeWindow>();
+    return win.get();
 }
 
 } // namespace
@@ -136,18 +156,14 @@ void PluginHostImpl::pumpMessageThreadIfNeeded() {
 bool PluginHostImpl::openTestWindow() {
     ensureJuceGui();
     const std::lock_guard<std::mutex> lock(g_guiMutex);
-    if (g_spikeWindow == nullptr) g_spikeWindow = std::make_unique<SpikeWindow>();
-    else
-        g_spikeWindow->setVisible(true);
-    return g_spikeWindow != nullptr;
+    SpikeWindow* win = sharedSpikeWindow();
+    if (win != nullptr) win->setVisible(true);
+    return win != nullptr;
 }
 
 int32_t PluginHostImpl::pumpMessages() {
 #if defined(__linux__) || defined(__FreeBSD__)
-    {
-        const std::lock_guard<std::mutex> lock(g_guiMutex);
-        if (g_juceGui == nullptr) return 0;
-    }
+    if (!g_juceGuiReady.load(std::memory_order_acquire)) return 0;
     auto* mm = juce::MessageManager::getInstanceWithoutCreating();
     if (mm == nullptr || !mm->isThisTheMessageThread()) return 0;
     constexpr int kMaxPerPump = 64;

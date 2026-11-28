@@ -10,19 +10,17 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <utility>
 
 namespace nota {
 
 class NOTA_ENGINE_CORE_API Engine::RackChain {
   public:
     RackChain() = default;
-    RackChain(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t chainIndex) noexcept
-        : impl_(std::move(impl)), trackId_(trackId), deviceIndex_(deviceIndex), chainIndex_(chainIndex) {}
+    RackChain(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t chainIndex) noexcept;
 
     int32_t trackId() const noexcept { return trackId_; }
-    int32_t deviceIndex() const noexcept { return deviceIndex_; }
-    int32_t index() const noexcept { return chainIndex_; }
+    int32_t deviceIndex() const noexcept;
+    int32_t index() const noexcept;
     bool isValid() const noexcept;
     explicit operator bool() const noexcept { return isValid(); }
 
@@ -148,10 +146,17 @@ class NOTA_ENGINE_CORE_API Engine::RackChain {
     int32_t setKey(int32_t slot, int32_t src, int32_t part, int32_t tapPre, float gainDb, float mix);
 
   private:
+    friend class Rack;
+    RackChain(std::weak_ptr<Engine::Impl> impl, int32_t trackId, int32_t deviceIndex, int32_t chainIndex,
+        uint64_t rackDeviceId, uint64_t chainUid) noexcept;
+    bool resolve(std::shared_ptr<Engine::Impl>& outImpl, int32_t& outDevIdx, int32_t& outChainIdx) const noexcept;
+
     std::weak_ptr<Engine::Impl> impl_;
     int32_t trackId_ = -1;
     int32_t deviceIndex_ = -1;
     int32_t chainIndex_ = -1;
+    uint64_t rackDeviceId_ = 0;
+    uint64_t chainUid_ = 0;
 };
 
 } // namespace nota

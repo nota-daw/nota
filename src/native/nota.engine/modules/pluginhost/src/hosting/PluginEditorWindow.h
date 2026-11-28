@@ -53,7 +53,8 @@ class PluginEditorWindow : public juce::DocumentWindow {
     void releaseHeldKeys();
 
     std::map<int, int32_t> held_;
-    void* keyMonitor_ = nullptr;
+    std::shared_ptr<void> keyMonitor_;
+    std::unique_ptr<juce::GenericAudioProcessorEditor> genericEditor_;
 };
 
 struct EditorHost {

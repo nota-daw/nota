@@ -149,8 +149,32 @@ struct SysexJob {
     std::vector<uint8_t> bytes;
 };
 
+struct SysexInflight {
+    std::mutex mutex;
+    std::vector<std::unique_ptr<SysexJob>> jobs;
+};
+
+SysexInflight& sysexInflight() {
+    static SysexInflight state;
+    return state;
+}
+
+void removeSysexJob(const SysexJob* target) {
+    std::unique_ptr<SysexJob> completed;
+    {
+        auto& state = sysexInflight();
+        std::lock_guard<std::mutex> lock(state.mutex);
+        auto it = std::find_if(state.jobs.begin(), state.jobs.end(),
+            [target](const std::unique_ptr<SysexJob>& j) { return j.get() == target; });
+        if (it != state.jobs.end()) {
+            completed = std::move(*it);
+            state.jobs.erase(it);
+        }
+    }
+}
+
 void sysexDone(MIDISysexSendRequest* req) {
-    delete static_cast<SysexJob*>(req->completionRefCon);
+    if (req != nullptr) removeSysexJob(static_cast<const SysexJob*>(req->completionRefCon));
 }
 
 class CoreMidiOutput final : public IMidiOutput {
@@ -187,15 +211,21 @@ class CoreMidiOutput final : public IMidiOutput {
                 int32_t j = i;
                 while (j < len && data[j] != 0xF7) ++j;
                 if (j >= len) return false;
-                auto* job = new SysexJob();
+                auto job = std::make_unique<SysexJob>();
                 job->bytes.assign(data + i, data + j + 1);
                 job->req.destination = dest_;
                 job->req.data = job->bytes.data();
                 job->req.bytesToSend = static_cast<UInt32>(job->bytes.size());
                 job->req.completionProc = sysexDone;
-                job->req.completionRefCon = job;
-                if (MIDISendSysex(&job->req) != noErr) {
-                    delete job;
+                SysexJob* raw = job.get();
+                job->req.completionRefCon = raw;
+                {
+                    auto& state = sysexInflight();
+                    std::lock_guard<std::mutex> lock(state.mutex);
+                    state.jobs.push_back(std::move(job));
+                }
+                if (MIDISendSysex(&raw->req) != noErr) {
+                    removeSysexJob(raw);
                     return false;
                 }
                 i = j + 1;

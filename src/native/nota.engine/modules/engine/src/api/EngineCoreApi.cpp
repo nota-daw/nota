@@ -29,6 +29,9 @@
 #include "render/HybridBufferController.h"
 #include "nota/media/AudioCodecTypes.h"
 #include "nota/engine/Types.h"
+#include "nota/pluginhost/PluginHostImpl.h"
+#include "nota/pluginhost/PluginHostModule.h"
+#include "nota/pluginscanner/PluginScannerModule.h"
 #include "session/SessionPass.h"
 
 #include <string>
@@ -44,7 +47,11 @@ namespace nota {
 #define NOTA_VERSION_STRING "dev"
 #endif
 
-Engine::Engine() : impl_(std::make_shared<Impl>()) {}
+Engine::Engine() {
+    auto& host = pluginhost::sharedPluginHost();
+    if (!host.catalog()) host.setCatalog(pluginscanner::sharedCatalogPtr());
+    impl_ = std::make_shared<Impl>();
+}
 Engine::~Engine() = default;
 Engine::Engine(Engine&&) noexcept = default;
 Engine& Engine::operator=(Engine&&) noexcept = default;

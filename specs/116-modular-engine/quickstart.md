@@ -20,12 +20,12 @@ ctest --test-dir src/native/nota.engine/build-dev --output-on-failure
 
 ```bash
 clangd --compile-commands-dir=src/native/nota.engine/build-dev \
-  --check=src/native/nota.engine/modules/engine/src/core/Engine.cpp
+  --check=src/native/nota.engine/modules/engine/src/core/EngineLifecycle.cpp
 clangd --compile-commands-dir=src/native/nota.engine/build-dev \
   --check=src/native/nota.engine/modules/io/src/audio/AudioDriverRegistry.cpp
 clangd --compile-commands-dir=src/native/nota.engine/build-dev \
   --check=src/native/nota.engine/modules/pluginscanner/src/OutOfProcessScanner.cpp
-ctest --test-dir src/native/nota.engine/build-dev -R test_headers_compile --output-on-failure
+ctest --test-dir src/native/nota.engine/build-dev -R headers_compile --output-on-failure
 ```
 
 ## 3. Release Universal Build, Export Verification & Perf Checks

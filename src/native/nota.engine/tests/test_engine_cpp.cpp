@@ -8,9 +8,13 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -30,6 +34,67 @@ double bufferRms(const std::vector<float>& buf) {
     double sum = 0.0;
     for (float s : buf) sum += static_cast<double>(s) * static_cast<double>(s);
     return std::sqrt(sum / static_cast<double>(buf.size()));
+}
+
+struct TempDataDirGuard {
+    std::filesystem::path dir;
+    std::string prevDataDir;
+    bool hadPrevDataDir = false;
+
+    explicit TempDataDirGuard(const char* suffix) {
+        if (const char* prev = std::getenv("NOTA_DATA_DIR")) {
+            prevDataDir = prev;
+            hadPrevDataDir = true;
+        }
+        dir = std::filesystem::temp_directory_path() / suffix;
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+        std::filesystem::create_directories(dir, ec);
+        setDataDirEnv(dir.string().c_str());
+    }
+    ~TempDataDirGuard() {
+        setDataDirEnv(hadPrevDataDir ? prevDataDir.c_str() : nullptr);
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+    }
+
+  private:
+    static void setDataDirEnv(const char* value) {
+#if defined(_WIN32)
+        _putenv_s("NOTA_DATA_DIR", value ? value : "");
+#else
+        if (value != nullptr) setenv("NOTA_DATA_DIR", value, 1);
+        else
+            unsetenv("NOTA_DATA_DIR");
+#endif
+    }
+};
+
+void testPluginCatalogWiringInCppEngine() {
+    TempDataDirGuard guard("nota_engine_cpp_catalog_test");
+    {
+        std::ofstream out(guard.dir / "plugins.xml", std::ios::binary);
+        out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+               "<KNOWNPLUGINS>\n"
+               "  <PLUGIN name=\"MockSynth\" format=\"VST3\" category=\"Synth\" manufacturer=\"Nota\" "
+               "version=\"1.0\" file=\"/nonexistent/MockSynth.vst3\" uniqueId=\"1111\" isInstrument=\"1\" "
+               "numInputs=\"0\" numOutputs=\"2\" isShell=\"0\" uid=\"1111\"/>\n"
+               "  <PLUGIN name=\"MockFx\" format=\"VST3\" category=\"Effect\" manufacturer=\"Nota\" "
+               "version=\"1.0\" file=\"/nonexistent/MockFx.vst3\" uniqueId=\"2222\" isInstrument=\"0\" "
+               "numInputs=\"2\" numOutputs=\"2\" isShell=\"0\" uid=\"2222\"/>\n"
+               "</KNOWNPLUGINS>\n";
+    }
+
+    nota::Engine eng;
+    auto pluginTr = eng.tracks().addPluginInstrument(0);
+    expect(pluginTr.isValid(), "C++ Engine::Engine wires shared catalog for addPluginInstrument");
+    expect(pluginTr.devices().instrument().name() == "MockSynth", "Plugin instrument track uses catalog entry name");
+
+    const int32_t fxIdx = pluginTr.devices().addPlugin(1);
+    expect(fxIdx == 0, "C++ Engine::Engine wires shared catalog for DeviceChain::addPlugin");
+    expect(pluginTr.devices().device(fxIdx).name() == "MockFx", "Plugin effect uses catalog entry name");
+    expect(!eng.tracks().addPluginInstrument(99).isValid(), "Out-of-bounds plugin catalog index fails cleanly");
+    if (pluginTr.isValid()) expect(eng.tracks().remove(pluginTr.id()), "Plugin test track removes cleanly");
 }
 
 void testLifecycleAndTransport() {
@@ -182,6 +247,96 @@ void testDevicesAndRacks() {
     expect(rack.removeChain(c0), "Removed RackChain");
 }
 
+void testSavedHandleStabilityAndInvalidation() {
+    nota::Engine eng;
+    auto tr = eng.tracks().addInstrument("volt");
+    auto chain = tr.devices();
+
+    // Audio effects: removal invalidates removed handle while surviving handles track moved indices.
+    const int32_t eqIdx = chain.add("eq");
+    const int32_t compIdx = chain.add("compressor");
+    expect(eqIdx == 0 && compIdx == 1, "Two audio effects added");
+    auto eq = chain.device(eqIdx);
+    auto eqParam = eq.parameter(0);
+    auto comp = chain.device(compIdx);
+    auto compParam = comp.parameter(0);
+    expect(eq.isValid() && eqParam.isValid() && comp.isValid() && compParam.isValid(),
+        "Audio effect handles and parameters valid before edits");
+    const float compTarget = 0.5f * (compParam.min() + compParam.max());
+    compParam.set(compTarget);
+
+    expect(chain.remove(0), "Remove first audio effect");
+    expect(!eq.isValid() && eq.index() == -1 && !eqParam.isValid(),
+        "Removed audio effect handle and parameter invalidate");
+    expect(comp.isValid() && comp.index() == 0 && compParam.isValid(),
+        "Remaining audio effect handle and parameter track shifted index 0");
+    expect(
+        std::fabs(compParam.get() - compTarget) < 1e-4f, "Remaining parameter continues targeting moved audio effect");
+    comp.setBypassed(true);
+    expect(comp.bypassed(), "Remaining device handle controls compressor after removal");
+
+    // Reordering audio effects: handles follow their devices across move(0, 1).
+    const int32_t eq2Idx = chain.add("eq");
+    expect(eq2Idx == 1, "Second audio effect added for reorder test");
+    auto eq2 = chain.device(eq2Idx);
+    auto eq2Param = eq2.parameter(0);
+    const float eq2Target = eq2Param.max();
+    eq2Param.set(eq2Target);
+    expect(chain.move(0, 1), "Move compressor after EQ");
+    expect(comp.isValid() && comp.index() == 1 && comp.bypassed(),
+        "Moved device handle updates index to 1 and keeps state");
+    expect(eq2.isValid() && eq2.index() == 0 && !eq2.bypassed(),
+        "Displaced device handle updates index to 0 and keeps state");
+    expect(std::fabs(compParam.get() - compTarget) < 1e-4f, "Comp parameter still resolves to index 1");
+    expect(std::fabs(eq2Param.get() - eq2Target) < 1e-4f, "EQ2 parameter still resolves to index 0");
+
+    // MIDI effects: removal invalidates removed handle and preserves surviving handle.
+    const int32_t m0Idx = chain.addMidiEffect("arpeggiator");
+    const int32_t m1Idx = chain.addMidiEffect("arpeggiator");
+    expect(m0Idx == 0 && m1Idx == 1, "Two MIDI effects added");
+    auto m0 = chain.midiEffect(m0Idx);
+    auto m0Param = m0.parameter(0);
+    auto m1 = chain.midiEffect(m1Idx);
+    auto m1Param = m1.parameter(0);
+    m1.setBypassed(true);
+    expect(chain.removeMidiEffect(0), "Removed first MIDI effect");
+    expect(
+        !m0.isValid() && m0.index() == -1 && !m0Param.isValid(), "Removed MIDI effect handle and parameter invalidate");
+    expect(m1.isValid() && m1.index() == 0 && m1Param.isValid() && m1.bypassed(),
+        "Remaining MIDI effect handle and parameter track shifted index 0");
+
+    // Instrument replacement: saved handle expires when a new instrument replaces it.
+    auto oldInst = chain.instrument();
+    expect(oldInst.isValid(), "Saved instrument handle valid");
+    expect(chain.setInstrument("monolith"), "Replaced Volt with Monolith");
+    expect(!oldInst.isValid() && oldInst.index() == -1, "Replaced instrument handle expires");
+    expect(chain.instrument().isValid(), "Replacement instrument handle is valid");
+
+    // Rack / Macro / RackChain identity across chain removal & effect-chain shifts.
+    const int32_t rackSlot = chain.add("effect-rack");
+    expect(rackSlot >= 0, "Effect rack added to chain");
+    auto rackDev = chain.device(rackSlot);
+    auto fxRack = rackDev.asRack();
+    auto fxMacro = fxRack.macro(0);
+    expect(fxRack.isValid() && fxMacro.isValid(), "Effect rack & macro handles valid");
+    const int32_t c1Idx = fxRack.addChain(-1);
+    expect(c1Idx == 1, "Second rack chain added");
+    auto rc0 = fxRack.chain(0);
+    auto rc1 = fxRack.chain(c1Idx);
+    rc1.setName("Wet");
+    expect(chain.remove(0), "Removed earlier effect to shift EffectRack down");
+    const int32_t shiftedSlot = rackSlot - 1;
+    expect(
+        rackDev.index() == shiftedSlot && fxRack.deviceIndex() == shiftedSlot && fxMacro.deviceIndex() == shiftedSlot,
+        "EffectRack & Macro track shifted device index");
+    expect(fxRack.removeChain(0), "Removed first rack chain");
+    expect(!rc0.isValid() && rc0.index() == -1, "Removed RackChain expires");
+    expect(rc1.isValid() && rc1.index() == 0 && rc1.name() == "Wet", "Surviving RackChain tracks shifted index");
+    expect(chain.remove(shiftedSlot), "Removed EffectRack itself");
+    expect(!rackDev.isValid() && !fxRack.isValid() && !fxMacro.isValid() && !rc1.isValid(),
+        "Removing EffectRack expires Rack, Macro, and RackChain handles");
+}
+
 void testSessionAutomationModulationAndHistory() {
     nota::Engine eng;
     auto sess = eng.session();
@@ -325,9 +480,11 @@ void testBuiltInDiagnosticsSelfTests() {
 } // namespace
 
 int main() {
+    testPluginCatalogWiringInCppEngine();
     testLifecycleAndTransport();
     testTracksClipsAndOfflineRender();
     testDevicesAndRacks();
+    testSavedHandleStabilityAndInvalidation();
     testSessionAutomationModulationAndHistory();
     testPreviewAuditionAndIo();
     testBuiltInDiagnosticsSelfTests();

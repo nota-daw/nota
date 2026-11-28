@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -20,8 +21,8 @@ void invokeWorkgroupObserver(void* observerBlock, void* osWorkgroup);
 
 void activateApplication();
 using EditorKeyCallback = std::function<bool(int32_t ch, int keyCode, bool isKeyDown, bool hasModifiers)>;
-void* installEditorKeyMonitor(void* nsViewHandle, EditorKeyCallback callback);
-void removeEditorKeyMonitor(void* monitor);
+using ScopedEditorKeyMonitor = std::shared_ptr<void>;
+ScopedEditorKeyMonitor installEditorKeyMonitor(void* nsViewHandle, EditorKeyCallback callback);
 
 bool captureEditorImage(void* nsViewHandle, int bx, int by, int bw, int bh, int shortSide, int longSide,
     std::vector<uint8_t>& outBgraPremul, int& outWidth, int& outHeight);

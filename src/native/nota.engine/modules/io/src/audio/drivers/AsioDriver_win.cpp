@@ -11,12 +11,41 @@
 #include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace nota::io::audio {
 namespace {
+
+std::mutex& retiredCallbacksMutex() {
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::vector<std::unique_ptr<InputCallback>>& retiredCallbacks() {
+    static std::vector<std::unique_ptr<InputCallback>> retired;
+    return retired;
+}
+
+struct SessionGuard {
+    std::unique_ptr<asio::AsioSession> session = std::make_unique<asio::AsioSession>();
+    ~SessionGuard() {
+        // Intentionally avoid joining a stuck COM thread at DLL unload if still open;
+        // Engine explicitly closes the stream before shutdown.
+        if (session && session->state() != asio::AsioSession::State::Closed &&
+            session->state() != asio::AsioSession::State::Failed) {
+            (void)session.release();
+        }
+    }
+};
+
+std::shared_ptr<asio::AsioSession> makeGuardedSession() {
+    auto guard = std::make_shared<SessionGuard>();
+    asio::AsioSession* raw = guard->session.get();
+    return std::shared_ptr<asio::AsioSession>(std::move(guard), raw);
+}
 
 class AsioInputStream final : public IAudioInputStream {
   public:
@@ -26,17 +55,21 @@ class AsioInputStream final : public IAudioInputStream {
     bool start(InputCallback cb, uint32_t, double) override {
         if (registered_) return isRunning();
         if (!session_ || !session_->isRunning() || !session_->hasInputs()) return false;
-        cb_ = new InputCallback(std::move(cb));
-        session_->setInputCallback(cb_);
+        cb_ = std::make_unique<InputCallback>(std::move(cb));
+        session_->setInputCallback(cb_.get());
         registered_ = true;
         return true;
     }
 
     void stop() override {
         if (!registered_) return;
-        if (session_ && session_->setInputCallback(nullptr)) { delete cb_; }
+        if (session_ && session_->setInputCallback(nullptr)) {
+            cb_.reset();
+        } else if (cb_) {
+            const std::lock_guard<std::mutex> lock(retiredCallbacksMutex());
+            retiredCallbacks().push_back(std::move(cb_));
+        }
         registered_ = false;
-        cb_ = nullptr;
     }
 
     bool isRunning() const override { return registered_ && session_ && session_->isRunning(); }
@@ -51,20 +84,13 @@ class AsioInputStream final : public IAudioInputStream {
 
   private:
     std::shared_ptr<asio::AsioSession> session_;
-    InputCallback* cb_ = nullptr;
+    std::unique_ptr<InputCallback> cb_;
     bool registered_ = false;
 };
 
 class AsioOutputStream final : public IAudioOutputStream {
   public:
-    AsioOutputStream()
-        : session_(new asio::AsioSession(), [](asio::AsioSession* s) {
-              // Intentionally avoid joining a stuck COM thread at DLL unload if still open;
-              // Engine explicitly closes the stream before shutdown.
-              if (s->state() == asio::AsioSession::State::Closed || s->state() == asio::AsioSession::State::Failed) {
-                  delete s;
-              }
-          }) {}
+    AsioOutputStream() : session_(makeGuardedSession()) {}
 
     ~AsioOutputStream() override { stop(); }
 

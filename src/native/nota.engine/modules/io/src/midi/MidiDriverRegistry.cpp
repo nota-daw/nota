@@ -54,8 +54,8 @@ double getNumberTolerant(const json& j, const char* key, double fallback) {
 } // namespace
 
 MidiDriverRegistry& MidiDriverRegistry::instance() {
-    static MidiDriverRegistry* reg = new MidiDriverRegistry();
-    return *reg;
+    static MidiDriverRegistry reg;
+    return reg;
 }
 
 void MidiDriverRegistry::registerDriver(std::shared_ptr<const IMidiDriver> driver) {

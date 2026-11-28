@@ -39,9 +39,14 @@ juce::AudioPluginFormat* findJuceFormat(const juce::String& name) {
 
 void ensureWorkerGuiInit() {
     // AU/VST3 probing inside nota-scanworker touches CoreFoundation / platform run loops.
-    static juce::ScopedJuceInitialiser_GUI* init = nullptr;
-    static std::once_flag once;
-    std::call_once(once, [] { init = new juce::ScopedJuceInitialiser_GUI(); });
+    static const bool primed = [] {
+        struct DeletedAtShutdownPrimer final : juce::DeletedAtShutdown {};
+        const DeletedAtShutdownPrimer primer;
+        (void)primer;
+        return true;
+    }();
+    (void)primed;
+    static juce::ScopedJuceInitialiser_GUI init;
     (void)init;
 }
 

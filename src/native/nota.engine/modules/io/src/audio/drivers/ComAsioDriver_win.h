@@ -40,9 +40,10 @@ class ComAsioDriver final : public AsioDriverApi {
     bool panelOpen() const override;
 
     struct Shared;
+    struct ConstructTag {};
+    explicit ComAsioDriver(ConstructTag);
 
   private:
-    ComAsioDriver();
     template <class F> bool call(F fn, unsigned timeoutMs);
 
     std::shared_ptr<Shared> sh_;

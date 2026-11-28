@@ -9,6 +9,7 @@
 
 #import <AppKit/AppKit.h>
 
+#include <memory>
 #include <utility>
 
 namespace nota::pluginhost::detail::mac {
@@ -26,6 +27,15 @@ bool takesTyping(NSResponder* responder) {
 struct MonitorHolder {
     id monitor = nil;
     EditorKeyCallback callback;
+
+    explicit MonitorHolder(EditorKeyCallback cb) : callback(std::move(cb)) {}
+    ~MonitorHolder() {
+        if (monitor != nil) {
+            [NSEvent removeMonitor:monitor];
+            [monitor release];
+            monitor = nil;
+        }
+    }
 };
 
 } // namespace
@@ -34,9 +44,10 @@ void activateApplication() {
     [NSApp activateIgnoringOtherApps:YES];
 }
 
-void* installEditorKeyMonitor(void* nsViewHandle, EditorKeyCallback callback) {
-    auto* holder = new MonitorHolder{nil, std::move(callback)};
-    holder->monitor = [[NSEvent
+ScopedEditorKeyMonitor installEditorKeyMonitor(void* nsViewHandle, EditorKeyCallback callback) {
+    auto holder = std::make_shared<MonitorHolder>(std::move(callback));
+    MonitorHolder* raw = holder.get();
+    raw->monitor = [[NSEvent
         addLocalMonitorForEventsMatchingMask:(NSEventMaskKeyDown | NSEventMaskKeyUp)
                                      handler:^NSEvent*(NSEvent* ev) {
                                        if (nsViewHandle == nullptr) return ev;
@@ -56,21 +67,10 @@ void* installEditorKeyMonitor(void* nsViewHandle, EditorKeyCallback callback) {
                                            return ev;
                                        }
                                        const bool consumed =
-                                           holder->callback && holder->callback(ch, code, isKeyDown, hasMods);
+                                           raw->callback && raw->callback(ch, code, isKeyDown, hasMods);
                                        return consumed ? nil : ev;
                                      }] retain];
     return holder;
-}
-
-void removeEditorKeyMonitor(void* opaqueHolder) {
-    if (opaqueHolder == nullptr) return;
-    auto* holder = static_cast<MonitorHolder*>(opaqueHolder);
-    if (holder->monitor != nil) {
-        [NSEvent removeMonitor:holder->monitor];
-        [holder->monitor release];
-        holder->monitor = nil;
-    }
-    delete holder;
 }
 
 } // namespace nota::pluginhost::detail::mac
