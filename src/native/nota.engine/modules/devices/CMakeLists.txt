@@ -109,3 +109,10 @@ target_include_directories(nota_devices
     SYSTEM PRIVATE
         ${hiir_SOURCE_DIR}
 )
+
+if(UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # Preserve GCC's baseline register allocation in Synth::renderBlock without LTO.
+    set_source_files_properties(src/instruments/synth/Synth.cpp
+        PROPERTIES COMPILE_OPTIONS "-fsemantic-interposition"
+    )
+endif()
