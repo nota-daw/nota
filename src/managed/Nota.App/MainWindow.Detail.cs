@@ -814,11 +814,19 @@ public partial class MainWindow
                         var notes = cn.Notes.ToArray();
                         if (roll.AutoExpand && Engine.TryGetClipInfo(cn.TrackId, cn.ClipIndex, out var info))
                         {
-                            var prior = Engine.GetClipNotes(cn.TrackId, cn.ClipIndex).ToHashSet();
+                            // Count timing pairs so value edits keep a trim, while a new
+                            // note at the same timing as a retained one can still expand.
+                            var prior = Engine.GetClipNotes(cn.TrackId, cn.ClipIndex)
+                                .CountBy(note => (note.StartBeat, note.LengthBeats)).ToDictionary();
                             double start = 0, end = info.LengthBeats;
                             foreach (var note in notes)
                             {
-                                if (prior.Contains(note)) continue;
+                                var timing = (note.StartBeat, note.LengthBeats);
+                                if (prior.TryGetValue(timing, out int count) && count > 0)
+                                {
+                                    prior[timing] = count - 1;
+                                    continue;
+                                }
                                 start = Math.Min(start, note.StartBeat);
                                 end = Math.Max(end, note.StartBeat + note.LengthBeats);
                             }

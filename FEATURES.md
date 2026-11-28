@@ -450,7 +450,8 @@ own window — see
   - Drag either clip boundary in the Piano Roll ruler to resize an Arrangement MIDI clip.
     Hold Alt/Option to bypass snapping, or press Escape to cancel.
   - Enable **Auto expand** in the clip settings strip to grow an Arrangement MIDI clip
-    when a note edit extends past its boundaries. The clip and note edit undo together.
+    when a note is placed or stretched beyond its boundaries. Scroll left of the clip
+    to draw earlier notes. The clip and note edit undo together.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - Drag the upper part of a note to adjust selected note velocities together.

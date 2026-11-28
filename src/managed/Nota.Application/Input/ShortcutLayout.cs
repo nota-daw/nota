@@ -74,7 +74,7 @@ public static class ShortcutLayout
                 F(Loc.T("preferences.note_velocity_drag"), Loc.T("preferences.note_velocity_drag_help")),
                 F(Loc.T("preferences.stretch_note_gesture"), Loc.T("preferences.stretch_note_help")),
                 F(Loc.T("preferences.midi_boundary_drag"), Loc.T("preferences.midi_boundary_drag_help")),
-                F(Loc.T("preferences.double_click_empty_grid"), Loc.T("preferences.add_a_note_with_the")),
+                F(Loc.T("preferences.click_empty_grid"), Loc.T("preferences.add_a_note_with_the")),
                 F(Loc.T("preferences.double_click_and_hold_drag"), Loc.T("preferences.shape_the_new_note_move")),
                 F(Loc.T("preferences.drag_note_edge"), Loc.T("preferences.change_the_notes_start_or")),
                 F(Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag_2")),
