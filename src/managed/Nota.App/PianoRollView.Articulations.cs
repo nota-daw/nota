@@ -112,13 +112,22 @@ public sealed partial class PianoRollView
         return true;
     }
 
-    internal void ShowArticulationMenu(Control anchor, int hit)
+    internal void ShowArticulationMenu(Control anchor, int hit, double splitBeat)
     {
         if (hit < 0 || hit >= _notes.Count) return;
         var targets = ArticulationTargets(hit);
         _artMaps.Remove(TrackOfSlot(_owner[hit]));   // the menu shows the map as it is now
         var map = CachedArticulationMap(TrackOfSlot(_owner[hit]));
         var flyout = new MenuFlyout();
+        bool mute = targets.Any(i => _notes[i].Muted == 0);
+        flyout.Items.Add(MenuKit.Item(mute ? Loc.T("piano_roll.mute_notes") : Loc.T("piano_roll.unmute_notes"),
+            click: () => SetMute(targets, mute), enabled: targets.Count > 0));
+        var join = JoinCandidates();
+        flyout.Items.Add(MenuKit.Item(Loc.T("piano_roll.split_note"), click: () => SplitNote(hit, splitBeat),
+            enabled: CanSplit(hit, splitBeat)));
+        flyout.Items.Add(MenuKit.Item(Loc.T("piano_roll.join_notes"), click: () => JoinNotes(),
+            enabled: join.Length > 1, gesture: MenuKit.Bound("roll.joinNotes")));
+        flyout.Items.Add(new Separator());
         if (map is null || targets.Count == 0)
         {
             flyout.Items.Add(MenuKit.Item(map is null ? Loc.T("articulations.menu.no_map") : Loc.T("articulations.menu.locked"), enabled: false));
@@ -145,6 +154,104 @@ public sealed partial class PianoRollView
             click: () => SetArticulation(targets, 0), enabled: ids.Any(i => i != 0)));
         flyout.Items.Add(sub);
         flyout.ShowAt(anchor, showAtPointer: true);
+    }
+
+    private void SetMute(IReadOnlyList<int> targets, bool mute)
+    {
+        foreach (int i in targets)
+        {
+            var note = _notes[i];
+            note.Muted = mute ? 1 : 0;
+            _notes[i] = note;
+        }
+        CommitNotes();
+        Invalidate();
+        Changed?.Invoke();
+    }
+
+    private bool CanSplit(int hit, double beat)
+    {
+        if (hit < 0 || hit >= _notes.Count || IsLocked(hit)) return false;
+        var note = _notes[hit];
+        return beat - note.StartBeat >= 1.0 / 1024 && note.StartBeat + note.LengthBeats - beat >= 1.0 / 1024
+            && (note.ExprId == 0 || (CreateExpression is not null && ExprOf(note.ExprId).Length > 0));
+    }
+
+    private void SplitNote(int hit, double beat) => SplitNotes(new[] { hit }, beat);
+
+    private void SplitSelectionAtPlayhead()
+    {
+        if (_playheadBeat >= 0) SplitNotes(_selection.ToArray(), _playheadBeat);
+    }
+
+    private void SplitNotes(IReadOnlyList<int> targets, double beat)
+    {
+        bool changed = false;
+        foreach (int hit in targets)
+        {
+            if (!TrySplitNote(hit, beat)) continue;
+            if (!changed) _selection.Clear();
+            _selection.Add(hit);
+            _selection.Add(_notes.Count - 1);
+            changed = true;
+        }
+        if (!changed) return;
+        _placementPending = false;
+        CommitNotes();
+        Invalidate();
+        Changed?.Invoke();
+    }
+
+    private bool TrySplitNote(int hit, double beat)
+    {
+        if (!CanSplit(hit, beat)) return false;
+        var left = _notes[hit];
+        var right = left;
+        double cut = beat - left.StartBeat;
+        right.StartBeat = beat;
+        right.LengthBeats -= cut;
+        left.LengthBeats = cut;
+        if (!SplitExpression(ref left, ref right, (float)cut)) return false;
+        _notes[hit] = left;
+        AddNote(right, _owner[hit]);
+        return true;
+    }
+
+    private int[] JoinCandidates()
+    {
+        int[] picked = _selection.Where(i => i >= 0 && i < _notes.Count && !IsLocked(i))
+            .OrderBy(i => _notes[i].StartBeat).ThenBy(i => i).ToArray();
+        if (picked.Length < 2 || picked.Length != _selection.Count) return Array.Empty<int>();
+        var first = _notes[picked[0]];
+        int owner = _owner[picked[0]];
+        double end = first.StartBeat + first.LengthBeats;
+        foreach (int i in picked)
+        {
+            var note = _notes[i];
+            if (_owner[i] != owner || note.Pitch != first.Pitch || note.Velocity != first.Velocity
+                || note.ArticulationId != first.ArticulationId || note.Muted != first.Muted || note.ExprId != 0 || note.StartBeat > end + 1e-8)
+                return Array.Empty<int>();
+            end = Math.Max(end, note.StartBeat + note.LengthBeats);
+        }
+        return picked;
+    }
+
+    private void JoinNotes()
+    {
+        var picked = JoinCandidates();
+        if (picked.Length == 0) return;
+        int first = picked[0];
+        var note = _notes[first];
+        note.LengthBeats = picked.Max(i => _notes[i].StartBeat + _notes[i].LengthBeats) - note.StartBeat;
+        _notes[first] = note;
+        int remainingIndex = first - picked.Skip(1).Count(i => i < first);
+        foreach (int i in picked.Skip(1).OrderByDescending(i => i)) RemoveNoteAt(i);
+        _selection.Clear();
+        _selection.Add(remainingIndex);
+        _placementPending = false;
+        CommitNotes();
+        Invalidate();
+        Changed?.Invoke();
     }
 
     /// <summary>How a note's articulation reads: its name; none → the default's ("Default · Long");

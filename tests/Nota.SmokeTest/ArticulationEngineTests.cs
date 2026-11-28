@@ -37,14 +37,14 @@ internal static class ArticulationEngineTests
     }
 
     /// <summary>Where one note at beat 1 (0.5 s at 120 BPM) starts sounding, with the track at <paramref name="offsetMs"/>.</summary>
-    private static int OnsetWithOffset(double offsetMs)
+    private static int OnsetWithOffset(double offsetMs, bool muted = false)
     {
         using var e = new NotaEngine();
         e.SetBpm(120);
         int t = e.AddInstrumentTrack();
         e.SetTrackBuiltinInstrument(t, 0);
         int c = e.AddMidiClip(t, 0, 4);
-        e.SetClipNotes(t, c, new[] { new NotaNote(57, 1.0, 1.0, 0.9f) });
+        e.SetClipNotes(t, c, new[] { new NotaNote(57, 1.0, 1.0, 0.9f) { Muted = muted ? 1 : 0 } });
         e.SetTrackMidiOffsetMs(t, offsetMs);
         Render(e, 2);                                 // let the graph settle before the clock starts
         e.StopTransport(); e.Seek(0); e.Play();
@@ -401,6 +401,10 @@ internal static class ArticulationEngineTests
 
     public static IEnumerable<(bool ok, string label)> Run()
     {
+        yield return (OnsetWithOffset(0) >= 0 && OnsetWithOffset(0, muted: true) < 0,
+            "muted MIDI notes remain silent through offline playback");
+        yield return (new NoteDto(new NotaNote(60, 0, 1, 0.8f) { Muted = 1 }).ToNote().Muted == 1
+            && new NoteDto().ToNote().Muted == 0, "MIDI note mute round-trips through project data");
         foreach (var r in NoteEquality()) yield return r;
         foreach (var r in EditsKeepArticulations()) yield return r;
 

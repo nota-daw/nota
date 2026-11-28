@@ -157,6 +157,7 @@ public sealed class Settings
     /// <summary>The arrangement's grid: Auto · Medium, snap on by default.</summary>
     public Nota.Application.Editing.GridSetting ArrangementGrid { get; set; } = Nota.Application.Editing.GridSetting.DefaultArrangement;
     /// <summary>The piano roll's grid, independent of the arrangement's.</summary>
+    public bool AutoExpandMidiClip { get; set; }
     public Nota.Application.Editing.GridSetting PianoRollGrid { get; set; } = Nota.Application.Editing.GridSetting.DefaultPianoRoll;
     /// <summary>The piano roll's Quantize (and clip tools') step — its own value, so the
     /// result never depends on the zoom. 1/16 by default.</summary>

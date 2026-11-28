@@ -660,13 +660,16 @@ public sealed class NoteDto
     /// <summary>The note's articulation: an id in its track's articulation map (omitted = none). v30.</summary>
     public int? Articulation { get; set; }
 
+    public bool? Muted { get; set; }
+
     public NoteDto() { }
     public NoteDto(NotaNote n)
     {
         Pitch = n.Pitch; Start = n.StartBeat; Length = n.LengthBeats; Velocity = n.Velocity;
         Articulation = n.ArticulationId > 0 ? n.ArticulationId : null;
+        Muted = n.Muted != 0 ? true : null;
     }
-    public NotaNote ToNote() => new(Pitch, Start, Length, Velocity) { ArticulationId = Articulation is > 0 ? Articulation.Value : 0 };
+    public NotaNote ToNote() => new(Pitch, Start, Length, Velocity) { ArticulationId = Articulation is > 0 ? Articulation.Value : 0, Muted = Muted == true ? 1 : 0 };
 }
 
 /// <summary>A note's recorded expression: per dimension a flat [beat, value, beat, value…] list,

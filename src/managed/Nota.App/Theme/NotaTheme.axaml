@@ -1056,6 +1056,9 @@
     <Setter Property="CornerRadius" Value="0"/>
     <Setter Property="MinHeight" Value="0"/>
   </Style>
+  <Style Selector="TextBox.value.plain /template/ Border#PART_BorderElement, TextBox.value.plain:pointerover /template/ Border#PART_BorderElement, TextBox.value.plain:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderThickness" Value="0"/>
+  </Style>
   <Style Selector="TextBox.value.solid /template/ Border#PART_BorderElement, TextBox.value.solid:pointerover /template/ Border#PART_BorderElement, TextBox.value.solid:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
   </Style>

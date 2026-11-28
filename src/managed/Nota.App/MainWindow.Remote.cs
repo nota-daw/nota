@@ -260,6 +260,7 @@ public partial class MainWindow : IRemoteHost
 
     bool IRemoteHost.Undo()
     {
+        _editorRoll?.FlushPendingDraw();
         _editorRoll?.EndVelocityWheel();
         if (!Engine.Undo()) return false;
         RefreshAfterUndoRedo();

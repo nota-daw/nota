@@ -54,6 +54,7 @@ struct Note {
     int32_t articulation = 0;             // stable articulation id within the track's map (0 = none/default)
     int32_t exprId = 0;                   // the engine's expression store id (0 = none)
     std::shared_ptr<const NoteExpr> expr; // resolved from exprId; null = none
+    bool muted = false;
 };
 
 struct MidiClip {

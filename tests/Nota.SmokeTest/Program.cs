@@ -29,6 +29,54 @@ static float MonoRms(float[] buf)
     return (float)Math.Sqrt(sum / buf.Length);
 }
 
+void CheckMidiClipTrim()
+{
+    using (var trim = new NotaEngine())
+    {
+        int track = trim.AddInstrumentTrack();
+        int clip = trim.AddMidiClip(track, 4, 4);
+        trim.SetClipNotes(track, clip, [new Nota.Application.NotaNote(60, 0.5, 2, 0.8f)]);
+        foreach (var kind in new[] { Nota.Application.MidiClipEnvelope.Velocity, Nota.Application.MidiClipEnvelope.Volume })
+            trim.SetMidiClipEnvelope(track, clip, kind, [new Nota.Application.AutomationPoint(0.5, 0.4f), new Nota.Application.AutomationPoint(2, 0.8f)]);
+        trim.TrimClip(track, clip, 5, 3);
+        Check(trim.GetClipNotes(track, clip).Single().StartBeat == -0.5, "MIDI trim retains hidden note starts");
+        foreach (var kind in new[] { Nota.Application.MidiClipEnvelope.Velocity, Nota.Application.MidiClipEnvelope.Volume })
+        {
+            var points = trim.GetMidiClipEnvelope(track, clip, kind);
+            Check(points.Length == 2 && points[0].Beat == -0.5 && points[1].Beat == 1,
+                $"MIDI trim retains and rebases {kind} envelope");
+        }
+        trim.TrimClip(track, clip, 4, 4);
+        Check(trim.GetMidiClipEnvelope(track, clip, Nota.Application.MidiClipEnvelope.Volume)[0].Beat == 0.5,
+            "MIDI re-extension restores hidden envelope timing");
+        trim.BeginUndoGroup();
+        try
+        {
+            trim.TrimClip(track, clip, 3, 6);
+            trim.SetClipNotes(track, clip,
+                [new Nota.Application.NotaNote(60, 1.5, 2, 0.8f), new Nota.Application.NotaNote(64, 0, 6, 0.8f)]);
+        }
+        finally { trim.EndUndoGroup(); }
+        Check(trim.TryGetClipInfo(track, clip, out var expanded) && expanded.StartBeat == 3 && expanded.LengthBeats == 6
+            && trim.GetClipNotes(track, clip).Any(note => note.StartBeat + note.LengthBeats == 6),
+            "MIDI expansion contains the entire edited note");
+        trim.Undo();
+        Check(trim.TryGetClipInfo(track, clip, out var before) && before.StartBeat == 4 && before.LengthBeats == 4
+            && trim.GetClipNotes(track, clip).Single().StartBeat == 0.5,
+            "MIDI expansion undoes bounds and notes together");
+        trim.Redo();
+        Check(trim.TryGetClipInfo(track, clip, out var after) && after.StartBeat == 3 && after.LengthBeats == 6
+            && trim.GetClipNotes(track, clip).Length == 2,
+            "MIDI expansion redoes bounds and notes together");
+    }
+}
+
+if (args.Contains("--midi-clip-trim"))
+{
+    CheckMidiClipTrim();
+    return failures == 0 ? 0 : 1;
+}
+
 Console.WriteLine($"engine v{NotaEngine.Version}");
 if (args.Contains("--tempo"))
 {
@@ -16502,6 +16550,7 @@ foreach (var (ok, label) in UserDirsTests.Run()) Check(ok, label);
 Console.WriteLine("-- articulations --");
 foreach (var (ok, label) in ArticulationImportTests.Run()) Check(ok, label);
 foreach (var (ok, label) in ArticulationFileTests.Run()) Check(ok, label);
+CheckMidiClipTrim();
 foreach (var (ok, label) in ArticulationEngineTests.Run()) Check(ok, label);
 foreach (var (ok, label) in ArticulationManagerTests.Run()) Check(ok, label);
 foreach (var (ok, label) in ArticulationUiTests.Run()) Check(ok, label);

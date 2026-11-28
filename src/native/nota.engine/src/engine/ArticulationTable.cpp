@@ -90,6 +90,7 @@ uint64_t articulationNotesKey(const MidiClip& clip) {
         static_assert(sizeof(bits) == sizeof(n.startBeat));
         std::memcpy(&bits, &n.startBeat, sizeof(bits));
         mix(bits);
+        mix(n.muted ? 1 : 0);
         mix(static_cast<uint64_t>(static_cast<uint32_t>(n.pitch)) << 32 | static_cast<uint32_t>(n.articulation));
     }
     return h;
@@ -106,7 +107,7 @@ std::shared_ptr<const ArticulationTimeline> buildArticulationTimeline(
     // the highest note of a chord sets the articulation that stays in force.
     std::vector<const Note*> order;
     order.reserve(clip.notes.size());
-    for (const Note& n : clip.notes) order.push_back(&n);
+    for (const Note& n : clip.notes) if (!n.muted) order.push_back(&n);
     std::stable_sort(order.begin(), order.end(), [](const Note* a, const Note* b) {
         return a->startBeat < b->startBeat || (a->startBeat == b->startBeat && a->pitch < b->pitch);
     });

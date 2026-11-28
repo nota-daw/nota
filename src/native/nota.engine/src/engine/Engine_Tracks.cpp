@@ -3094,6 +3094,8 @@ bool Engine::trimClip(int32_t trackId, int32_t clipIndex, double newStartBeat, d
         const double delta = newStartBeat - c.startBeat; // shift notes to stay put
         for (auto& n : c.notes) n.startBeat -= delta;
         c.shiftControllers(-delta); // and controllers (a point left of the new start still sets the value there)
+        for (auto& point : c.velocityEnvelope.points) point.beat -= delta;
+        for (auto& point : c.volumeEnvelope.points) point.beat -= delta;
         c.startBeat = newStartBeat;
         c.lengthBeats = newLengthBeats;
     } else {
@@ -4528,6 +4530,7 @@ Note Engine::noteFromData(const NotaNoteData& d) const {
     n.lengthBeats = d.length_beats;
     n.velocity = d.velocity;
     n.articulation = d.articulation_id > 0 ? d.articulation_id : 0;
+    n.muted = d.muted != 0;
     if (d.expr_id > 0) {
         std::lock_guard<std::mutex> lk(exprMx_);
         auto it = exprStore_.find(d.expr_id);
@@ -4546,6 +4549,7 @@ void Engine::noteToData(const Note& n, NotaNoteData& d) {
     d.velocity = n.velocity;
     d.expr_id = n.expr ? n.exprId : 0;
     d.articulation_id = n.articulation;
+    d.muted = n.muted ? 1 : 0;
 }
 
 // --- articulation maps (specs/085) ---------------------------------------------------------

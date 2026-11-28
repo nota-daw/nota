@@ -39,13 +39,14 @@ public struct NotaNote(int pitch, double startBeat, double lengthBeats, float ve
     /// <summary>The note's articulation: a stable id in its track's articulation map (0 = none /
     /// the map's default). Copy the note (don't rebuild it from its fields) and it travels with it.</summary>
     public int ArticulationId;
+    public int Muted;
 
     /// <summary>Every field equal. Use this to tell whether an edit changed a note: a comparison
     /// that lists fields by hand misses the next one added (an articulation-only edit was once
     /// never sent to the engine for that reason). The smoke test checks it covers every field.</summary>
     public static bool Same(in NotaNote a, in NotaNote b) =>
         a.Pitch == b.Pitch && a.StartBeat == b.StartBeat && a.LengthBeats == b.LengthBeats
-        && a.Velocity == b.Velocity && a.ExprId == b.ExprId && a.ArticulationId == b.ArticulationId;
+        && a.Velocity == b.Velocity && a.ExprId == b.ExprId && a.ArticulationId == b.ArticulationId && a.Muted == b.Muted;
 }
 
 /// <summary>One articulation of a compiled articulation map (specs/085). Matches native

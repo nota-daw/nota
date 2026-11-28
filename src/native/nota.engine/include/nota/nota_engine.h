@@ -50,6 +50,7 @@ typedef struct NotaNoteData {
                             * copy or resize the note — the expression travels with it. */
     int32_t articulation_id; /* stable articulation id in the track's articulation map, 0 = none.
                               * Keep it when you move, copy or resize the note. */
+    int32_t muted;         /* 0 = audible, 1 = muted */
 } NotaNoteData;
 
 /* One breakpoint of a note's recorded expression (MPE). dim: 0 bend (semitones), 1 pressure

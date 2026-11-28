@@ -426,6 +426,7 @@ own window — see
   its own step (1/32 … 1/2, triplets; independent of the zoom) and strength; a velocity
   editor; transposing the selection. The clip's settings (start, length, loop, quantize,
   transpose, the selection) sit in one strip above the notes, so the notes get the full width.
+  - Click empty space to draw a note, drag empty space to select notes, or double-click an existing note to delete it.
   - A note drawn takes the length and velocity of the note last touched (clicked, moved,
     resized or velocity-changed); before any note is touched, one grid step at velocity 0.8.
   - **Shape a note as you place it** (#45): keep the button down after the double-click and
@@ -445,8 +446,25 @@ own window — see
     The roll shows the playhead while stopped, where playback will start, and its ruler
     reads the clip's arrangement position (a clip at bar 9 starts at 9). A Session slot
     plays on its own loop clock, so its editor counts from the slot's start and doesn't seek.
+  - Hold Cmd/Ctrl and drag a note's center to move copies of the selection.
+  - Drag either clip boundary in the Piano Roll ruler to resize an Arrangement MIDI clip.
+    Hold Alt/Option to bypass snapping, or press Escape to cancel.
+  - Enable **Auto expand** in the clip settings strip to grow an Arrangement MIDI clip
+    when a note is placed or stretched beyond its boundaries. Scroll left of the clip
+    to draw earlier notes. The clip and note edit undo together.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
+  - Drag the upper part of a note to adjust selected note velocities together.
+  - Scroll over the selection velocity readout to adjust the selected notes by one step,
+    or hold Shift for ten steps. The notes keep their velocity differences up to the range limit.
+  - Right-click selected notes to mute or unmute them. Muted notes remain editable and
+    their mute state is saved with the project.
+  - Click a value in the selection strip to type a precise edit. Single notes show pitch,
+    start, length and velocity. Multiple notes keep the pitch and velocity range readouts,
+    which can apply a new value to the selection.
+  - Right-click a note to split it at the pointer, or press I to split selected notes at
+    the playhead. Press N to join compatible selected notes in the same clip.
+  - Middle-button drag pans in time and pitch. The Piano Roll grid offers dotted divisions.
   - **Reset velocity**: double-click a velocity stem, or right-click it → **Reset velocity**, to put
     the note — or the whole selection, when the note is selected — back to the default velocity
     (0.8); one undo step. Notes already at the default and a reference clip's notes are left alone.
@@ -457,6 +475,8 @@ own window — see
     in the arrangement.
   - ⌘C / ⌘V pastes the copy selected, on top of the copied notes, ready to move off with
     the arrows or the mouse.
+  - Press Q in the Piano Roll to snap selected note starts to the Quantize resolution,
+    even when pointer snapping is off.
   - Keyboard: ←/→ move by the grid, ↑/↓ by a semitone (⇧ an octave), ⇧←/⇧→ shorten or
     lengthen by the grid, ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
   - ⇧ + wheel over a note changes the velocity of the selection (or of that note when it

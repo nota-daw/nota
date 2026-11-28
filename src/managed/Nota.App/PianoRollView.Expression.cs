@@ -162,6 +162,32 @@ public sealed partial class PianoRollView
         return c[^1].Value;
     }
 
+    private bool SplitExpression(ref NotaNote left, ref NotaNote right, float cut)
+    {
+        if (left.ExprId == 0) return true;
+        if (CreateExpression is null) return false;
+        var before = new List<NotaExprPoint>();
+        var after = new List<NotaExprPoint>();
+        foreach (var dim in ExprOf(left.ExprId).Select(point => point.Dim).Distinct())
+        {
+            var curve = CurveOf(left, dim);
+            float atCut = ValueAt(curve, cut, Neutral(dim));
+            foreach (var (beat, value) in curve)
+            {
+                if (beat < cut) before.Add(new NotaExprPoint(dim, beat, value));
+                if (beat > cut) after.Add(new NotaExprPoint(dim, beat - cut, value));
+            }
+            before.Add(new NotaExprPoint(dim, cut, atCut));
+            after.Add(new NotaExprPoint(dim, 0, atCut));
+        }
+        int leftId = CreateExpression(before.ToArray());
+        int rightId = CreateExpression(after.ToArray());
+        if (leftId <= 0 || rightId <= 0) return false;
+        left.ExprId = leftId;
+        right.ExprId = rightId;
+        return true;
+    }
+
     // ---- the gutter: velocity, expression and controller modes ------------------------------
 
     private sealed class LaneTabs : Control

@@ -71,7 +71,7 @@ public sealed class ClipEditorView : UserControl
         // The gesture hint fills the header's free space: one line when there is room, two in
         // a narrower editor (the header holds two caption lines), trimmed only past that, and
         // always readable in full in its tooltip.
-        string hintText = Loc.T("clip_props.double_click_add_or_delete");
+        string hintText = Loc.T("clip_props.note_grid_edit_hint");
         var hint = Hint(hintText);
         hint.TextWrapping = TextWrapping.Wrap;
         hint.MaxLines = 2;

@@ -55,6 +55,7 @@ public partial class MainWindow
     private void OnMenuUndo(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        _editorRoll?.FlushPendingDraw();
         _editorRoll?.EndVelocityWheel();   // the burst is the step about to be undone
         if (Engine.Undo()) { RefreshAfterUndoRedo(); _vm.StatusText = Loc.T("common.undo"); }
         else _vm.StatusText = Loc.T("main.menu.nothing_to_undo");
@@ -63,6 +64,7 @@ public partial class MainWindow
     private void OnMenuRedo(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        _editorRoll?.FlushPendingDraw();
         _editorRoll?.EndVelocityWheel();
         if (Engine.Redo()) { RefreshAfterUndoRedo(); _vm.StatusText = Loc.T("main.redo"); }
         else _vm.StatusText = Loc.T("main.menu.nothing_to_redo");
