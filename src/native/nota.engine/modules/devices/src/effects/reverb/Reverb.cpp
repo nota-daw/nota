@@ -67,6 +67,7 @@ void Reverb::setSampleRate(double sr, int32_t /*maxBlock*/) {
     quietSamples_ = 0;
     idle_ = false;
     feedPk_ = 0.0f;
+    ctrlCacheValid_ = false;
     hist_.setSampleRate(sr_);
     srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
 }
@@ -88,75 +89,100 @@ void Reverb::process(float* buf, int32_t frames) {
     }
     if (kill_.exchange(false, std::memory_order_relaxed)) wipe();
 
-    const bool freeze = on(Freeze);
-    const bool early = on(EarlyRefl) && !freeze;
-    const bool modTail = on(ModOnTail);
-    const bool vintage = on(Vintage);
-    const bool wetOnly = on(WetOnly);
+    bool dirty = !ctrlCacheValid_ || cachedSr_ != sr_;
+    for (int k = 0; k < kCacheParams; ++k) {
+        const float v = p_[k].load(std::memory_order_relaxed);
+        if (v != cachedP_[static_cast<size_t>(k)]) {
+            dirty = true;
+            cachedP_[static_cast<size_t>(k)] = v;
+        }
+    }
+    if (dirty) {
+        cachedSr_ = sr_;
+        cachedFreeze_ = on(Freeze);
+        cachedEarly_ = on(EarlyRefl) && !cachedFreeze_;
+        cachedModTail_ = on(ModOnTail);
+        cachedVintage_ = on(Vintage);
+        const bool wetOnly = on(WetOnly);
 
-    const double rt60 = expMap(clamp01(Decay), 0.2, 12.0);
-    const float damp = clamp01(HFDamp);
-    const float preMs = clamp01(PreDelay) * 200.0f;
-    const float sizeV = clamp01(Size);
-    const float size = 0.55f + sizeV * (kMaxSize - 0.55f);
-    const float diffV = clamp01(Diffusion);
-    const float diff = 0.4f + diffV * 0.35f; // output allpass gain
-    const float width = clamp01(Width);
-    const float modHz = static_cast<float>(expMap(clamp01(ModRate), 0.05, 5.0));
-    const float modD = clamp01(ModDepth) * (vintage ? 18.0f : 12.0f) * static_cast<float>(srScale_); // samples
-    const int algo = static_cast<int>(std::lround(clamp01(Algorithm) * 3.0f));
-    const float mix = wetOnly ? 1.0f : clamp01(DryWet);
-    const float dryG = wetOnly ? 0.0f : (1.0f - mix) * dryGain(clamp01(DryLevel));
-    const float outG = clamp01(Output) * 2.0f;
+        cachedRt60_ = expMap(clamp01(Decay), 0.2, 12.0);
+        const float damp = clamp01(HFDamp);
+        const float preMs = clamp01(PreDelay) * 200.0f;
+        const float sizeV = clamp01(Size);
+        const float size = 0.55f + sizeV * (kMaxSize - 0.55f);
+        const float diffV = clamp01(Diffusion);
+        const float diff = 0.4f + diffV * 0.35f; // output allpass gain
+        cachedWidth_ = clamp01(Width);
+        const float modHz = static_cast<float>(expMap(clamp01(ModRate), 0.05, 5.0));
+        cachedModD_ = clamp01(ModDepth) * (cachedVintage_ ? 18.0f : 12.0f) * static_cast<float>(srScale_);
+        const int algo = static_cast<int>(std::lround(clamp01(Algorithm) * 3.0f));
+        cachedMix_ = wetOnly ? 1.0f : clamp01(DryWet);
+        cachedDryG_ = wetOnly ? 0.0f : (1.0f - cachedMix_) * dryGain(clamp01(DryLevel));
+        cachedOutG_ = clamp01(Output) * 2.0f;
 
-    const float damp1 = freeze ? 0.0f : damp * 0.4f, damp2 = 1.0f - damp1;
+        const float damp1 = cachedFreeze_ ? 0.0f : damp * 0.4f, damp2 = 1.0f - damp1;
+        const float algoScale = kAlgoScale[algo];
+        cachedInApG_ = std::min(0.75f, 0.25f + diffV * 0.45f + (algo == 2 ? 0.1f : 0.0f));
+
+        const double lc = expMap(clamp01(LowCut), 20.0, 1000.0);
+        const double hc = expMap(clamp01(HighCut), 1000.0, 20000.0);
+        cachedHpCoef_ = static_cast<float>(std::exp(-2.0 * kPi * lc / sr_));
+        cachedLpCoef_ = static_cast<float>(1.0 - std::exp(-2.0 * kPi * hc / sr_));
+        cachedVintC_ = onePole(7000.0);
+        cachedMonoC_ = onePole(expMap(clamp01(BassMono), 30.0, 500.0));
+        cachedMonoOn_ = clamp01(BassMono) > 0.001f;
+
+        cachedSpanTarget_ = size * algoScale;
+
+        for (int c = 0; c < kCombs; ++c) {
+            const double loopSec = kCombTuning[c] * srScale_ * cachedSpanTarget_ / sr_;
+            const float fb = cachedFreeze_
+                                 ? 1.0f
+                                 : static_cast<float>(std::min(0.995, std::pow(10.0, -3.0 * loopSec / cachedRt60_)));
+            combL_[c].set(fb, damp1, damp2);
+            combR_[c].set(fb, damp1, damp2);
+        }
+        for (int a = 0; a < kAllpasses; ++a) {
+            allpL_[a].g = diff;
+            allpR_[a].g = diff;
+        }
+
+        int diffSmpSum = 0;
+        for (const auto& a : inAp_) diffSmpSum += a.n;
+        cachedDiffSmp_ = diffSmpSum;
+        const double preSmp = preMs * 0.001 * sr_;
+        cachedEffPre_ = std::max(0.0, preSmp - (on(LatencyComp) ? cachedDiffSmp_ : 0));
+
+        const double erScale = kErScale[algo] * (0.5 + sizeV * 0.8);
+        for (int k = 0; k < kEr; ++k) erSmp_[k] = std::min(kErMs[k] * erScale * 0.001 * sr_, 0.11 * sr_);
+
+        cachedModInc_ = modHz / sr_;
+        ctrlCacheValid_ = true;
+    }
+
+    const bool freeze = cachedFreeze_;
+    const bool early = cachedEarly_;
+    const bool modTail = cachedModTail_;
+    const bool vintage = cachedVintage_;
+    const double rt60 = cachedRt60_;
+    const float width = cachedWidth_;
+    const float modD = cachedModD_;
+    const float mix = cachedMix_;
+    const float dryG = cachedDryG_;
+    const float outG = cachedOutG_;
     const float inGain = freeze ? 0.0f : 0.015f;
-    const float algoScale = kAlgoScale[algo];
-    // Input diffusion: denser for the plate, the algorithm with no room to speak of.
-    const float inApG = std::min(0.75f, 0.25f + diffV * 0.45f + (algo == 2 ? 0.1f : 0.0f));
-
-    // Tone: one-pole HP (low cut) + LP (high cut) coefficients on the wet path.
-    const double lc = expMap(clamp01(LowCut), 20.0, 1000.0);
-    const double hc = expMap(clamp01(HighCut), 1000.0, 20000.0);
-    const float hpCoef = static_cast<float>(std::exp(-2.0 * kPi * lc / sr_));
-    const float lpCoef = static_cast<float>(1.0 - std::exp(-2.0 * kPi * hc / sr_));
-    const float vintC = onePole(7000.0);
-    const float monoC = onePole(expMap(clamp01(BassMono), 30.0, 500.0));
-    const bool monoOn = clamp01(BassMono) > 0.001f;
-
-    // Comb delay length = kCombTuning[c] * srScale * (size * algoScale). Size and
-    // Algorithm change per block; jumping the read pointer inside a high-feedback loop
-    // injects an uncorrelated sample that recirculates as a metallic blast. Glide the
-    // span toward its target per-sample so the pointer moves continuously (also gives a
-    // smooth "size morph" instead of a click). Primed to target on the first ever block.
-    const float spanTarget = size * algoScale;
+    const float inApG = cachedInApG_;
+    const float hpCoef = cachedHpCoef_;
+    const float lpCoef = cachedLpCoef_;
+    const float vintC = cachedVintC_;
+    const float monoC = cachedMonoC_;
+    const bool monoOn = cachedMonoOn_;
+    const float spanTarget = cachedSpanTarget_;
     if (span_ < 0.0f) span_ = spanTarget;
-
-    // Decay is an honest RT60: each comb loses 60 dB in rt60 seconds, whatever its length.
-    for (int c = 0; c < kCombs; ++c) {
-        const double loopSec = kCombTuning[c] * srScale_ * spanTarget / sr_;
-        const float fb = freeze ? 1.0f : static_cast<float>(std::min(0.995, std::pow(10.0, -3.0 * loopSec / rt60)));
-        combL_[c].set(fb, damp1, damp2);
-        combR_[c].set(fb, damp1, damp2);
-    }
-    for (int a = 0; a < kAllpasses; ++a) {
-        allpL_[a].g = diff;
-        allpR_[a].g = diff;
-    }
-
-    // Pre-delay, less the input diffuser's group delay when compensated.
-    int diffSmp = 0;
-    for (const auto& a : inAp_) diffSmp += a.n;
+    const int diffSmp = cachedDiffSmp_;
     const int preLen = static_cast<int>(preL_.size());
-    const double preSmp = preMs * 0.001 * sr_;
-    const double effPre = std::max(0.0, preSmp - (on(LatencyComp) ? diffSmp : 0));
-
-    // Early reflections: taps on the pre-delay line after the pre-delay, spaced by the
-    // algorithm and the size; even taps lean left, odd ones right.
-    const double erScale = kErScale[algo] * (0.5 + sizeV * 0.8);
-    for (int k = 0; k < kEr; ++k) erSmp_[k] = std::min(kErMs[k] * erScale * 0.001 * sr_, 0.11 * sr_);
-
-    const double modInc = modHz / sr_;
+    const double effPre = cachedEffPre_;
+    const double modInc = cachedModInc_;
 
     // Idle skip: silent input on a settled tail leaves the buffer untouched. A
     // frozen tail never sleeps (infinite tail); the modulation phase keeps advancing

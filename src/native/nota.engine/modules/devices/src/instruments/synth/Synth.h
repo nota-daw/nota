@@ -132,14 +132,14 @@ class Synth final : public Instrument {
     static constexpr float kWheelRange = 2.0f; // a keyboard's pitch wheel, semitones
 
     // Naive (aliased) shapes — deliberately modest, as the rest of the synth.
-    static double oscSample(int wave, double phase, double pw);
+    static inline double oscSample(int wave, double phase, double pw);
 
     struct Svf {
         double ic1 = 0.0, ic2 = 0.0;
     };
 
     // TPT state-variable filter (Zavalishin): low = v2, band = v1, high = in − k·v1 − v2.
-    static double svf(Svf& s, double in, double a1, double a2, double a3, double k, int type);
+    static inline double svf(Svf& s, double in, double a1, double a2, double a3, double k, int type);
 
     // Exponential (perceptual) map from a normalized value to [lo, hi].
     static double expMap(double v, double lo, double hi) { return lo * std::pow(hi / lo, std::clamp(v, 0.0, 1.0)); }

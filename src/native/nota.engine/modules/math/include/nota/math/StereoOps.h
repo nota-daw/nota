@@ -145,6 +145,33 @@ NOTA_ALWAYS_INLINE void addStereoScaled(
     }
 }
 
+NOTA_ALWAYS_INLINE float addStereoScaledPeak(
+    float* NOTA_RESTRICT dst, const float* NOTA_RESTRICT src, float gainL, float gainR, int32_t frames) noexcept {
+    if (!dst || !src || frames <= 0) return 0.0f;
+    const Vec4f gains = Vec4f::set(gainL, gainR, gainL, gainR);
+    Vec4f vmx0 = Vec4f::zero();
+    Vec4f vmx1 = Vec4f::zero();
+    int32_t i = 0;
+    for (; i + 4 <= frames; i += 4) {
+        const Vec4f s0 = Vec4f::load(src + i * 2);
+        const Vec4f s1 = Vec4f::load(src + i * 2 + 4);
+        vmx0 = Vec4f::max(vmx0, Vec4f::abs(s0));
+        vmx1 = Vec4f::max(vmx1, Vec4f::abs(s1));
+        Vec4f::fmadd(s0, gains, Vec4f::load(dst + i * 2)).store(dst + i * 2);
+        Vec4f::fmadd(s1, gains, Vec4f::load(dst + i * 2 + 4)).store(dst + i * 2 + 4);
+    }
+    float peak = Vec4f::max(vmx0, vmx1).horizontalMax();
+    for (; i < frames; ++i) {
+        const float l = src[i * 2];
+        const float r = src[i * 2 + 1];
+        dst[i * 2] += l * gainL;
+        dst[i * 2 + 1] += r * gainR;
+        const float a = std::max(std::fabs(l), std::fabs(r));
+        if (a > peak) peak = a;
+    }
+    return peak;
+}
+
 NOTA_ALWAYS_INLINE void interleaveWetDryMix(float* NOTA_RESTRICT interleaved, const float* NOTA_RESTRICT wetL,
     const float* NOTA_RESTRICT wetR, int32_t frames, float wetMix, float dryMix) noexcept {
     if (!interleaved || !wetL || !wetR || frames <= 0) return;

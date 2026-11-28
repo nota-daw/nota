@@ -742,4 +742,13 @@ int32_t Engine::Diagnostics::midiSurfaceSelfTest() {
     return detail::MidiSurface::selfTest();
 }
 
+namespace engine::internal {
+bool EngineDirect::undo(Engine& engine) {
+    return engine.impl_ ? engine.impl_->runtime.undo() : false;
+}
+int32_t EngineDirect::splitClip(Engine& engine, int32_t trackId, int32_t clipIndex, double atBeat) {
+    return engine.impl_ ? engine.impl_->runtime.clips().splitClip(trackId, clipIndex, atBeat) : -1;
+}
+} // namespace engine::internal
+
 } // namespace nota

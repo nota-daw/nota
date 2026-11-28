@@ -334,7 +334,7 @@ int32_t nota_clip_get_warp_markers(
 }
 
 int32_t nota_clip_split(NotaEngine* e, int32_t track_id, int32_t clip_index, double at_beat) {
-    return e ? nota::c_abi::trackHandle(nota::c_abi::eng(e), track_id).clip(clip_index).split(at_beat) : -1;
+    return e ? nota::engine::internal::EngineDirect::splitClip(nota::c_abi::eng(e), track_id, clip_index, at_beat) : -1;
 }
 
 void nota_engine_set_split_fades(NotaEngine* e, int32_t on) {

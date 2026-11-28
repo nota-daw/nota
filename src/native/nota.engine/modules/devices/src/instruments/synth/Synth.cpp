@@ -298,7 +298,7 @@ void Synth::wake() {
     gate_.wake();
 }
 
-double Synth::oscSample(int wave, double phase, double pw) {
+NOTA_ALWAYS_INLINE double Synth::oscSample(int wave, double phase, double pw) {
     switch (wave) {
     case 1: return phase < pw ? 1.0 : -1.0;            // square / pulse
     case 2: return 4.0 * std::fabs(phase - 0.5) - 1.0; // triangle
@@ -307,7 +307,7 @@ double Synth::oscSample(int wave, double phase, double pw) {
     }
 }
 
-double Synth::svf(Svf& s, double in, double a1, double a2, double a3, double k, int type) {
+NOTA_ALWAYS_INLINE double Synth::svf(Svf& s, double in, double a1, double a2, double a3, double k, int type) {
     const double v3 = in - s.ic2;
     const double v1 = a1 * s.ic1 + a2 * v3;
     const double v2 = s.ic2 + a2 * s.ic1 + a3 * v3;

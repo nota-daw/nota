@@ -164,8 +164,18 @@ NOTA_ALWAYS_INLINE float dot(const float* a, const float* b, int32_t count) noex
 
 NOTA_ALWAYS_INLINE float maxAbs(const float* src, int32_t count) noexcept {
     if (!src || count <= 0) return 0.0f;
-    Vec4f vmx = Vec4f::zero();
+    Vec4f vmx0 = Vec4f::zero();
+    Vec4f vmx1 = Vec4f::zero();
+    Vec4f vmx2 = Vec4f::zero();
+    Vec4f vmx3 = Vec4f::zero();
     int32_t i = 0;
+    for (; i + 16 <= count; i += 16) {
+        vmx0 = Vec4f::max(vmx0, Vec4f::abs(Vec4f::load(src + i)));
+        vmx1 = Vec4f::max(vmx1, Vec4f::abs(Vec4f::load(src + i + 4)));
+        vmx2 = Vec4f::max(vmx2, Vec4f::abs(Vec4f::load(src + i + 8)));
+        vmx3 = Vec4f::max(vmx3, Vec4f::abs(Vec4f::load(src + i + 12)));
+    }
+    Vec4f vmx = Vec4f::max(Vec4f::max(vmx0, vmx1), Vec4f::max(vmx2, vmx3));
     for (; i + 4 <= count; i += 4) vmx = Vec4f::max(vmx, Vec4f::abs(Vec4f::load(src + i)));
     float mx = vmx.horizontalMax();
     for (; i < count; ++i) {
@@ -224,14 +234,45 @@ NOTA_ALWAYS_INLINE void squashNonFinite(float* dst, int32_t count) noexcept {
 
 NOTA_ALWAYS_INLINE bool isSilent(const float* src, int32_t count, float threshold = 1.0e-5f) noexcept {
     if (!src || count <= 0) return true;
+    int32_t i = 0;
+#if defined(NOTA_SIMD_NEON) && defined(__aarch64__)
+    const float32x4_t vThresh = vdupq_n_f32(threshold);
+    for (; i + 16 <= count; i += 16) {
+        const uint32x4_t m0 = vcleq_f32(vabsq_f32(vld1q_f32(src + i)), vThresh);
+        const uint32x4_t m1 = vcleq_f32(vabsq_f32(vld1q_f32(src + i + 4)), vThresh);
+        const uint32x4_t m2 = vcleq_f32(vabsq_f32(vld1q_f32(src + i + 8)), vThresh);
+        const uint32x4_t m3 = vcleq_f32(vabsq_f32(vld1q_f32(src + i + 12)), vThresh);
+        const uint32x4_t allLe = vandq_u32(vandq_u32(m0, m1), vandq_u32(m2, m3));
+        if (vminvq_u32(allLe) == 0) return false;
+    }
+    for (; i + 4 <= count; i += 4) {
+        const uint32x4_t m = vcleq_f32(vabsq_f32(vld1q_f32(src + i)), vThresh);
+        if (vminvq_u32(m) == 0) return false;
+    }
+#elif defined(NOTA_SIMD_SSE2)
+    const __m128 absMask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff));
+    const __m128 vThresh = _mm_set1_ps(threshold);
+    for (; i + 16 <= count; i += 16) {
+        const __m128 m0 = _mm_cmple_ps(_mm_and_ps(_mm_loadu_ps(src + i), absMask), vThresh);
+        const __m128 m1 = _mm_cmple_ps(_mm_and_ps(_mm_loadu_ps(src + i + 4), absMask), vThresh);
+        const __m128 m2 = _mm_cmple_ps(_mm_and_ps(_mm_loadu_ps(src + i + 8), absMask), vThresh);
+        const __m128 m3 = _mm_cmple_ps(_mm_and_ps(_mm_loadu_ps(src + i + 12), absMask), vThresh);
+        const __m128 allLe = _mm_and_ps(_mm_and_ps(m0, m1), _mm_and_ps(m2, m3));
+        if (_mm_movemask_ps(allLe) != 0xF) return false;
+    }
+    for (; i + 4 <= count; i += 4) {
+        const __m128 m = _mm_cmple_ps(_mm_and_ps(_mm_loadu_ps(src + i), absMask), vThresh);
+        if (_mm_movemask_ps(m) != 0xF) return false;
+    }
+#else
     const Vec4f thr = Vec4f::splat(threshold);
     const Vec4u allOnes = Vec4u::splat(~0u);
-    int32_t i = 0;
     for (; i + 4 <= count; i += 4) {
         const Vec4f a = Vec4f::abs(Vec4f::load(src + i));
         const Vec4u ok = Vec4f::lessEqual(a, thr).toUintBits();
         if ((ok ^ allOnes).anyNonZero()) return false;
     }
+#endif
     for (; i < count; ++i) {
         if (!(std::fabs(src[i]) <= threshold)) return false;
     }

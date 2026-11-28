@@ -29,6 +29,7 @@ class NOTA_DEVICES_API RackInstrument : public dsp::Instrument, public RackCore 
     ~RackInstrument() override;
 
     int32_t kind() const override { return 3; }
+    RackCore* asRack() noexcept override { return this; }
     const RackCore* asRack() const override { return this; }
     const dsp::capabilities::IRack* asRackCapability() const override { return this; }
     const char* displayName() const override { return "Nota Instrument Rack"; }

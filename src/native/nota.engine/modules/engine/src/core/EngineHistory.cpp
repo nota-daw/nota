@@ -127,7 +127,7 @@ void EngineRuntime::reapplyRackMacros() {
     if (!authoring_) return;
     auto each = [](const std::shared_ptr<Track>& t) {
         if (!t) return;
-        if (auto* r = dynamic_cast<RackCore*>(t->instrument.get())) r->reapplyMacros();
+        if (auto* r = t->instrument ? t->instrument->asRack() : nullptr) r->reapplyMacros();
         for (auto& d : t->devices)
             if (auto* r = dynamic_cast<RackCore*>(d.get())) r->reapplyMacros();
         for (auto& m : t->midiEffects)

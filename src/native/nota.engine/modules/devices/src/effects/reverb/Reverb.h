@@ -30,6 +30,7 @@
 #include "nota/dsp/primitives/LevelHistory.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -271,6 +272,17 @@ class Reverb : public Device {
     uint64_t quietSamples_ = 0;
     bool idle_ = false;
     float feedPk_ = 0.0f; // peak tank feed (blocks sleep while the tail rings)
+
+    static constexpr int kCacheParams = LatencyComp + 1;
+    double cachedSr_ = -1.0, cachedRt60_ = 1.0, cachedEffPre_ = 0.0, cachedModInc_ = 0.0;
+    int cachedDiffSmp_ = 0;
+    float cachedSpanTarget_ = 1.0f, cachedInApG_ = 0.5f, cachedModD_ = 0.0f;
+    float cachedHpCoef_ = 0.0f, cachedLpCoef_ = 0.0f, cachedVintC_ = 0.0f, cachedMonoC_ = 0.0f;
+    float cachedMix_ = 0.3f, cachedDryG_ = 1.0f, cachedOutG_ = 1.0f, cachedWidth_ = 0.6f;
+    bool cachedFreeze_ = false, cachedEarly_ = true, cachedModTail_ = true, cachedVintage_ = false,
+         cachedMonoOn_ = false;
+    bool ctrlCacheValid_ = false;
+    std::array<float, kCacheParams> cachedP_{};
 
     std::atomic<bool> kill_{false}, reset_{false};
     std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, srA_{44100.0f}, rt60A_{0}, preA_{0}, diffA_{0}, erOnA_{0};

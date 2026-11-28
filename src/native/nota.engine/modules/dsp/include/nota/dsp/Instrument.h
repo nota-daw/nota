@@ -36,6 +36,7 @@ NOTA_DSP_API uint64_t nextInstrumentUid() noexcept;
 
 class NOTA_DSP_API Instrument {
   public:
+    virtual nota::devices::RackCore* asRack() noexcept { return nullptr; }
     virtual const nota::devices::RackCore* asRack() const { return nullptr; }
     virtual nota::devices::DrumRack* asDrumRack() noexcept { return nullptr; }
     virtual const nota::devices::DrumRack* asDrumRack() const noexcept { return nullptr; }

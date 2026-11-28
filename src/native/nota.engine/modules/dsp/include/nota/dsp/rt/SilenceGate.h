@@ -7,6 +7,7 @@
 
 #include "nota/dsp/Export.h"
 #include "nota/dsp/rt/RtAttributes.h"
+#include "nota/math/BufferOps.h"
 
 #include <atomic>
 #include <cmath>
@@ -92,11 +93,7 @@ class NOTA_DSP_API SilenceGate {
     }
 
     static bool isBufferSilent(const float* samples, int32_t sampleCount, float threshold) noexcept {
-        if (!samples || sampleCount <= 0) return true;
-        for (int32_t i = 0; i < sampleCount; ++i) {
-            if (!(std::fabs(samples[i]) <= threshold)) return false;
-        }
-        return true;
+        return nota::math::isSilent(samples, sampleCount, threshold);
     }
 
     void reset() noexcept {

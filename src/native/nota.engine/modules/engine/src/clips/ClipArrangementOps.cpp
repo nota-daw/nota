@@ -553,13 +553,13 @@ int32_t ClipOps::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
         // The old graph owns an immutable source throughout the split. Reading it
         // avoids copying its markers, envelopes and cache ownership a third time.
         const AudioClip& src = old->clips[static_cast<size_t>(clipIndex)];
+        const double display = audioDisplayLenBeats(src, spb, devSR, rt_.tempoMap());
         const double local = atBeat - src.startBeat;
-        if (local <= 0.0 || local >= audioDisplayLenBeats(src, spb, devSR, rt_.tempoMap())) return -1;
+        if (local <= 0.0 || local >= display) return -1;
         // The same carves the range ops use: they cut in played time, so warped halves
         // split over the beat window (not lengthFrames, which warp ignores) and a reversed
         // clip's halves keep the audio each one sounded. Each warped half also gets its own
         // stretch cache, since the stretcher's seek state is per-clip.
-        const double display = audioDisplayLenBeats(src, spb, devSR, rt_.tempoMap());
         AudioClip left = audioCarveLeft(src, local, spb, devSR, rt_.tempoMap());
         AudioClip right = audioCarveRight(src, local, spb, devSR, rt_.tempoMap());
         if (audioCarriesState(src)) { // each half plays its own part of the envelopes (#467)

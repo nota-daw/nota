@@ -561,7 +561,7 @@ NotaResult nota_engine_poll(NotaEngine* e) {
 
 NotaResult nota_engine_undo(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG;
-    return nota::c_abi::eng(e).history().undo() ? NOTA_OK : NOTA_ERR_UNKNOWN;
+    return nota::engine::internal::EngineDirect::undo(nota::c_abi::eng(e)) ? NOTA_OK : NOTA_ERR_UNKNOWN;
 }
 
 NotaResult nota_engine_redo(NotaEngine* e) {

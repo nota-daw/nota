@@ -5,9 +5,19 @@
 
 #include "nota/engine/Export.h"
 
+#include <cstdint>
 #include <memory>
 
 namespace nota {
+
+class Engine;
+
+namespace engine::internal {
+struct NOTA_ENGINE_CORE_API EngineDirect {
+    static bool undo(Engine& engine);
+    static int32_t splitClip(Engine& engine, int32_t trackId, int32_t clipIndex, double atBeat);
+};
+} // namespace engine::internal
 
 class NOTA_ENGINE_CORE_API Engine {
   public:
@@ -86,6 +96,7 @@ class NOTA_ENGINE_CORE_API Engine {
     const Diagnostics diagnostics() const;
 
   private:
+    friend struct engine::internal::EngineDirect;
     std::shared_ptr<Impl> impl_;
 };
 

@@ -9,6 +9,7 @@
 #include "nota/dsp/rt/RenderExecutor.h"
 #include "nota/dsp/rt/ScratchArena.h"
 #include "nota/dsp/Instrument.h"
+#include "nota/math/StereoOps.h"
 
 #include <algorithm>
 #include <array>
@@ -497,14 +498,7 @@ void RackInstrument::renderChunk(RackState& st, float* out, int32_t frames, int3
         const float pan = c.ctl->pan.load(std::memory_order_relaxed);
         const float lg = g * (pan > 0.0f ? 1.0f - pan : 1.0f) * rv;
         const float rg = g * (pan < 0.0f ? 1.0f + pan : 1.0f) * rv;
-        float peak = 0.0f;
-        for (int32_t i = 0; i < frames; ++i) {
-            const float l = src[i * 2], r = src[i * 2 + 1];
-            out[i * 2] += l * lg;
-            out[i * 2 + 1] += r * rg;
-            const float a = std::max(std::fabs(l), std::fabs(r));
-            if (a > peak) peak = a;
-        }
+        const float peak = nota::math::addStereoScaledPeak(out, src, lg, rg, frames);
         c.ctl->meter.store(peak * g, std::memory_order_relaxed);
     };
 
@@ -554,6 +548,12 @@ void RackInstrument::renderChunk(RackState& st, float* out, int32_t frames, int3
         for (int32_t w = 0; w < nWork; ++w) {
             const ChainWork& cw = work[static_cast<size_t>(w)];
             if (!cw.silent) accumulateChain(*cw.chain, parallelArena_.buffer(w));
+        }
+    } else if (!overflow) {
+        for (int32_t w = 0; w < nWork; ++w) {
+            const ChainWork& cw = work[static_cast<size_t>(w)];
+            renderChainAudio(cw.ci, *cw.chain, scratch, cw.tap, cw.silent);
+            if (!cw.silent) accumulateChain(*cw.chain, scratch);
         }
     } else {
         for (auto& c : st.chains) {
