@@ -801,23 +801,33 @@ public partial class MainWindow
                 Timeline.Refresh();
                 ReloadEditorNotes();
             },
-            CommitClips = changed =>
+            CommitClips = (changed, drawBaseline) =>
             {
                 var live = LiveClips(roll, changed);
                 if (live is null) return;
-                bool expanded = false;
+                bool reload = false;
                 Engine.BeginUndoGroup();
                 try
                 {
                     foreach (var cn in live)
                     {
                         var notes = cn.Notes.ToArray();
-                        if (roll.AutoExpand && Engine.TryGetClipInfo(cn.TrackId, cn.ClipIndex, out var info))
+                        if (Engine.TryGetClipInfo(cn.TrackId, cn.ClipIndex, out var info) &&
+                            (roll.AutoExpand || drawBaseline is not null))
                         {
+                            var current = Engine.GetClipNotes(cn.TrackId, cn.ClipIndex);
+                            if (drawBaseline is not null)
+                            {
+                                var baseline = drawBaseline.First(c => c.TrackId == cn.TrackId && c.ClipIndex == cn.ClipIndex);
+                                int slot = roll.Clips.IndexOf(cn.TrackId, cn.ClipIndex);
+                                double offset = roll.Clips.Clips[slot].StartBeat - info.StartBeat;
+                                var merged = MergePendingNoteEdit(baseline.Notes, notes, current, offset);
+                                reload |= !merged.SequenceEqual(notes);
+                                notes = merged;
+                            }
                             // Count timing pairs so value edits keep a trim, while a new
                             // note at the same timing as a retained one can still expand.
-                            var prior = Engine.GetClipNotes(cn.TrackId, cn.ClipIndex)
-                                .CountBy(note => (note.StartBeat, note.LengthBeats)).ToDictionary();
+                            var prior = current.CountBy(note => (note.StartBeat, note.LengthBeats)).ToDictionary();
                             double start = 0, end = info.LengthBeats;
                             foreach (var note in notes)
                             {
@@ -831,11 +841,11 @@ public partial class MainWindow
                                 end = Math.Max(end, note.StartBeat + note.LengthBeats);
                             }
                             start = Math.Max(-info.StartBeat, start);
-                            if (start < -1e-9 || end > info.LengthBeats + 1e-9)
+                            if (roll.AutoExpand && (start < -1e-9 || end > info.LengthBeats + 1e-9))
                             {
                                 Engine.TrimClip(cn.TrackId, cn.ClipIndex, info.StartBeat + start, end - start);
                                 for (int i = 0; i < notes.Length; i++) notes[i].StartBeat -= start;
-                                expanded = true;
+                                reload = true;
                             }
                         }
                         Engine.SetClipNotes(cn.TrackId, cn.ClipIndex, notes);
@@ -843,7 +853,9 @@ public partial class MainWindow
                 }
                 finally { Engine.EndUndoGroup(); }
                 Timeline.Refresh();
-                if (expanded) Dispatcher.UIThread.Post(() =>
+                if (reload && drawBaseline is not null && ReferenceEquals(roll, _editorRoll))
+                    ReloadEditorNotes(keepSelection: true);
+                else if (reload) Dispatcher.UIThread.Post(() =>
                 {
                     if (ReferenceEquals(roll, _editorRoll)) ReloadEditorNotes();
                 });
@@ -942,6 +954,45 @@ public partial class MainWindow
     // Every open clip's notes, as the engine holds them.
     private List<ClipNotes> ClipNotesOf(ClipSet set)
         => set.Clips.Select(c => new ClipNotes(c.TrackId, c.ClipIndex, Engine.GetClipNotes(c.TrackId, c.ClipIndex))).ToList();
+
+    private static NotaNote[] MergePendingNoteEdit(IReadOnlyList<NotaNote> baseline,
+        IReadOnlyList<NotaNote> edited, IReadOnlyList<NotaNote> current, double offset)
+    {
+        // Keep occurrences separate: recording can add another note identical to an old one.
+        var remaining = baseline.CountBy(note => note).ToDictionary();
+        var added = new List<NotaNote>();
+        foreach (var note in edited)
+        {
+            if (remaining.TryGetValue(note, out int count) && count > 0)
+                remaining[note] = count - 1;
+            else
+                added.Add(Rebase(note));
+        }
+
+        var removed = new Dictionary<NotaNote, int>();
+        foreach (var (note, count) in remaining)
+        {
+            if (count == 0) continue;
+            var rebased = Rebase(note);
+            removed[rebased] = removed.GetValueOrDefault(rebased) + count;
+        }
+        var merged = new List<NotaNote>(current.Count + added.Count);
+        foreach (var note in current)
+        {
+            if (removed.TryGetValue(note, out int count) && count > 0)
+                removed[note] = count - 1;
+            else
+                merged.Add(note);
+        }
+        merged.AddRange(added);
+        return merged.ToArray();
+
+        NotaNote Rebase(NotaNote note)
+        {
+            note.StartBeat += offset;
+            return note;
+        }
+    }
 
     // The entries whose clip is still a live MIDI clip; dead clips leave the editor (reloaded
     // without them), and null — after dropping the editor — when none of its clips is left.
@@ -1205,7 +1256,7 @@ public partial class MainWindow
     private bool ClipEditorShown(Control editor)
         => ReferenceEquals(ClipDetailHost.Content, editor) && (DetailFloating || DetailPanel.IsVisible);
 
-    private void ReloadEditorNotes()
+    private void ReloadEditorNotes(bool keepSelection = false)
     {
         _patternView?.Reload();   // the step grid is a second view of the same notes
         if (_vm is null || _editorRoll is null) return;
@@ -1230,7 +1281,7 @@ public partial class MainWindow
         foreach (var c in set.Clips.ToList())
             if (Engine.TryGetClipInfo(c.TrackId, c.ClipIndex, out var info))
                 set.UpdateGeometry(c.TrackId, c.ClipIndex, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : c.LengthBeats);
-        roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+        roll.SetClips(set, ClipNotesOf(set), TrackBrush, keepSelection);
         // The roll shows the recording take: draw its held notes too (#56).
         bool take = _recordPreview is { Active: true, SessionScene: < 0 } rp
                     && set.IndexOf(rp.TrackId, rp.TakeClipIndex) >= 0;

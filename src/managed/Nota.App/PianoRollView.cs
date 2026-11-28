@@ -760,13 +760,14 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Loads a set of clips (specs/029): <paramref name="perClip"/> holds each clip's
     /// notes in its own beats; <paramref name="brushOf"/> gives a track's colour. A set of one is
     /// exactly the single-clip editor.</summary>
-    public void SetClips(ClipSet set, IReadOnlyList<ClipNotes> perClip, Func<int, ISolidColorBrush> brushOf)
+    public void SetClips(ClipSet set, IReadOnlyList<ClipNotes> perClip, Func<int, ISolidColorBrush> brushOf,
+        bool keepSelection = false)
     {
         // A track-mode set refreshed for the same track (a clip drawn, split, pasted; undo)
         // keeps the zoom, scroll and note selection the user is working with (specs/059).
         bool keepView = _set.TrackMode && set.TrackMode && _pixelsPerBeat > 0
                         && _set.ActiveClip.TrackId == set.ActiveClip.TrackId;
-        var kept = keepView ? SelectedNotesAbsolute() : null;
+        var kept = keepView || keepSelection ? SelectedNotesAbsolute() : null;
         bool rescroll = !keepView && !ReferenceEquals(set, _set) && set.IsMulti;
         _set = set;
         _slotBrushes.Clear();
@@ -1213,7 +1214,7 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Several-clip commit (specs/029): the clips whose notes changed, each in its own
     /// beats. The host makes one undo step of the whole list. When set, it replaces
     /// <see cref="Commit"/>.</summary>
-    public Action<IReadOnlyList<ClipNotes>>? CommitClips { get; set; }
+    public Action<IReadOnlyList<ClipNotes>, IReadOnlyList<ClipNotes>?>? CommitClips { get; set; }
     /// <summary>Live, no-undo variant of <see cref="CommitClips"/> (drags, tool previews).</summary>
     public Action<IReadOnlyList<ClipNotes>>? CommitClipsLive { get; set; }
 
@@ -1261,7 +1262,7 @@ public sealed partial class PianoRollView : UserControl
     /// undo step — every editable clip goes.</summary>
     private void CommitNotes(IReadOnlyList<NotaNote>? notes = null, IReadOnlyList<int>? owners = null, bool seed = false)
     {
-        _gridControl.ClearPendingDraw();
+        bool pendingDraw = _gridControl.ClearPendingDraw();
         // Backstop: an edit that did not close the velocity burst first must not leave the
         // timer to commit it again later, nor fold it silently into this edit unannounced.
         if (_velWheelBurst && VelBurstHolds) EndVelocityWheel();
@@ -1271,8 +1272,12 @@ public sealed partial class PianoRollView : UserControl
         owners ??= _owner;
         if (CommitClips is not null)
         {
+            // A recording refresh may have been deferred. Pass the last loaded notes
+            // so the host can apply just this edit to the current engine clip.
+            var baseline = pendingDraw ? _set.Clips.Select((clip, slot) =>
+                new ClipNotes(clip.TrackId, clip.ClipIndex, _pushed[slot])).ToArray() : null;
             var dirty = DirtyClips(notes, owners, seed);
-            if (dirty.Count > 0) CommitClips(dirty);
+            if (dirty.Count > 0) CommitClips(dirty, baseline);
         }
         else Commit?.Invoke(notes);
     }
@@ -3258,7 +3263,7 @@ public sealed partial class PianoRollView : UserControl
 
         internal void FlushPendingDraw()
         {
-            if (ClearPendingDraw()) _o.CommitNotes();
+            if (HasPendingDraw) _o.CommitNotes();
         }
 
         private void DrawNote(Point p, bool offGrid, PointerType pointerType)
