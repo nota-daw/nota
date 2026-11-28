@@ -57,6 +57,7 @@ class RecordingOps {
     void setDisabledInputs(const int32_t* channels, int32_t count);
     void setTestInputDevice(int32_t channels);
     void updateCaptureLayout();
+    bool syncCaptureLayout();
     const CaptureLayoutSnapshot* layoutFor(uint32_t generation) const;
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;

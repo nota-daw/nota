@@ -180,17 +180,29 @@ void RecordingOps::setTestInputDevice(int32_t channels) {
 
 // The device channels the engine carries: every channel picked by an audio track that is armed
 // or monitors the hardware input, plus the hardware take in progress. Publishes only on change.
-void RecordingOps::updateCaptureLayout() {
+bool RecordingOps::syncCaptureLayout() {
+    bool wantMonitorOrArmed = false;
+    if (rt_.authoring_)
+        for (const auto& t : rt_.authoring_->tracks)
+            if (t->type() == TrackType::Audio && (t->monitor() || t->armed()) && t->recordInputSource() == 0) {
+                wantMonitorOrArmed = true;
+                break;
+            }
+    const bool hasLanes = rt_.audioRecording_ && rt_.internalRecordSource_.load(std::memory_order_relaxed) == 0 &&
+                          !rt_.captureLanes_.empty();
+    if (!wantMonitorOrArmed && !hasLanes && testLayoutChannels_ <= 0 && layoutMsg_.count == 0)
+        return wantMonitorOrArmed;
+
     std::array<bool, kMaxInputChannels> want{};
     auto addPick = [&](int32_t first, int32_t width) {
         for (int32_t c = first; c < first + width; ++c)
             if (c >= 0 && c < kMaxInputChannels) want[static_cast<size_t>(c)] = true;
     };
-    if (rt_.authoring_)
-        for (auto& t : rt_.authoring_->tracks)
+    if (wantMonitorOrArmed)
+        for (const auto& t : rt_.authoring_->tracks)
             if (t->type() == TrackType::Audio && (t->monitor() || t->armed()) && t->recordInputSource() == 0)
                 addPick(t->inputFirst(), t->inputWidth());
-    if (rt_.audioRecording_ && rt_.internalRecordSource_.load(std::memory_order_relaxed) == 0)
+    if (hasLanes)
         for (const auto& l : rt_.captureLanes_) addPick(l.first, l.width); // every lane of the take
     addPick(0, testLayoutChannels_);                                       // tests feeding a pretend device
     CaptureLayoutSnapshot next;
@@ -199,11 +211,15 @@ void RecordingOps::updateCaptureLayout() {
             next.columnOf[static_cast<size_t>(c)] = static_cast<int8_t>(next.count);
             next.channel[static_cast<size_t>(next.count++)] = static_cast<int8_t>(c);
         }
-    if (next.count == layoutMsg_.count && next.columnOf == layoutMsg_.columnOf) return;
+    if (next.count == layoutMsg_.count && next.columnOf == layoutMsg_.columnOf) return wantMonitorOrArmed;
     next.generation = layoutMsg_.generation + 1;
     layoutMsg_ = next;
     layoutHistory_[next.generation % kLayoutHistory] = next;
     captureLayout_.publish(next);
+    return wantMonitorOrArmed;
+}
+void RecordingOps::updateCaptureLayout() {
+    syncCaptureLayout();
 }
 const CaptureLayoutSnapshot* RecordingOps::layoutFor(uint32_t generation) const {
     const auto& h = layoutHistory_[generation % kLayoutHistory];
@@ -289,14 +305,7 @@ void RecordingOps::releaseAudioInputIfIdle() {
 // input, or is armed on it and meters it (#352). Only acts on a change, so a failed open
 // isn't retried on every edit.
 void RecordingOps::updateMonitorInput() {
-    updateCaptureLayout(); // the channels armed / monitoring tracks pick
-    bool want = false;
-    if (rt_.authoring_)
-        for (auto& t : rt_.authoring_->tracks)
-            if (t->type() == TrackType::Audio && (t->monitor() || t->armed()) && t->recordInputSource() == 0) {
-                want = true;
-                break;
-            }
+    const bool want = syncCaptureLayout(); // the channels armed / monitoring tracks pick
     if (want == rt_.hwMonitorWanted_) return;
     rt_.hwMonitorWanted_ = want;
     if (want) {

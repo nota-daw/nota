@@ -467,6 +467,12 @@ int32_t DeviceOps::trackLatencySamples(int32_t trackId) const {
 // Delay every track by (maxLatency - itsOwnLatency) so all outputs stay aligned.
 void DeviceOps::recomputePdc(bool resetChangedDelays) {
     const size_t n = rt_.authoring_->tracks.size();
+    if (n == 0) return;
+    if (n == 1 && !resetChangedDelays) {
+        const auto& t = rt_.authoring_->tracks[0];
+        if (t && t->pdc && t->pdc->delay() != 0) t->pdc->setDelay(0, false);
+        return;
+    }
     std::array<int32_t, 512> stackLat{};
     std::vector<int32_t> heapLat;
     int32_t* lats = n <= stackLat.size() ? stackLat.data() : (heapLat.resize(n), heapLat.data());
