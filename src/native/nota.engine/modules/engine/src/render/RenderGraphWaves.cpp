@@ -84,10 +84,11 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
     if (!ctx.offline) {
         helpers = 0;
         if (eng.rtParallel_ && (eng.rtParallelLeftNs_ -= periodNs) <= 0) {
-            if (static_cast<double>(eng.parWorkNs_) <= roomNs * kRtExitHysteresis &&
-                static_cast<double>(eng.leafWorkNs_) <= roomNs * kRtExitHysteresis) {
+            if (static_cast<double>(eng.parWorkNs_) <= roomNs * kRtExitHysteresis) {
                 eng.rtParallel_ = false;
-                eng.leafWorkNs_ = eng.parWorkNs_;
+                // Cap seeded solo work below roomNs so the probe window can measure solo cost before re-tripping.
+                eng.leafWorkNs_ = std::min(eng.parWorkNs_, static_cast<int64_t>(roomNs * 0.85));
+                eng.rtOverBudgetStreak_ = 0;
                 eng.rtProbeLeftNs_ = kRtProbeSeconds * 1e9;
             } else {
                 eng.rtParallelLeftNs_ = eng.rtHoldNs_;
@@ -116,12 +117,14 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
     const bool allowSub = (m == 1) && (ctx.offline || eng.rtParallel_) && eng.pool_->workerCount() > 0;
     const dsp::RenderExecutor::ScopedHost execScope(&ctx.execHost, allowSub);
 
+    const bool timeTasks = !ctx.offline && (eng.rtParallel_ || m <= 8);
+    const bool startedAllAsleep = helpers == 0 && eng.pool_->allAsleep();
     int64_t poolPhaseNs = 0;
     int off = 0;
     auto runTask = [&](int wid, int j) {
         const size_t i = static_cast<size_t>(eng.rs_->parIdx[static_cast<size_t>(off + j)]);
         LeafWork& w = eng.rs_->leafWork[i];
-        const auto t0 = !ctx.offline ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+        const auto t0 = timeTasks ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         w.wid = wid;
         float* base = eng.leafBase(i, stride);
         const bool hasFxOrPdc = !w.t->devices.empty() || (!w.frozenActive && w.t->pdc && !w.t->pdc->isIdle());
@@ -135,7 +138,7 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
             RenderGraphExecutor::processDeviceChain(eng, ctx.g, *w.t, base + stride, wid, ctx.frames, ctx.blockStart,
                 ctx.spb, ctx.playing, ctx.ti, w.frozenActive);
         }
-        if (!ctx.offline)
+        if (timeTasks)
             w.workNs =
                 std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
     };
@@ -196,14 +199,19 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
     }
 
     if (!ctx.offline && m > 0) {
-        int64_t work = 0;
-        int64_t peak = 0;
-        bool alone = true;
-        for (int j = 0; j < m; ++j) {
-            const LeafWork& w = eng.rs_->leafWork[static_cast<size_t>(eng.rs_->parIdx[static_cast<size_t>(j)])];
-            work += w.workNs;
-            peak = std::max(peak, w.workNs);
-            alone = alone && w.wid == eng.pool_->workerCount();
+        int64_t work = poolPhaseNs;
+        int64_t peak = std::max<int64_t>(1, poolPhaseNs / m);
+        bool alone = helpers == 0 && startedAllAsleep;
+        if (timeTasks) {
+            work = 0;
+            peak = 0;
+            alone = true;
+            for (int j = 0; j < m; ++j) {
+                const LeafWork& w = eng.rs_->leafWork[static_cast<size_t>(eng.rs_->parIdx[static_cast<size_t>(j)])];
+                work += w.workNs;
+                peak = std::max(peak, w.workNs);
+                alone = alone && w.wid == eng.pool_->workerCount();
+            }
         }
         eng.leafPeakNs_ += (peak - eng.leafPeakNs_) / 16;
         eng.phaseNs_ += static_cast<double>(poolPhaseNs);
@@ -212,19 +220,24 @@ void RenderGraphExecutor::runLeafWaves(MixContext& ctx, const int32_t* slotLeaf,
         } else {
             const bool probeMissed = eng.rtProbeLeftNs_ > 0 && static_cast<double>(work) > roomNs;
             if (alone) {
-                eng.leafWorkNs_ += (work - eng.leafWorkNs_) / 16;
+                // Clamp isolated preemption spikes so 1-2 stalled blocks don't poison solo EWMA above roomNs.
+                const int64_t cappedWork = std::min<int64_t>(work, static_cast<int64_t>(1.25 * roomNs));
+                eng.leafWorkNs_ += (cappedWork - eng.leafWorkNs_) / 16;
                 eng.rtOverBudgetStreak_ = static_cast<double>(work) > roomNs ? eng.rtOverBudgetStreak_ + 1 : 0;
             }
-            if (probeMissed || eng.rtOverBudgetStreak_ >= 2 ||
-                (alone && static_cast<double>(eng.leafWorkNs_) > roomNs)) {
+            const bool streakTrip =
+                eng.rtOverBudgetStreak_ >= 4 ||
+                (eng.rtOverBudgetStreak_ >= 3 && static_cast<double>(eng.leafWorkNs_) >= roomNs * 0.90);
+            if (probeMissed || streakTrip || (alone && static_cast<double>(eng.leafWorkNs_) > roomNs)) {
                 if (probeMissed) eng.rtHoldNs_ = std::min(2.0 * eng.rtHoldNs_, kRtMaxHoldSeconds * 1e9);
                 eng.rtParallel_ = true;
                 eng.rtParallelLeftNs_ = eng.rtHoldNs_;
                 eng.rtProbeLeftNs_ = 0;
                 eng.rtOverBudgetStreak_ = 0;
-                eng.leafWorkNs_ = std::max(eng.leafWorkNs_, work);
-                eng.parWorkNs_ = eng.leafWorkNs_;
-                eng.sizeWorkNs_ = eng.leafWorkNs_;
+                const int64_t seedWork =
+                    std::max(eng.leafWorkNs_, std::min<int64_t>(work, static_cast<int64_t>(4.0 * roomNs)));
+                eng.parWorkNs_ = seedWork;
+                eng.sizeWorkNs_ = seedWork;
                 eng.overrunShare_ = 0.0;
             } else if (eng.rtProbeLeftNs_ > 0 &&
                        (eng.rtProbeLeftNs_ -= ctx.frames / std::max(1.0, ctx.sr) * 1e9) <= 0) {

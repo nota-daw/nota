@@ -45,7 +45,9 @@ inline constexpr double kTailMaxQuietSeconds = 30.0;
 inline constexpr float kTailFloor = 1.0e-5f;
 inline constexpr double kOverrunShare = 0.05;
 inline constexpr double kRtSizeLoad = 0.50;
-inline constexpr double kRtExitHysteresis = 0.72;
+// parWorkNs_ sums per-leaf durations across concurrent cores (~20-30% contention overhead vs solo),
+// so values up to ~1.15 * roomNs can still fit solo during the probe window.
+inline constexpr double kRtExitHysteresis = 1.15;
 inline constexpr double kRtHoldSeconds = 2.0;
 inline constexpr double kRtMaxHoldSeconds = 32.0;
 inline constexpr double kRtProbeSeconds = 0.5;

@@ -39,6 +39,7 @@
 #include <os/object.h>
 #include <os/workgroup.h>
 #include <pthread.h>
+#include <pthread/qos.h>
 #include <sys/sysctl.h>
 
 #include <mutex>
@@ -209,6 +210,7 @@ void AudioThreadPool::followWorkgroup(uint32_t& seenGen, void*& joined, void* to
             thread_standard_policy_data_t std{};
             thread_policy_set(pthread_mach_thread_np(pthread_self()), THREAD_STANDARD_POLICY,
                 reinterpret_cast<thread_policy_t>(&std), THREAD_STANDARD_POLICY_COUNT);
+            pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
             return;
         }
         // A real-time thread for the device's period first: an audio workgroup takes those.
@@ -239,6 +241,9 @@ void AudioThreadPool::workerLoop(int id) {
     using Clock = std::chrono::steady_clock;
     constexpr int kSpinPauses = 64;
     ScopedNoDenormals ftz; // whole thread lifetime: FTZ + DAZ
+#if defined(__APPLE__)
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
     uint64_t seen = 0;
     int spins = 0;
     Clock::time_point idleSince{};

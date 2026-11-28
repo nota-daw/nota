@@ -475,7 +475,8 @@ void RenderGraphExecutor::classifyLeaves(MixContext& ctx, int32_t* slotLeaf, int
             ctx.spb > 0.0)
             eligible = false;
         if (srcId >= 0 && t.armed()) eligible = false;
-        if (eligible && !canProcessTrackParallel(t)) eligible = false;
+        const bool needParallelCheck = ctx.offline || eng.rtParallel_ || !eng.pool_->allAsleep();
+        if (eligible && needParallelCheck && !canProcessTrackParallel(t)) eligible = false;
         w.eligible = eligible;
     }
 

@@ -73,17 +73,16 @@ void EngineRuntime::render(float* out, float* cue, int32_t numFrames) {
     deviceBlock_ = true; // a deadline, whatever the gap since the last block
     phaseNs_ = 0.0;
     processBlock(out, cue, numFrames);
+    const auto t1 = std::chrono::steady_clock::now();
     // The transport's rate, as mixGraph sizes by (a device-block render in tests has no device).
     if (phaseNs_ > 0.0 && numFrames > 0 && transport_.sampleRate() > 0.0)
-        adjustPoolSizing(
-            static_cast<double>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count()),
+        adjustPoolSizing(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count()),
             1e9 * numFrames / transport_.sampleRate());
     // DSP load = render time / block budget, smoothed (Phase 11). Live-device
     // path only; renderOffline stays untimed.
     const double sr = io_.sampleRate();
     if (sr > 0.0 && numFrames > 0) {
-        const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        const double elapsed = std::chrono::duration<double>(t1 - t0).count();
         const double load = elapsed / (numFrames / sr);
         const float prev = cpuLoad_.load(std::memory_order_relaxed);
         cpuLoad_.store(static_cast<float>(prev * 0.9 + load * 0.1), std::memory_order_relaxed);
@@ -112,7 +111,11 @@ void EngineRuntime::adjustPoolSizing(double totalNs, double periodNs) {
         sizeWorkNs_ = std::min(std::max(sizeWorkNs_, leafWorkNs_) * 5 / 4, std::max(parWorkNs_, leafWorkNs_));
         overrunShare_ = 0.0;
     } else if (phaseNs_ < 0.5 * room) {
-        sizeWorkNs_ -= (sizeWorkNs_ - leafWorkNs_) / 64;
+        const int64_t floorNs = std::min(leafWorkNs_, parWorkNs_);
+        if (sizeWorkNs_ > floorNs) sizeWorkNs_ -= (sizeWorkNs_ - floorNs) / 64;
+    } else if (!overrun && overrunShare_ < 0.5 * kOverrunShare) {
+        const int64_t ceilNs = std::max(leafWorkNs_, parWorkNs_);
+        if (sizeWorkNs_ > ceilNs) sizeWorkNs_ -= (sizeWorkNs_ - ceilNs) / 16;
     }
 }
 

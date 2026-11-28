@@ -72,6 +72,7 @@ class AudioThreadPool {
 
     // Dedicated threads (excludes the caller-helper slot).
     int workerCount() const noexcept { return static_cast<int>(workers_.size()); }
+    bool allAsleep() const noexcept { return sleepers_.load(std::memory_order_acquire) >= workerCount(); }
 
     dsp::RenderExecutorHost executorHost() noexcept {
         return {
@@ -115,7 +116,8 @@ class AudioThreadPool {
     // a context switch, so wake only as many as the job's work pays for.
     template <typename F> void dispatch(int n, F&& fn, int helpers = -1) {
         if (n <= 0) return;
-        if (workers_.empty() || (n == 1 && (helpers == 0 || !dsp::RenderExecutor::isParallelAllowed()))) {
+        if (workers_.empty() || (n == 1 && (helpers == 0 || !dsp::RenderExecutor::isParallelAllowed())) ||
+            (helpers == 0 && sleepers_.load(std::memory_order_seq_cst) >= workerCount())) {
             for (int i = 0; i < n; ++i) fn(workerCount(), i);
             return;
         }

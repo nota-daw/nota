@@ -340,13 +340,18 @@ void EngineRuntime::computeBlockMidi(
         rs_->blockExprN[i] = 0;
         Track& t = *g->tracks[i];
         if (hybridActive && hybrid_->isRtBlockWorkerServed(i, t.id())) continue;
+        if (t.type() != TrackType::Instrument || !t.instrument) {
+            if (t.liveHeld && t.liveHeld->midiKey.mask) t.liveHeld->midiKey = {};
+            if (rs_->blockMidiStart[i].mask) rs_->blockMidiStart[i] = {};
+            continue;
+        }
         auto& held = t.liveHeld->midiKey;
         const bool timeline = playing && arrangementActive;
         if (t.liveHeld->midiKeyArrangement && !timeline) held = {};
         t.liveHeld->midiKeyArrangement = timeline;
         // Session-active tracks feed via renderSessionSlotRaw (their own clock), so skip here.
         const bool sessionActive = t.sessionPlayer && t.sessionPlayer->playing.load(std::memory_order_relaxed) >= 0;
-        if (t.type() != TrackType::Instrument || !t.instrument || sessionActive) {
+        if (sessionActive) {
             if (held.mask) held = {};
             if (rs_->blockMidiStart[i].mask) rs_->blockMidiStart[i] = {};
             continue;
