@@ -35,6 +35,8 @@ set(NOTA_DEVICES_SOURCES
     src/effects/delay/Delay.cpp
     src/effects/dynamic_eq/DynamicEq.cpp
     src/effects/eq/Eq.cpp
+    src/effects/eq/EqDsp.cpp
+    src/effects/eq/EqParams.cpp
     src/effects/eq3/Eq3.cpp
     src/effects/flanger/Flanger.cpp
     src/effects/forge/Forge.cpp

@@ -106,6 +106,9 @@ set(NOTA_ENGINE_SOURCES
     src/api/DeviceChainApi.cpp
     src/api/DeviceAndRackApi.cpp
     src/api/RackApi.cpp
+    src/api/RackChainApi.cpp
+    src/api/RackChainDeviceApi.cpp
+    src/api/RackChainMidiAndIoApi.cpp
     src/api/SessionAndIoApi.cpp
 )
 

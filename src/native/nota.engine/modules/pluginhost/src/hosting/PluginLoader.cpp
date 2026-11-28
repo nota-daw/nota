@@ -7,14 +7,16 @@
 #include "nota/core/ConfigFile.h"
 
 #include <algorithm>
-#include <cstdint>
 #include <chrono>
+#include <condition_variable>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <thread>
-#include <string>
-#include <mutex>
+#include <deque>
 #include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -78,28 +80,49 @@ std::string reasonText(LoadReason r, const std::string& arg) {
 
 } // namespace
 
+struct PluginLoader::WorkerState {
+    std::mutex mx;
+    std::condition_variable cv;
+    std::condition_variable exitCv;
+    std::deque<std::shared_ptr<LoadTicket>> queue;
+    std::shared_ptr<LoadTicket> current;
+    Clock::time_point currentStarted{};
+    std::vector<std::shared_ptr<LoadTicket>> loaded;
+    bool finishing = false;
+    bool stuck = false;
+    bool stop = false;
+    bool exited = false;
+};
+
 PluginLoader& PluginLoader::instance() {
     static PluginLoader loader;
     return loader;
 }
 
-PluginLoader::PluginLoader() {
+PluginLoader::PluginLoader() : state_(std::make_shared<WorkerState>()) {
     readLeftoverRecord();
-    thread_ = std::thread([this] { run(); });
+    thread_ = std::thread(&PluginLoader::run, state_);
 }
 
 PluginLoader::~PluginLoader() {
-    bool hung = false;
     {
-        const std::lock_guard<std::mutex> lock(mx_);
-        stop_ = true;
-        hung = stuck_;
+        const std::lock_guard<std::mutex> lock(state_->mx);
+        state_->stop = true;
     }
-    cv_.notify_all();
+    state_->cv.notify_all();
+    bool canJoin = false;
+    {
+        std::unique_lock<std::mutex> lock(state_->mx);
+        if (!state_->stuck) {
+            constexpr auto kShutdownWait = std::chrono::milliseconds(250);
+            state_->exitCv.wait_for(lock, kShutdownWait, [this] { return state_->exited; });
+        }
+        canJoin = state_->exited;
+    }
     if (thread_.joinable()) {
-        if (hung) thread_.detach();
+        if (canJoin) thread_.join();
         else
-            thread_.join();
+            thread_.detach();
     }
 }
 
@@ -120,8 +143,8 @@ std::shared_ptr<LoadTicket> PluginLoader::request(const juce::PluginDescription&
     }
     bool stuck = false;
     {
-        const std::lock_guard<std::mutex> lock(mx_);
-        stuck = stuck_;
+        const std::lock_guard<std::mutex> lock(state_->mx);
+        stuck = state_->stuck;
     }
     if (stuck) {
         fail(*t, LoadReason::RestartRequired);
@@ -138,30 +161,43 @@ void PluginLoader::enqueue(const std::shared_ptr<LoadTicket>& t) {
     t->started_ = Clock::now();
     t->deadline_ = {};
     {
-        const std::lock_guard<std::mutex> lock(mx_);
+        const std::lock_guard<std::mutex> lock(state_->mx);
         t->cancelled_ = false;
         t->gaveUp_ = false;
         t->binaryDone_ = false;
         t->binaryError_.clear();
         ++t->attempt_;
-        queue_.push_back(t);
+        state_->queue.push_back(t);
     }
-    cv_.notify_one();
+    state_->cv.notify_one();
 }
 
-void PluginLoader::run() {
+void PluginLoader::run(std::shared_ptr<WorkerState> state) {
+    struct ExitGuard {
+        const std::shared_ptr<WorkerState>& s;
+        ~ExitGuard() {
+            {
+                const std::lock_guard<std::mutex> lock(s->mx);
+                s->exited = true;
+            }
+            s->exitCv.notify_all();
+        }
+    } const exitGuard{state};
+
     for (;;) {
         std::shared_ptr<LoadTicket> t;
         uint32_t attempt = 0;
         {
-            std::unique_lock<std::mutex> lock(mx_);
-            cv_.wait(lock, [this] { return stop_ || (!queue_.empty() && loaded_.empty() && !finishing_); });
-            if (stop_) break;
-            t = queue_.front();
-            queue_.pop_front();
+            std::unique_lock<std::mutex> lock(state->mx);
+            state->cv.wait(lock, [&state] {
+                return state->stop || (!state->queue.empty() && state->loaded.empty() && !state->finishing);
+            });
+            if (state->stop) break;
+            t = state->queue.front();
+            state->queue.pop_front();
             attempt = t->attempt_;
-            current_ = t;
-            currentStarted_ = Clock::now();
+            state->current = t;
+            state->currentStarted = Clock::now();
         }
         const auto t0 = Clock::now();
         std::string err;
@@ -172,13 +208,13 @@ void PluginLoader::run() {
         } else if (secs > 2.0) {
             logLoad(t->desc, "the binary load", secs, "binary loaded");
         }
-        const std::lock_guard<std::mutex> lock(mx_);
-        current_.reset();
-        stuck_ = false;
-        if (!t->cancelled_ && !t->gaveUp_ && t->attempt_ == attempt) {
+        const std::lock_guard<std::mutex> lock(state->mx);
+        state->current.reset();
+        state->stuck = false;
+        if (!state->stop && !t->cancelled_ && !t->gaveUp_ && t->attempt_ == attempt) {
             t->binaryDone_ = true;
             t->binaryError_ = ok ? std::string{} : err;
-            loaded_.push_back(t);
+            state->loaded.push_back(t);
         }
     }
 }
@@ -192,18 +228,18 @@ void PluginLoader::fail(LoadTicket& t, LoadReason reason, std::string arg) {
 
 std::vector<std::shared_ptr<LoadTicket>> PluginLoader::poisonLocked() {
     std::vector<std::shared_ptr<LoadTicket>> behind;
-    if (!current_ || stuck_ || !(current_->cancelled_ || current_->gaveUp_)) return behind;
-    if (Clock::now() - currentStarted_ < timeout()) return behind;
-    stuck_ = true;
-    behind.assign(queue_.begin(), queue_.end());
+    if (!state_->current || state_->stuck || !(state_->current->cancelled_ || state_->current->gaveUp_)) return behind;
+    if (Clock::now() - state_->currentStarted < timeout()) return behind;
+    state_->stuck = true;
+    behind.assign(state_->queue.begin(), state_->queue.end());
     for (auto& q : behind) q->gaveUp_ = true;
-    queue_.clear();
+    state_->queue.clear();
     return behind;
 }
 
 void PluginLoader::finishOne(const std::shared_ptr<LoadTicket>& t, Serviced& s) {
     {
-        const std::lock_guard<std::mutex> lock(mx_);
+        const std::lock_guard<std::mutex> lock(state_->mx);
         if (t->cancelled_ || t->gaveUp_) return;
     }
     if (!t->finish || t->state_ == LoadState::Failed) return;
@@ -231,20 +267,20 @@ PluginLoader::Serviced PluginLoader::service() {
     std::vector<std::shared_ptr<LoadTicket>> behind;
     std::shared_ptr<LoadTicket> current;
     {
-        const std::lock_guard<std::mutex> lock(mx_);
-        ready.swap(loaded_);
-        finishing_ = !ready.empty();
+        const std::lock_guard<std::mutex> lock(state_->mx);
+        ready.swap(state_->loaded);
+        state_->finishing = !ready.empty();
         behind = poisonLocked();
-        current = current_;
+        current = state_->current;
     }
     for (auto& q : behind) fail(*q, LoadReason::RestartRequired);
     for (const auto& t : ready) finishOne(t, s);
     if (!ready.empty()) {
         {
-            const std::lock_guard<std::mutex> lock(mx_);
-            finishing_ = false;
+            const std::lock_guard<std::mutex> lock(state_->mx);
+            state_->finishing = false;
         }
-        cv_.notify_one();
+        state_->cv.notify_one();
     }
 
     const auto now = Clock::now();
@@ -304,13 +340,13 @@ void PluginLoader::act(const std::shared_ptr<LoadTicket>& t, LoadAction a) {
         if (t->state_ == LoadState::Loaded || t->state_ == LoadState::Failed) break;
         std::vector<std::shared_ptr<LoadTicket>> behind;
         {
-            const std::lock_guard<std::mutex> lock(mx_);
+            const std::lock_guard<std::mutex> lock(state_->mx);
             t->gaveUp_ = true;
-            queue_.erase(std::remove(queue_.begin(), queue_.end(), t), queue_.end());
-            loaded_.erase(std::remove(loaded_.begin(), loaded_.end(), t), loaded_.end());
-            if (current_ == t) behind = poisonLocked();
+            state_->queue.erase(std::remove(state_->queue.begin(), state_->queue.end(), t), state_->queue.end());
+            state_->loaded.erase(std::remove(state_->loaded.begin(), state_->loaded.end(), t), state_->loaded.end());
+            if (state_->current == t) behind = poisonLocked();
         }
-        cv_.notify_one();
+        state_->cv.notify_one();
         fail(*t, a == LoadAction::Abandon ? LoadReason::Removed : LoadReason::GaveUp);
         for (auto& q : behind) fail(*q, LoadReason::RestartRequired);
         break;
@@ -319,8 +355,8 @@ void PluginLoader::act(const std::shared_ptr<LoadTicket>& t, LoadAction a) {
         if (t->state_ != LoadState::Failed || !t->finish) break;
         bool stuck = false;
         {
-            const std::lock_guard<std::mutex> lock(mx_);
-            stuck = stuck_;
+            const std::lock_guard<std::mutex> lock(state_->mx);
+            stuck = state_->stuck;
         }
         if (stuck) fail(*t, LoadReason::RestartRequired);
         else
@@ -333,11 +369,11 @@ void PluginLoader::act(const std::shared_ptr<LoadTicket>& t, LoadAction a) {
 void PluginLoader::cancel(const std::shared_ptr<LoadTicket>& t) {
     if (!t) return;
     t->finish = nullptr;
-    const std::lock_guard<std::mutex> lock(mx_);
+    const std::lock_guard<std::mutex> lock(state_->mx);
     t->cancelled_ = true;
-    queue_.erase(std::remove(queue_.begin(), queue_.end(), t), queue_.end());
-    loaded_.erase(std::remove(loaded_.begin(), loaded_.end(), t), loaded_.end());
-    cv_.notify_one();
+    state_->queue.erase(std::remove(state_->queue.begin(), state_->queue.end(), t), state_->queue.end());
+    state_->loaded.erase(std::remove(state_->loaded.begin(), state_->loaded.end(), t), state_->loaded.end());
+    state_->cv.notify_one();
 }
 
 void PluginLoader::readLeftoverRecord() {

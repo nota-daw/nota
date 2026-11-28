@@ -17,6 +17,7 @@
 #include "core/EnginePrelude.h"
 #include "core/EngineRuntime.h"
 #include "recording/RecordingOps.h"
+#include "render/RenderTypes.h"
 #include "session/SessionOps.h"
 #include "nota/dsp/rt/SilenceGate.h"
 #include "render/RenderRoutingPlan.h"

@@ -8,12 +8,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
-#include <deque>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <set>
 #include <string>
 #include <thread>
@@ -100,9 +97,11 @@ class PluginLoader {
     static std::chrono::milliseconds timeout();
 
   private:
+    struct WorkerState;
+
     PluginLoader();
     ~PluginLoader();
-    void run();
+    static void run(std::shared_ptr<WorkerState> state);
     void enqueue(const std::shared_ptr<LoadTicket>& t);
     void fail(LoadTicket& t, LoadReason reason, std::string arg = {});
     void finishOne(const std::shared_ptr<LoadTicket>& t, Serviced& s);
@@ -115,16 +114,7 @@ class PluginLoader {
     void endMainThreadStep();
 
     std::vector<std::weak_ptr<LoadTicket>> active_;
-
-    mutable std::mutex mx_;
-    std::condition_variable cv_;
-    std::deque<std::shared_ptr<LoadTicket>> queue_;
-    std::shared_ptr<LoadTicket> current_;
-    std::chrono::steady_clock::time_point currentStarted_{};
-    std::vector<std::shared_ptr<LoadTicket>> loaded_;
-    bool finishing_ = false;
-    bool stuck_ = false;
-    bool stop_ = false;
+    std::shared_ptr<WorkerState> state_;
 
     int autoloadScope_ = 0;
     std::set<std::string> frozenIds_;
