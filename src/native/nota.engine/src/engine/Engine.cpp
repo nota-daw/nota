@@ -4,6 +4,9 @@
 // Engine — lifecycle, audio/MIDI device config, preview, tone/transport setters, immutable-graph publish/clone/undo/reset, post-fader meters. Definitions of the rest of the class live in the sibling Engine_*.cpp slices.
 
 #include "Engine.h"
+#include "RenderRoutingPlan.h"
+#include "TimelineIndex.h"
+#include "dsp/core/ScratchArena.h"
 #include "devices/effects/Eq.h"
 #include "devices/racks/RackCore.h"
 #include "audio_io/AudioBackendFactory.h"
@@ -41,11 +44,15 @@ Engine::Engine()
     for (auto& s : trackTapRingTrack_) s = -1;
     ensureRenderScratch(authoring_->tracks.size());
     graphHist_.publish(authoring_);
+    hybrid_ = std::make_unique<HybridBufferController>(*this);
+    hybrid_->onGraphChanged(authoring_);
     installRackPluginFactory(); // lets rack blobs rebuild hosted-plugin children on load
 }
 
 Engine::~Engine() {
     cancelWarpJob(); // a background warp build must not outlive the engine
+    if (hybrid_) hybrid_->setStopped();
+    syncStreamingPlaybackState(false);
     stop();
     if (input_) input_->stop(); // monitoring can keep the capture device open until teardown
 }
@@ -120,6 +127,7 @@ bool Engine::start() {
     void* const wg = ok ? backend_->ioWorkgroup() : nullptr;
     setPluginAudioWorkgroup(wg);
     const int32_t bf = ok ? backend_->bufferFrames() : 0;
+    if (ok && bf > preparedBlockCap_) ensureBlockCapacity(std::min(bf, kMaxBlock));
     if (pool_)
         pool_->setWorkgroup(wg, wg && bf > 0 && backend_->sampleRate() > 0 ? 1e9 * bf / backend_->sampleRate() : 0.0);
     renderSuspended_.store(false, std::memory_order_release);
@@ -297,6 +305,8 @@ int32_t Engine::gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const 
 }
 
 void Engine::stop() {
+    if (hybrid_) hybrid_->setStopped();
+    syncStreamingPlaybackState(false);
     if (midiInput_) midiInput_->close();
     midiOutputs_.clear();
     setPluginAudioWorkgroup(nullptr); // before the device (and its workgroup) goes
@@ -677,6 +687,13 @@ void Engine::playClock() { enqueueTransportStart(0); }
 // Main Play (and arrangement record) roll the Arrangement; session launches use playClock().
 void Engine::transportPlay() {
     arrangementActive_.store(true, std::memory_order_relaxed);
+    const double hint = pendingSeekBeat_ >= 0.0 ? pendingSeekBeat_ : transport_.uiPositionBeats();
+    pendingSeekBeat_ = -1.0;
+    syncStreamingPlaybackState(true, hint);
+    if (hybrid_) {
+        hybrid_->invalidate(true);
+        hybrid_->onPlayRequested();
+    }
     playClock();
 }
 // Play preceded by the count-in (when one is set and the transport is stopped). The audio
@@ -687,6 +704,13 @@ void Engine::transportPlayCountIn() {
     if (bars <= 0 || transport_.uiIsPlaying()) {
         transportPlay();
         return;
+    }
+    const double hint = pendingSeekBeat_ >= 0.0 ? pendingSeekBeat_ : transport_.uiPositionBeats();
+    pendingSeekBeat_ = -1.0;
+    syncStreamingPlaybackState(true, hint);
+    if (hybrid_) {
+        hybrid_->invalidate(true);
+        hybrid_->onPlayRequested();
     }
     arrangementActive_.store(true, std::memory_order_relaxed);
     startCountIn(bars);
@@ -702,6 +726,8 @@ void Engine::startCountIn(int32_t bars) {
     }
 }
 void Engine::transportStop() {
+    if (hybrid_) hybrid_->setStopped();
+    syncStreamingPlaybackState(false);
     arrangementActive_.store(false, std::memory_order_relaxed);
     {
         LandingMute mute(*this);      // a global stop never fires a landing rule (#481)
@@ -749,6 +775,7 @@ bool Engine::setBpm(double bpm) {
         authoringBpm_ = bpm;
         placeTakesForTempo(); // take lanes + their comp keep one mapping (specs/067)
     }
+    if (hybrid_) hybrid_->invalidate(true);
     return true;
 }
 double Engine::bpm() const {
@@ -765,6 +792,7 @@ void Engine::setLoop(bool enabled, double s, double e) {
     loopEnabled_ = enabled && e > s; // message-thread mirror for the UI
     loopStart_ = s;
     loopEnd_ = e;
+    if (hybrid_) hybrid_->invalidate(true);
     Command c;
     c.type = CommandType::SetLoop;
     c.i0 = enabled ? 1 : 0;
@@ -779,6 +807,9 @@ void Engine::setMetronome(bool on) {
     commands_.push(c);
 }
 void Engine::seekBeats(double beat) {
+    if (hybrid_) hybrid_->invalidate(true);
+    pendingSeekBeat_ = beat;
+    syncStreamingPlaybackState(transport_.uiIsPlaying(), beat);
     Command c;
     c.type = CommandType::Seek;
     c.d0 = beat;
@@ -818,16 +849,17 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->articulationMapJson = t.articulationMapJson;
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
     nt->clips = t.clips;
-    nt->takes = t.takes; // take lanes (specs/067) — buffers shared
+    nt->takes = t.takes; // take lanes (specs/067) — CoW slice
     nt->midiClips = t.midiClips;
+    nt->timelineIndex = t.timelineIndex; // reused when clips/midiClips/articulationTable tokens match
     nt->instrument = t.instrument;     // shared — voice state persists
     nt->midiEffects = t.midiEffects;   // shared — arp held/phase state persists
     nt->devices = t.devices;           // shared — DSP state persists (M3)
     nt->pdc = t.pdc;                   // shared — delay-line state persists (M3-7)
-    nt->sessionSlots = t.sessionSlots; // Session slots (M5)
-    nt->automation = t.automation;     // automation lanes (M9)
-    nt->modulators = t.modulators;     // CV modulation sources (Phase 3)
-    nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
+    nt->sessionSlots = t.sessionSlots; // Session slots (M5) — CoW slice
+    nt->automation = t.automation;     // automation lanes (M9) — CoW slice
+    nt->modulators = t.modulators;     // CV modulation sources — CoW slice
+    nt->cvLinks = t.cvLinks;           // CV modulation edges — CoW slice
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
@@ -864,33 +896,68 @@ void Engine::settleArticulations(Track& t) {
         if (articulationTimelineCurrent(c, t.articulationTable)) return;
         c.articulations = t.articulationTable ? buildArticulationTimeline(c, t.articulationTable) : nullptr;
     };
-    for (auto& c : t.midiClips) settle(c);
-    for (auto& s : t.sessionSlots) settle(s.midi);
+    for (auto& c : t.midiClips.write()) settle(c);
+    for (auto& s : t.sessionSlots.write()) settle(s.midi);
 }
 
 // Message thread: make sure the published render scratch holds `tracks` tracks. Never
 // grows the live one (the audio thread may be inside a block using it): builds a new one
 // with headroom and publishes it. Runs inside publishRaw (before the live-graph swap, so a
 // block that sees the new graph sees its scratch too) and propagateSampleRate.
-void Engine::ensureRenderScratch(size_t tracks) {
-    if (const RenderScratch* cur = scratchHist_.live(); cur && cur->tracks >= tracks) return;
+void Engine::ensureRenderScratch(size_t tracks, int32_t minFrames) {
+    const RenderScratch* cur = scratchHist_.live();
+    const int32_t curFrames = cur && cur->frameCapacity > 0
+                                  ? cur->frameCapacity
+                                  : dsp::StereoScratchArena<1>::kDefaultLiveFrames;
+    const int32_t frameCap = std::clamp(
+        std::max({curFrames, minFrames, dsp::StereoScratchArena<1>::kDefaultLiveFrames}),
+        dsp::StereoScratchArena<1>::kDefaultLiveFrames, kMaxBlock);
+    const size_t workerSlots = static_cast<size_t>(std::clamp(pool_ ? pool_->workerCount() + 1 : 1, 1, 65));
+    if (cur && cur->tracks >= tracks && cur->frameCapacity >= frameCap && cur->workerPlanarCount >= workerSlots)
+        return;
     const size_t cap = std::max<size_t>(8, (tracks + 7) / 8 * 8); // grow in steps of 8 tracks
     auto s = std::make_shared<RenderScratch>();
     s->tracks = cap;
+    s->frameCapacity = frameCap;
+    s->workerPlanarCount = workerSlots;
     s->leafWork.resize(cap);
-    s->leafBuf.assign(cap * (size_t)kMaxBlock * 4, 0.0f); // two halves (dry + post) per track
+    s->leafBuf.assign(cap * static_cast<size_t>(frameCap) * 4, 0.0f); // two halves (dry + post) per track
+    s->groupScratch.assign(static_cast<size_t>(kMaxGroups) * static_cast<size_t>(frameCap) * 2, 0.0f);
+    s->returnScratch.assign(static_cast<size_t>(kMaxReturns) * static_cast<size_t>(frameCap) * 2, 0.0f);
+    s->workerPlanar.resize(workerSlots);
+    for (auto& buf : s->workerPlanar) buf.ensureFrames(frameCap);
     s->blockMidi.assign(cap, std::vector<MidiEv>(1024));
     s->blockMidiN.assign(cap, 0);
     s->blockMidiStart.resize(cap);
     s->blockExpr.assign(cap, std::vector<ExprEv>(kMaxBlockExpr));
     s->blockExprN.assign(cap, 0);
     s->parIdx.assign(cap, 0);
+    s->trackRouteSlot.assign(cap, -1);
     scratchHist_.publish(std::move(s));
+}
+
+void Engine::ensureBlockCapacity(int32_t frames) {
+    const int32_t target = std::clamp(frames, dsp::StereoScratchArena<1>::kDefaultLiveFrames, kMaxBlock);
+    if (target > preparedBlockCap_) preparedBlockCap_ = target;
+    if (!authoring_) {
+        ensureRenderScratch(0, preparedBlockCap_);
+        return;
+    }
+    ensureRenderScratch(authoring_->tracks.size(), preparedBlockCap_);
+    auto prepTrack = [cap = preparedBlockCap_](Track& t) {
+        if (t.instrument) t.instrument->ensureBlockCapacity(cap);
+        for (auto& d : t.devices)
+            if (d) d->ensureBlockCapacity(cap);
+    };
+    for (auto& t : authoring_->tracks)
+        if (t) prepTrack(*t);
+    if (authoring_->masterTrack) prepTrack(*authoring_->masterTrack);
 }
 
 bool Engine::setRenderThreads(int n) {
     if (isRunning()) return false; // the audio thread may be inside dispatch()
     pool_ = std::make_unique<AudioThreadPool>(n < 0 ? -1 : n);
+    if (authoring_) ensureRenderScratch(authoring_->tracks.size(), preparedBlockCap_);
     return true;
 }
 
@@ -925,17 +992,23 @@ void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
         }
     };
     std::vector<Span> was, is;
-    for (const auto& old : before.tracks) {
+    for (size_t i = 0; i < before.tracks.size(); ++i) {
+        const auto& old = before.tracks[i];
         if (!old || old->type() != TrackType::Instrument || old->midiClips.empty()) continue;
         const Track* now = nullptr;
         bool same = false;
-        for (const auto& t : after.tracks)
-            if (t && t->id() == old->id()) {
-                now = t.get();
-                same = (t == old);
-                break;
-            }
-        if (same || !now) continue; // untouched, or gone with its instrument
+        if (i < after.tracks.size() && after.tracks[i] && after.tracks[i]->id() == old->id()) {
+            now = after.tracks[i].get();
+            same = (after.tracks[i] == old);
+        } else {
+            for (const auto& t : after.tracks)
+                if (t && t->id() == old->id()) {
+                    now = t.get();
+                    same = (t == old);
+                    break;
+                }
+        }
+        if (same || !now || old->midiClips.sharesStorageWith(now->midiClips)) continue; // untouched, or gone with its instrument
         was.clear();
         around(*old, was);
         if (was.empty()) continue;
@@ -967,8 +1040,32 @@ void Engine::releaseVanishedClipNotes(const Graph& before, const Graph& after) {
     }
 }
 
+namespace {
+
+bool graphNeedsRoutingPlan(const Graph& g) noexcept {
+    if (g.tracks.size() > 4) return true;
+    if (g.masterTrack && (!g.masterTrack->automation.empty() || !g.masterTrack->cvLinks.empty() ||
+                             (g.masterTrack->ccRoutes && !g.masterTrack->ccRoutes->empty()))) {
+        return true;
+    }
+    for (const auto& t : g.tracks) {
+        if (!t) continue;
+        if (t->type() == TrackType::Group || t->type() == TrackType::Return) return true;
+        if (!t->automation.empty() || !t->modulators.empty() || !t->cvLinks.empty()) return true;
+        if (t->ccRoutes && !t->ccRoutes->empty()) return true;
+        if (t->midiFromTrackId() >= 0) return true;
+        if (t->instrument && (t->instrument->acceptsSidechain() || t->instrument->asRack() != nullptr)) return true;
+        for (const auto& d : t->devices)
+            if (d && (d->acceptsSidechain() || d->asRack() != nullptr)) return true;
+    }
+    return false;
+}
+
+} // namespace
+
 void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
-    if (g && !restored) deriveTempoMap(*g); // specs/099: the master Tempo lane is the tempo
+    if (g && !restored && (!authoring_ || g->masterTrack != authoring_->masterTrack || g->tempoMap != authoring_->tempoMap))
+        deriveTempoMap(*g); // specs/099: the master Tempo lane is the tempo
     // Fade flags are derived, not stored. A track this graph shares with the one still
     // playing is the audio thread's — leave it. Any other one an edit just cloned is
     // settled in place. A restored track (undo, redo, take retry) was published before and
@@ -996,21 +1093,29 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
     // Ensure every track has a session slot per scene (M5). Only grows freshly
     // added tracks (already-sized tracks are a no-op), so no race with audio.
     for (auto& t : g->tracks)
-        if (static_cast<int32_t>(t->sessionSlots.size()) < g->sceneCount) t->sessionSlots.resize(g->sceneCount);
+        if (static_cast<int32_t>(t->sessionSlots.size()) < g->sceneCount) t->sessionSlots.write().resize(g->sceneCount);
     // Articulation timelines (specs/085) follow each clip's notes and its track's table. The same
     // rule as the take joins above: a track the playing graph shares is the audio thread's and
     // already current; one an edit just cloned is settled in place; a restored one (undo, redo,
     // take retry) may still be walked by a render, so it is cloned first if anything would change.
     if (g) {
-        auto playing = [&](const std::shared_ptr<Track>& t) {
+        auto playing = [&](size_t idx, const std::shared_ptr<Track>& t) {
             if (!authoring_) return false;
+            if (idx < authoring_->tracks.size() && authoring_->tracks[idx] == t) return true;
             for (const auto& old : authoring_->tracks)
                 if (old == t) return true;
             return false;
         };
-        for (auto& t : g->tracks) {
-            if (!t || articulationsCurrent(*t) || playing(t)) continue; // cheap test first: `playing` scans the graph
-            if (restored) t = cloneTrack(*t);
+        for (size_t idx = 0; idx < g->tracks.size(); ++idx) {
+            auto& t = g->tracks[idx];
+            if (!t || (t->type() != TrackType::Instrument && !t->articulationTable && t->midiClips.empty()) ||
+                playing(idx, t) || articulationsCurrent(*t)) {
+                continue; // O(1) track/shared check first
+            }
+            if (restored) {
+                t = cloneTrack(*t);
+                g->routingPlan.reset();
+            }
             settleArticulations(*t);
         }
     }
@@ -1027,14 +1132,40 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
                 cache->inputs.sample == c.sample.get() && cache->inputs.markers == c.warpMarkers &&
                 cache->inputs.playStart == c.warpPlayStart && cache->inputs.playEnd == c.warpPlayEndEff() &&
                 cache->inputs.pitch == c.pitchSemitones && cache->inputs.mode == c.warpMode) continue;
-            if (!copied) { t = cloneTrack(*t); copied = true; }
-            configureTempoWarp(t->clips[i], g->tempoMap, transport_.sampleRate());
+            if (!copied) {
+                t = cloneTrack(*t);
+                g->routingPlan.reset();
+                copied = true;
+            }
+            configureTempoWarp(t->clips.write()[i], g->tempoMap, transport_.sampleRate());
         }
     }
     if (g && authoring_ && transport_.uiIsPlaying()) releaseVanishedClipNotes(*authoring_, *g);
     if (g && authoring_) giveUpVanishedPluginLoads(*authoring_, *g);
+    if (g) {
+        const dsp::TelemetryMode tmode = telemetryMode();
+        for (size_t i = 0; i < g->tracks.size(); ++i) {
+            const auto& t = g->tracks[i];
+            if (!t) continue;
+            if (authoring_ && i < authoring_->tracks.size() && authoring_->tracks[i] == t) continue;
+            if (t->instrument && t->instrument->telemetryMode() != tmode) t->instrument->setTelemetryMode(tmode);
+            for (auto& d : t->devices)
+                if (d && d->telemetryMode() != tmode) d->setTelemetryMode(tmode);
+        }
+        if (g->masterTrack && (!authoring_ || authoring_->masterTrack != g->masterTrack)) {
+            if (g->masterTrack->instrument && g->masterTrack->instrument->telemetryMode() != tmode)
+                g->masterTrack->instrument->setTelemetryMode(tmode);
+            for (auto& d : g->masterTrack->devices)
+                if (d && d->telemetryMode() != tmode) d->setTelemetryMode(tmode);
+        }
+    }
+    auto prevGraph = authoring_;
     authoring_ = g;
-    if (g) ensureRenderScratch(g->tracks.size());
+    if (g) {
+        ensureRenderScratch(g->tracks.size(), preparedBlockCap_);
+        if (preparedBlockCap_ > dsp::StereoScratchArena<1>::kDefaultLiveFrames)
+            ensureBlockCapacity(preparedBlockCap_);
+    }
     // Fresh track objects only: the audio thread never sees them change. Before any CC target
     // exists their routes are complete as they are (empty): marking them so keeps an undo to
     // such a snapshot from rebuilding them from targets set later.
@@ -1043,7 +1174,44 @@ void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
         for (auto& t : g->tracks) t->ccRoutesDirty = false;
         if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
     }
+    if (g) {
+        for (size_t i = 0; i < g->tracks.size(); ++i) {
+            auto& t = g->tracks[i];
+            if (!t) continue;
+            const bool wantsIndex = (t->clips.size() > 16 || t->midiClips.size() > 16);
+            if (prevGraph && i < prevGraph->tracks.size() && prevGraph->tracks[i] == t &&
+                (t->timelineIndex || !wantsIndex))
+                continue; // shared with previously published graph: already indexed and sealed
+            if (!wantsIndex) {
+                t->timelineIndex.reset();
+            } else {
+                if (t->timelineIndex && !t->timelineIndex->matchesTrack(*t)) t->timelineIndex.reset();
+                if (!t->timelineIndex) t->timelineIndex = TimelineIndex::buildForTrack(*t);
+            }
+            t->sealContent();
+        }
+        if (g->masterTrack && (!prevGraph || prevGraph->masterTrack != g->masterTrack)) g->masterTrack->sealContent();
+        if (!graphNeedsRoutingPlan(*g)) {
+            g->routingPlan.reset();
+        } else if (!restored || !g->routingPlan) {
+            g->routingPlan = RenderRoutingPlan::build(*g);
+        }
+        bool anyAuto = !g->masterVolume.points.empty() || (g->masterTrack && !g->masterTrack->automation.empty());
+        bool anyMod = false;
+        bool anyCv = false;
+        for (const auto& t : g->tracks) {
+            if (!t) continue;
+            anyAuto |= !t->automation.empty();
+            anyMod |= !t->modulators.empty();
+            anyCv |= !t->cvLinks.empty();
+        }
+        g->hasAutomation = anyAuto;
+        g->hasModulators = anyMod;
+        g->hasCvLinks = anyCv;
+    }
     graphHist_.publish(g); // frees the graphs no render can still be walking
+    if (hybrid_ && hybrid_->mode() != HybridBufferMode::Off) hybrid_->onGraphChanged(g);
+    busState_.requestInvalidate();
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
 }
@@ -1501,13 +1669,13 @@ void Engine::deriveTempoMap(Graph& g) const {
     };
     for (auto& t : g.tracks) {
         if (!shared(t)) { // this edit's own clone: its placement stands, its takes follow the map
-            for (auto& take : t->takes) take.tempoMap = g.tempoMap;
+            for (auto& take : t->takes.write()) take.tempoMap = g.tempoMap;
             continue;
         }
         if (t->takes.empty() && std::none_of(t->clips.begin(), t->clips.end(), [](const auto& c) { return !c.warpEnabled; })) continue;
         t = cloneTrack(*t);
-        for (auto& c : t->clips) if (!c.warpEnabled) c.startBeat = toBeat(beatToSeconds(c.startBeat));
-        for (auto& take : t->takes) {
+        for (auto& c : t->clips.write()) if (!c.warpEnabled) c.startBeat = toBeat(beatToSeconds(c.startBeat));
+        for (auto& take : t->takes.write()) {
             take.originBeat = toBeat(beatToSeconds(take.originBeat));
             take.tempoMap = g.tempoMap;
         }
@@ -1581,11 +1749,131 @@ bool Engine::trackMeter(int32_t trackId, float& peakL, float& peakR, float& rmsL
     return true;
 }
 
+int32_t Engine::readTrackMeters(NotaTrackMeterEntry* out, int32_t capacity) const {
+    if (!authoring_) return 0;
+    const auto& tracks = authoring_->tracks;
+    const int32_t total = static_cast<int32_t>(tracks.size());
+    if (out && capacity > 0) {
+        const int32_t n = std::min(total, capacity);
+        for (int32_t i = 0; i < n; ++i) {
+            const auto& t = tracks[i];
+            if (!t) {
+                out[i] = {};
+                out[i].track_id = -1;
+                continue;
+            }
+            out[i].track_id = t->id();
+            out[i].meter.peak_l = t->meterPeakL();
+            out[i].meter.peak_r = t->meterPeakR();
+            out[i].meter.rms_l = t->meterRmsL();
+            out[i].meter.rms_r = t->meterRmsR();
+        }
+    }
+    return total;
+}
+
+void Engine::applyTelemetryMode(const Graph& g, dsp::TelemetryMode mode) {
+    auto applyTrack = [mode](Track& t) {
+        if (t.instrument) t.instrument->setTelemetryMode(mode);
+        for (auto& d : t.devices)
+            if (d) d->setTelemetryMode(mode);
+    };
+    for (const auto& t : g.tracks)
+        if (t) applyTrack(*t);
+    if (g.masterTrack) applyTrack(*g.masterTrack);
+}
+
+void Engine::setTelemetryMode(dsp::TelemetryMode mode) {
+    telemetryMode_.store(mode, std::memory_order_relaxed);
+    if (authoring_) applyTelemetryMode(*authoring_, mode);
+}
+
 void Engine::masterMeter(float& peakL, float& peakR, float& rmsL, float& rmsR) const {
     peakL = masterPeakL_.load(std::memory_order_relaxed);
     peakR = masterPeakR_.load(std::memory_order_relaxed);
     rmsL = masterRmsL_.load(std::memory_order_relaxed);
     rmsR = masterRmsR_.load(std::memory_order_relaxed);
+}
+
+void Engine::setStreamThresholdBytes(int64_t bytes) {
+    streamThresholdBytes_.store(std::max<int64_t>(0, bytes), std::memory_order_release);
+}
+
+void Engine::setSampleLoadPolicy(SampleLoadPolicy policy) {
+    sampleLoadPolicy_.store(static_cast<int32_t>(policy), std::memory_order_release);
+}
+
+bool Engine::isSampleStreaming(int64_t sampleId) const {
+    auto s = findSampleById(sampleId);
+    return s && s->isStreaming();
+}
+
+void Engine::streamingStats(NotaStreamingStats& out) const {
+    out = NotaStreamingStats{};
+    out.stream_threshold_bytes = streamThresholdBytes();
+    if (!authoring_) return;
+
+    std::vector<int64_t> seen;
+    auto visit = [&](const std::shared_ptr<SampleBuffer>& sb) {
+        if (!sb) return;
+        for (int64_t id : seen)
+            if (id == sb->id) return;
+        seen.push_back(sb->id);
+        const int64_t mem = sb->memoryBytes();
+        out.resident_sample_bytes += mem;
+        if (sb->isStreaming()) {
+            ++out.active_streams;
+            const StreamRuntimeStats rs = sb->source->runtimeStats();
+            out.stream_cache_bytes += rs.cacheBytes;
+            out.pages_faulted += rs.pagesFaulted;
+            out.pages_served_async += rs.pagesServedAsync;
+            out.pages_served_sync += rs.pagesServedSync;
+            out.rt_underruns += rs.rtUnderruns;
+        }
+    };
+
+    for (const auto& t : authoring_->tracks) {
+        if (!t) continue;
+        for (const auto& c : t->clips) visit(c.sample);
+        for (const auto& k : t->takes) visit(k.sample);
+        for (const auto& sl : t->sessionSlots) visit(sl.audio.sample);
+    }
+}
+
+void Engine::syncStreamingPlaybackState(bool playing, double beatHint) const {
+    if (!authoring_) return;
+    const double sr = transport_.sampleRate() > 0.0 ? transport_.sampleRate() : 44100.0;
+    const double spb = authoringBpm_ > 0.0 ? (sr * 60.0 / authoringBpm_) : transport_.samplesPerBeat();
+    for (const auto& t : authoring_->tracks) {
+        if (!t) continue;
+        for (const auto& c : t->clips) {
+            if (!c.sample || !c.sample->source) continue;
+            c.sample->source->setPlaybackActive(playing);
+            if (beatHint >= 0.0 && spb > 0.0) {
+                const double ratio = c.sample->sourceSampleRate / sr * c.pitchRatio();
+                const int64_t len = c.effectiveLength();
+                const double clipBeats = len / std::max(1e-9, ratio * spb);
+                if (beatHint >= c.startBeat - 1.0 && beatHint <= c.startBeat + clipBeats) {
+                    const double relFrames = std::max(0.0, (beatHint - c.startBeat) * spb * ratio);
+                    const int64_t targetFrame = c.reversed
+                        ? static_cast<int64_t>(c.sourceOffsetFrames + std::max(0.0, len - 1 - relFrames))
+                        : static_cast<int64_t>(c.sourceOffsetFrames + relFrames);
+                    c.sample->source->primeAround(targetFrame, c.reversed);
+                }
+            }
+        }
+        for (const auto& sl : t->sessionSlots) {
+            if (sl.audio.sample && sl.audio.sample->source)
+                sl.audio.sample->source->setPlaybackActive(playing);
+        }
+    }
+}
+
+void Engine::setHybridBufferingMode(HybridBufferMode mode) {
+    if (hybrid_) {
+        hybrid_->setMode(mode);
+        if (mode == HybridBufferMode::Auto) hybrid_->onGraphChanged(authoring_);
+    }
 }
 
 } // namespace nota

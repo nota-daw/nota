@@ -449,8 +449,12 @@ class Pentad final : public Instrument {
     // rendered block is silent — the HIIR decimator drain is covered by the
     // quiet hangover below.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     // MPE: bend → pitch; pressure → cutoff (by the patch's Aftertouch Cutoff, two octaves when
     // that is off — it is poly aftertouch here) + level; slide → cutoff (±2 octaves). A keyboard's
@@ -629,10 +633,8 @@ class Pentad final : public Instrument {
     float peakL_ = 0, peakR_ = 0, mixPeak_ = 0, mixPeakChunk_ = 0;
     // Auto-sleep hangover (see render()): idle only after the tail has settled.
     static constexpr uint64_t kIdleHangover = 16384; // frames of silence before sleep
-    uint64_t quietSamples_ = 0;
     float chunkOutPeak_ = 0.0f; // our peak contribution across this render's chunks
-    bool idle_ = false;
-    double cpu_ = 0.0;
+    dsp::SilenceGate gate_{kIdleHangover};
     mutable std::atomic<float> tele_[kScopeN] = {};
     std::atomic<float> pn_[kNumParams];
 };

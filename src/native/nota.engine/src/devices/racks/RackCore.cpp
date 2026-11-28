@@ -31,10 +31,8 @@
 
 namespace nota {
 
-void RackCore::forwardTransport(const TransportInfo& ti) {
-    RackState* st = live();
-    if (!st) return;
-    for (auto& c : st->chains) {
+void RackCore::forwardTransportSlow(RackState& st, const TransportInfo& ti) {
+    for (auto& c : st.chains) {
         if (c.instrument) c.instrument->setTransportInfo(ti);
         for (auto& d : c.devices)
             if (d) d->setTransportInfo(ti);
@@ -52,14 +50,25 @@ bool RackCore::chainsHostPlugin() const {
     return false;
 }
 
-void RackCore::forwardTempo(double beatStart, double spb, bool playing) {
-    RackState* st = live();
-    if (!st) return;
-    for (auto& c : st->chains) {
+void RackCore::forwardTempoSlow(RackState& st, double beatStart, double spb, bool playing) {
+    for (auto& c : st.chains) {
         if (c.instrument) c.instrument->setTransport(beatStart, spb, playing);
         for (auto& d : c.devices)
             if (d) d->setTransport(beatStart, spb, playing);
     }
+}
+
+void RackCore::prepareParallelScratch(const RackState* st, int32_t minFrames) {
+    if (!st) return;
+    const int32_t n = static_cast<int32_t>(st->chains.size());
+    if (n >= 2) parallelArena_.prepare(n, std::max(minFrames, maxBlock_));
+}
+
+bool RackCore::chainSupportsParallel(const RackChain& c) {
+    if (c.instrument && !c.instrument->supportsParallelRender()) return false;
+    for (const auto& d : c.devices)
+        if (d && !d->bypassed() && !d->supportsParallelRender()) return false;
+    return true;
 }
 
 void RackCore::setRates(double sr, int32_t maxBlock) {
@@ -67,12 +76,25 @@ void RackCore::setRates(double sr, int32_t maxBlock) {
     maxBlock_ = maxBlock > 0 ? maxBlock : kMaxBlock;
     auto st = authoring_;
     if (!st) return;
+    prepareParallelScratch(st.get(), maxBlock_);
     for (auto& c : st->chains) {
         if (c.instrument) c.instrument->setSampleRate(sampleRate_);
         for (auto& d : c.devices)
             if (d) d->setSampleRate(sampleRate_, maxBlock_);
         for (auto& m : c.midiDevices)
             if (m) m->setSampleRate(sampleRate_, maxBlock_);
+    }
+}
+
+void RackCore::ensureChainBlockCapacity(int32_t frames) {
+    if (frames <= 0) return;
+    auto st = authoring_;
+    if (!st) return;
+    prepareParallelScratch(st.get(), frames);
+    for (auto& c : st->chains) {
+        if (c.instrument) c.instrument->ensureBlockCapacity(frames);
+        for (auto& d : c.devices)
+            if (d) d->ensureBlockCapacity(frames);
     }
 }
 
@@ -124,6 +146,19 @@ void RackCore::forkFrom(const RackCore& o) {
     thru_.store(o.thru_.load(r), r);
     sampleRate_ = o.sampleRate_;
     maxBlock_ = o.maxBlock_;
+}
+
+void RackCore::propagateTelemetry(RackState& st) const {
+    for (auto& c : st.chains) {
+        if (c.instrument) c.instrument->setTelemetryMode(telemetryMode_);
+        for (auto& d : c.devices)
+            if (d) d->setTelemetryMode(telemetryMode_);
+    }
+}
+
+void RackCore::setTelemetryMode(dsp::TelemetryMode mode) {
+    telemetryMode_ = mode;
+    if (authoring_) propagateTelemetry(*authoring_);
 }
 
 bool RackCore::setChainName(int32_t c, const std::string& name) {

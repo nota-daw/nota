@@ -109,7 +109,7 @@ void Engine::resolveLoadedPluginLanes() {
             if (pendingLaneIndex(*t, l) >= 0) any = true;
         if (!any) continue;
         auto nt = cloneTrack(*t);
-        for (TrackLane& l : nt->automation)
+        for (TrackLane& l : nt->automation.write())
             if (const int32_t i = pendingLaneIndex(*nt, l); i >= 0) l.paramIndex = i;
         republishWithTrackRaw(id, nt); // not an edit of the user's: no undo step
     }

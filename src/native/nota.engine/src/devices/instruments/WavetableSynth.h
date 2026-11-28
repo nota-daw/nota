@@ -33,6 +33,7 @@
 #include "devices/Instrument.h"
 #include "EnvShape.h"
 #include "devices/instruments/AuroraTable.h"
+#include "dsp/poly/PolyVoiceScheduler.h"
 #include "engine/NoteExpression.h"
 #include "engine/SnapshotHistory.h"
 
@@ -156,6 +157,7 @@ class WavetableSynth final : public Instrument {
     static int macroIdx(int m, int f) { return MacroBase + m * 3 + f; }
 
     WavetableSynth();
+    ~WavetableSynth() override;
 
     int32_t kind() const override { return 5; }
     const char* displayName() const override { return "Nota Aurora"; }
@@ -174,8 +176,12 @@ class WavetableSynth final : public Instrument {
     // Sleep contract: release + chorus/reverb tails ring past note-off (the engine-visible
     // tail). Settles after the hangover; noteOn/noteOff/setParam wake.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     // ---- parameters --------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -308,7 +314,7 @@ class WavetableSynth final : public Instrument {
     // and, through `sideOut`, the half-difference the spread opens up.
     // detF/panL/panR/norm are block-constant per-unison data prepared by render().
     float oscStack(double* ph, double inc, int bank, float pos, int mode, double warpAmt, int uniN,
-        const double* detF, const float* panL, const float* panR, float norm, float& sideOut);
+        const double* detF, const float* panL, const float* panR, float norm, float& sideOut) const;
     // Sub oscillator: the sine DEFINES pitch and stays std::-exact.
     static float subOsc(int wave, double ph) {
         switch (wave) {
@@ -343,7 +349,7 @@ class WavetableSynth final : public Instrument {
     // fastest unison voice's increment and the warp mode's harmonic bias (research R4),
     // so a bright table played high stays below Nyquist.
     float oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode, double warpAmt, int uniN,
-        const double* detF, double maxDet, const float* panL, const float* panR, float norm, float& sideOut);
+        const double* detF, double maxDet, const float* panL, const float* panR, float norm, float& sideOut) const;
     static float harmAmp(int bank, float t, int n);
     // The four banks × sixteen frames are the same read-only 512 KB for every instance and
     // every clone, so they are built once, on first use, and handed out as a pointer.
@@ -400,6 +406,24 @@ class WavetableSynth final : public Instrument {
         int idx = 0;
     };
 
+    struct BlockScalars;
+    struct BlockArrays;
+    struct BatchParams;
+    struct BatchWork;
+    NOTA_NOINLINE BlockScalars snapshotBlockParams(int32_t frames, BlockArrays& a);
+    NOTA_NOINLINE bool publishBlockTelemetry(const BlockScalars& s, const BlockArrays& a) noexcept;
+    void stepFilterSmoothing(const BlockScalars& s, double& f1base, double& f2base, double& reso1, double& reso2) noexcept;
+    void stepLfos(const BlockScalars& s, double& lfo1, double& lfo2) noexcept;
+    float processFxAndMixSample(const BlockScalars& s, float mixL, float mixR, float* dstSample) noexcept;
+    bool renderVoiceSample(const BlockScalars& s, const BlockArrays& a, Voice& v, double lfo1, double lfo2,
+        const BatchWork* bw, int32_t bwIdx, double scalarF1, double scalarF2, double scalarR1, double scalarR2,
+        float& outL, float& outR) const noexcept;
+    void renderVoiceBatch(const BatchParams& bp, const BatchWork& bw, int32_t chunk, Voice* const* vList, int vCount,
+        float* dstL, float* dstR) const;
+    NOTA_NOINLINE bool renderLinear(float* out, int32_t frames);
+    NOTA_NOINLINE bool renderBatched(float* out, int32_t frames);
+
+    static constexpr int32_t kModChunk = 1024;
     Voice voices_[kVoices];
     double sampleRate_ = 44100.0, spb_ = 0.0;
     // The block's start beat and whether the transport plays (setTransport): a synced LFO
@@ -441,8 +465,8 @@ class WavetableSynth final : public Instrument {
 
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;
-    uint64_t quietSamples_ = 0;
-    bool idle_ = false;
+    dsp::SilenceGate gate_{kIdleSamples};
+    std::unique_ptr<BatchWork> batchWork_;
 };
 
 } // namespace nota

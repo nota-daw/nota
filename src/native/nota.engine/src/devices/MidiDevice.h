@@ -94,6 +94,9 @@ class MidiDevice {
     // it by deltaBeats so it carries on across the seam — held keys and all (#29).
     virtual void timeJump(double /*deltaBeats*/) {}
 
+    // True when this MIDI device holds no active notes or scheduled delayed events across silence.
+    virtual bool isIdle() const { return true; }
+
     // Built-in identity (0 = Arpeggiator), or -1 for a future hosted MIDI plugin.
     virtual int32_t midiKind() const { return -1; }
     virtual const char* displayName() const { return "MidiDevice"; }

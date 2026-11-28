@@ -188,6 +188,7 @@ class VoltSynth final : public Instrument {
     void setSampleRate(double sr) override {
         sampleRate_ = sr > 0 ? sr : 44100.0;
         exprCoef_ = exprSmoothCoef(sampleRate_);
+        gate_.prepare(sampleRate_, 0.0);
     }
 
     // MPE: bend → pitch (a keyboard's wheel uses the patch's Bend Range), pressure → level +
@@ -239,8 +240,12 @@ class VoltSynth final : public Instrument {
     // line). Idle only when no voice is sounding — then the voice loop writes
     // nothing and the output stage maps exact silence to silence.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     void render(float* out, int32_t frames) override;
 
@@ -368,7 +373,7 @@ class VoltSynth final : public Instrument {
     int lastVoice_ = -1;            // the voice started last — the one the envelope graphs follow
     std::atomic<float> envTele_[4]; // amp stage, amp progress, filter stage, filter progress
     std::atomic<float> pn_[kNumParams];
-    bool idle_ = false; // sleep flag: set when no voice sounds
+    dsp::SilenceGate gate_{0};
 };
 
 } // namespace nota

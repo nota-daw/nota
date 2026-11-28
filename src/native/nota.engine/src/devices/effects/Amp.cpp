@@ -62,7 +62,7 @@ void Amp::wake() {
 }
 
 void Amp::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetReq_.exchange(false, std::memory_order_relaxed)) resetState();
 
     const Params P = params();
@@ -209,9 +209,6 @@ void Amp::process(float* buf, int32_t frames) {
     compA_.store(compG_, std::memory_order_relaxed);
     if (frames > 0) {
         gateA_.store(gateSum / (float)frames, std::memory_order_relaxed);
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
     }
 }
 
@@ -225,7 +222,7 @@ int32_t Amp::scopeRead(float* out, int32_t maxSamples) const {
     float t[kTele] = {};
     t[S_InPk] = inPkA_.load(std::memory_order_relaxed);
     t[S_OutPk] = outPkA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_SampleRate] = (float)sr;
     const float lvl = t[S_InPk] > 0.004f ? std::min(t[S_InPk], 1.0f) : 0.5f;
     t[S_TestLvl] = lvl;

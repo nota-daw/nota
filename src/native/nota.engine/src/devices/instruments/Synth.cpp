@@ -33,6 +33,7 @@ Synth::Synth() {
 }
 
 void Synth::noteExpression(int32_t pitch, int32_t dim, float value) {
+    wake();
     if (pitch < 0) {
         gexpr_.set(dim, value);
         return;
@@ -80,6 +81,7 @@ void Synth::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> Synth::clone() const {
@@ -142,6 +144,13 @@ void Synth::noteOff(int32_t pitch) {
 }
 
 void Synth::render(float* out, int32_t frames) {
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip) return;
+    gate_.observe(renderBlock(out, frames), frames, gateEpoch);
+}
+
+bool Synth::renderBlock(float* out, int32_t frames) {
     // Snapshot params once per block (denormalise to musical units).
     const int wave = static_cast<int>(std::lround(pn_[Wave].load(std::memory_order_relaxed) * 3.0f));
     const float atkRate = static_cast<float>(1.0 / (secOf(Attack, 0.001, 2.0) * sampleRate_));
@@ -270,16 +279,13 @@ void Synth::render(float* out, int32_t frames) {
         }
     }
     // Sleep: no sounding voice means the loop above wrote nothing.
-    idle_ = true;
     for (const auto& v : voices_)
-        if (v.active) {
-            idle_ = false;
-            break;
-        }
+        if (v.active) return true;
+    return false;
 }
 
 void Synth::wake() {
-    idle_ = false;
+    gate_.wake();
 }
 
 double Synth::oscSample(int wave, double phase, double pw) {

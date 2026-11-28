@@ -885,6 +885,9 @@ public interface IAudioEngine : IDisposable
     int PluginPreviewSerial(int trackId, int deviceIndex);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);
     bool DeviceBypassed(int trackId, int deviceIndex);
+    /// <summary>Auto-sleep policy for hosted plugins and instruments (deviceIndex -1 = instrument).</summary>
+    void SetPluginSleepMode(int trackId, int deviceIndex, PluginSleepMode mode);
+    PluginSleepMode GetPluginSleepMode(int trackId, int deviceIndex);
     /// <summary>Fold (specs/022): the Devices panel draws the device as a narrow strip.
     /// deviceIndex -1 = the instrument. Kept on the device; saved with the project.</summary>
     void SetDeviceFolded(int trackId, int deviceIndex, bool folded);
@@ -1225,6 +1228,7 @@ public interface IAudioEngine : IDisposable
 
     // --- Level meters (M6-2) -----------------------------------------------
     bool TryGetTrackMeter(int trackId, out NotaMeter meter);
+    int ReadTrackMeters(Span<TrackMeterReading> destination);
     NotaMeter MasterMeter();
     /// <summary>The Cue bus after the Cue level (specs/089).</summary>
     NotaMeter CueMeter();
@@ -1614,6 +1618,16 @@ public interface IAudioEngine : IDisposable
 
     /// <summary>Smoothed real-time DSP load, 0..1 (0 when no live device runs).</summary>
     float CpuLoad { get; }
+    /// <summary>Controls how built-in devices measure per-block CPU usage on the audio thread.</summary>
+    DeviceTelemetryMode DeviceTelemetry { get; set; }
+
+    // --- Streaming disk audio sources & hybrid anticipative buffering (Phase 6, #1050) ---
+    long StreamThresholdBytes { get; set; }
+    SampleLoadPolicy SampleLoadPolicy { get; set; }
+    bool IsSampleStreaming(long sampleId);
+    NotaStreamingStats GetStreamingStats();
+    HybridBufferMode HybridBuffering { get; set; }
+    NotaHybridBufferStats GetHybridStats();
 
     // --- CV modulation (Phase 3, Modular editor) ---------------------------
     // Modulator (LFO) sources + CV links to built-in device params on the same track.

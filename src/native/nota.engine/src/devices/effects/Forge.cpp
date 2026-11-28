@@ -71,7 +71,7 @@ void Forge::wake() {
 }
 
 void Forge::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetReq_.exchange(false, std::memory_order_acquire)) {
         lfoPhase_ = 0;
         inPkM_ = outPkM_ = 0;
@@ -255,9 +255,6 @@ void Forge::process(float* buf, int32_t frames) {
         outRmsA_.store(dbMs(msOut_), std::memory_order_relaxed);
         inLvlA_.store(inLvl_, std::memory_order_relaxed);
         envA_.store(std::min(env_, 1.0f), std::memory_order_relaxed);
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
     }
 }
 
@@ -347,7 +344,7 @@ int32_t Forge::scopeRead(float* out, int32_t maxSamples) const {
     t[S_InRms] = inRmsA_.load(std::memory_order_relaxed);
     t[S_OutRms] = outRmsA_.load(std::memory_order_relaxed);
     t[S_SampleRate] = srA_.load(std::memory_order_relaxed);
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Latency] = (float)latencySamples();
     t[S_OsFactor] = (float)(1 << osIndex());
     t[S_Lfo] = lfoLive_.load(std::memory_order_relaxed);

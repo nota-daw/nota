@@ -261,6 +261,108 @@
           </Style>
         </Style>
       </ControlTheme>
+
+      <!-- ===== Scrollbars (spec 010 / #1113) ===================================
+           A thin 5px muted pill on a transparent 9px track, with no Fluent arrow
+           buttons, track fill, or 16px hover expansion: state changes only the
+           thumb's colour over 120ms ease-out. -->
+      <ControlTheme x:Key="NotaScrollBarPageButton" TargetType="RepeatButton">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Border Background="{TemplateBinding Background}"/>
+          </ControlTemplate>
+        </Setter>
+      </ControlTheme>
+
+      <ControlTheme x:Key="NotaScrollBarThumb" TargetType="Thumb">
+        <Setter Property="Background" Value="{DynamicResource Brush.Rule}"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.Group}"/>
+        <Setter Property="Template">
+          <ControlTemplate>
+            <Border Background="Transparent">
+              <Border Name="PART_Thumb"
+                      Background="{TemplateBinding Background}"
+                      CornerRadius="{TemplateBinding CornerRadius}"
+                      Margin="2">
+                <Border.Transitions>
+                  <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" Easing="CubicEaseOut"/>
+                  </Transitions>
+                </Border.Transitions>
+              </Border>
+            </Border>
+          </ControlTemplate>
+        </Setter>
+      </ControlTheme>
+
+      <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Style Selector="^:vertical">
+          <Setter Property="Width" Value="9"/>
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="{TemplateBinding Background}">
+                <Track Minimum="{TemplateBinding Minimum}"
+                       Maximum="{TemplateBinding Maximum}"
+                       ViewportSize="{TemplateBinding ViewportSize}"
+                       Orientation="{TemplateBinding Orientation}"
+                       IsDirectionReversed="True"
+                       Value="{TemplateBinding Value, Mode=TwoWay}">
+                  <Track.DecreaseButton>
+                    <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource NotaScrollBarPageButton}"/>
+                  </Track.DecreaseButton>
+                  <Track.IncreaseButton>
+                    <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource NotaScrollBarPageButton}"/>
+                  </Track.IncreaseButton>
+                  <Track.Thumb>
+                    <Thumb Theme="{StaticResource NotaScrollBarThumb}" MinHeight="20"/>
+                  </Track.Thumb>
+                </Track>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^:horizontal">
+          <Setter Property="Height" Value="9"/>
+          <Setter Property="Template">
+            <ControlTemplate>
+              <Border Background="{TemplateBinding Background}">
+                <Track Minimum="{TemplateBinding Minimum}"
+                       Maximum="{TemplateBinding Maximum}"
+                       ViewportSize="{TemplateBinding ViewportSize}"
+                       Orientation="{TemplateBinding Orientation}"
+                       Value="{TemplateBinding Value, Mode=TwoWay}">
+                  <Track.DecreaseButton>
+                    <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource NotaScrollBarPageButton}"/>
+                  </Track.DecreaseButton>
+                  <Track.IncreaseButton>
+                    <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource NotaScrollBarPageButton}"/>
+                  </Track.IncreaseButton>
+                  <Track.Thumb>
+                    <Thumb Theme="{StaticResource NotaScrollBarThumb}" MinWidth="20"/>
+                  </Track.Thumb>
+                </Track>
+              </Border>
+            </ControlTemplate>
+          </Setter>
+        </Style>
+        <Style Selector="^:pointerover /template/ Thumb, ^ /template/ Thumb:pointerover">
+          <Setter Property="Background" Value="{DynamicResource Brush.TextFaint}"/>
+        </Style>
+        <Style Selector="^ /template/ Thumb:pressed">
+          <Setter Property="Background" Value="{DynamicResource Brush.TextMuted}"/>
+        </Style>
+        <Style Selector="^:disabled /template/ Thumb">
+          <Setter Property="IsVisible" Value="False"/>
+        </Style>
+      </ControlTheme>
     </ResourceDictionary>
   </Styles.Resources>
 
@@ -1408,31 +1510,12 @@
     <Setter Property="FontSize" Value="10.5"/>
   </Style>
 
-  <!-- ===== Scrollbars: a thin muted thumb on a transparent track ===== -->
-  <Style Selector="ScrollBar">
+  <!-- ===== Scrollbars =====
+       ScrollBar takes its own Nota ControlTheme (above in Styles.Resources) so Fluent's
+       16px hover expansion, track box and arrow buttons never appear. Keep ScrollViewer's
+       corner square hidden when both bars show. -->
+  <Style Selector="ScrollViewer /template/ Panel#PART_ScrollBarsSeparator">
     <Setter Property="Background" Value="Transparent"/>
-  </Style>
-  <Style Selector="ScrollBar:vertical">
-    <Setter Property="Width" Value="9"/>
-  </Style>
-  <Style Selector="ScrollBar:horizontal">
-    <Setter Property="Height" Value="9"/>
-  </Style>
-  <Style Selector="ScrollBar /template/ Thumb">
-    <Setter Property="Background" Value="{DynamicResource Brush.Rule}"/>
-    <Setter Property="CornerRadius" Value="{StaticResource Radius.Group}"/>
-    <Setter Property="MinWidth" Value="5"/>
-    <Setter Property="MinHeight" Value="5"/>
-  </Style>
-  <Style Selector="ScrollBar:pointerover /template/ Thumb">
-    <Setter Property="Background" Value="{DynamicResource Brush.TextFaint}"/>
-  </Style>
-  <Style Selector="ScrollBar /template/ Thumb:pressed">
-    <Setter Property="Background" Value="{DynamicResource Brush.TextMuted}"/>
-  </Style>
-  <!-- Track buttons (the little arrows) are noise at this scale — hide them. -->
-  <Style Selector="ScrollBar /template/ RepeatButton">
-    <Setter Property="Opacity" Value="0"/>
-    <Setter Property="IsHitTestVisible" Value="False"/>
+    <Setter Property="IsVisible" Value="False"/>
   </Style>
 </Styles>

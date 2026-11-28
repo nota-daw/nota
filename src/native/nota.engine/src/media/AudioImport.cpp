@@ -3,6 +3,7 @@
 
 #include "AudioImport.h"
 #include "AudioFile.h"
+#include "StreamingAudioSource.h"
 #include "TempoDetect.h"
 
 // Declarations only — the implementations live in AudioFile.cpp.
@@ -51,7 +52,8 @@ struct AudioImportJob::Decoder {
 
 AudioImportJob::~AudioImportJob() = default;
 
-std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path, double maxSeconds) {
+std::unique_ptr<AudioImportJob> AudioImportJob::open(
+    const std::string& path, double maxSeconds, const AudioDecodeOptions& opts) {
     std::string ext;
     if (auto dot = path.find_last_of('.'); dot != std::string::npos) ext = path.substr(dot + 1);
     std::transform(
@@ -102,13 +104,14 @@ std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path, do
     auto job = std::unique_ptr<AudioImportJob>(new AudioImportJob());
     job->buf_ = std::make_shared<SampleBuffer>();
     job->buf_->sourceSampleRate = rate;
+    job->path_ = path;
     if (channels == 0 || rate <= 0.0) return nullptr;
 
     if (total == 0) {
         // Length unknown up front (a streamed FLAC without it in STREAMINFO): no block-wise
         // progress possible, so fall back to decoding it whole here.
         dec->close();
-        auto whole = decodeAudioFile(path);
+        auto whole = decodeAudioFile(path, opts);
         if (!whole || whole->empty()) return nullptr;
         job->buf_ = std::move(whole);
         job->decoded_ = job->buf_->frames;
@@ -121,8 +124,24 @@ std::unique_ptr<AudioImportJob> AudioImportJob::open(const std::string& path, do
     if (maxSeconds > 0.0) total = std::min<uint64_t>(total, static_cast<uint64_t>(std::max(1.0, maxSeconds * rate)));
     job->buf_->channels = static_cast<int32_t>(channels);
     job->buf_->frames = static_cast<int64_t>(total);
-    job->buf_->samples.assign(static_cast<size_t>(total) * channels, 0.0f);
-    job->buf_->updatePeakTable(0, 0); // allocate the overview (all "no data")
+
+    const int64_t threshold = std::max<int64_t>(0, opts.streamThresholdBytes);
+    const int64_t estimatedBytes = static_cast<int64_t>(total) * static_cast<int64_t>(channels) * sizeof(float);
+    const bool useStreaming = (maxSeconds <= 0.0) &&
+                              ((opts.policy == SampleLoadPolicy::StreamAlways) ||
+                                  (opts.policy == SampleLoadPolicy::Auto && threshold > 0 && estimatedBytes > threshold));
+    job->streaming_ = useStreaming;
+    if (useStreaming) {
+        // Leave samples empty; allocate only peak/RMS overview tables + tiny carryover buffer.
+        const int64_t nBlocks = job->buf_->peakBlocks();
+        job->buf_->peakTable.assign(static_cast<size_t>(nBlocks * 2), 0.0f);
+        job->buf_->rmsTable.assign(static_cast<size_t>(nBlocks), 0.0f);
+        job->buf_->fillSentinel(0, nBlocks);
+        job->streamCarry_.assign(static_cast<size_t>(SampleBuffer::kPeakBlock) * channels, 0.0f);
+    } else {
+        job->buf_->samples.assign(static_cast<size_t>(total) * channels, 0.0f);
+        job->buf_->updatePeakTable(0, 0); // allocate the overview (all "no data")
+    }
     job->dec_ = std::move(dec);
     return job;
 }
@@ -132,10 +151,58 @@ int32_t AudioImportJob::step(int64_t maxFrames) {
     if (!dec_ || !buf_) return -1;
     SampleBuffer& b = *buf_;
     const int64_t want = std::min<int64_t>(std::max<int64_t>(1, maxFrames), b.frames - decoded_);
-    const uint64_t got = dec_->read(static_cast<uint64_t>(want), b.samples.data() + decoded_ * b.channels);
     const int64_t before = decoded_;
-    decoded_ += static_cast<int64_t>(got);
-    if (!seeded_) b.updatePeakTable(before, decoded_);
+    uint64_t got = 0;
+
+    if (streaming_) {
+        const size_t needSize = static_cast<size_t>(want + streamCarryFrames_) * static_cast<size_t>(b.channels);
+        if (streamScratch_.size() < needSize) streamScratch_.resize(needSize);
+        if (streamCarryFrames_ > 0) {
+            std::copy_n(streamCarry_.data(), static_cast<size_t>(streamCarryFrames_) * b.channels,
+                streamScratch_.data());
+        }
+        got = dec_->read(
+            static_cast<uint64_t>(want), streamScratch_.data() + static_cast<size_t>(streamCarryFrames_) * b.channels);
+        decoded_ += static_cast<int64_t>(got);
+
+        const int64_t blockStartFrame = before - streamCarryFrames_;
+        const int64_t totalChunkFrames = streamCarryFrames_ + static_cast<int64_t>(got);
+        const int64_t fullBlocks = totalChunkFrames / SampleBuffer::kPeakBlock;
+        if (!seeded_) {
+            for (int64_t bi = 0; bi < fullBlocks; ++bi) {
+                const int64_t blkIdx = blockStartFrame / SampleBuffer::kPeakBlock + bi;
+                if (blkIdx < 0 || blkIdx >= b.peakBlocks()) continue;
+                const float* ptr =
+                    streamScratch_.data() + static_cast<size_t>(bi * SampleBuffer::kPeakBlock) * b.channels;
+                float mn = 1.0f, mx = -1.0f;
+                double sq = 0.0;
+                for (int64_t f = 0; f < SampleBuffer::kPeakBlock; ++f) {
+                    const float l = ptr[static_cast<size_t>(f) * b.channels];
+                    const float r = b.channels >= 2 ? ptr[static_cast<size_t>(f) * b.channels + 1] : l;
+                    const float mid = 0.5f * (l + r);
+                    mn = std::min(mn, mid);
+                    mx = std::max(mx, mid);
+                    const double dmid = 0.5 * (static_cast<double>(l) + static_cast<double>(r));
+                    sq += dmid * dmid;
+                }
+                b.peakTable[static_cast<size_t>(blkIdx) * 2] = mn;
+                b.peakTable[static_cast<size_t>(blkIdx) * 2 + 1] = mx;
+                b.rmsTable[static_cast<size_t>(blkIdx)] =
+                    static_cast<float>(sq / static_cast<double>(SampleBuffer::kPeakBlock));
+            }
+        }
+        const int64_t rem = totalChunkFrames - fullBlocks * SampleBuffer::kPeakBlock;
+        if (rem > 0) {
+            std::copy_n(streamScratch_.data() + static_cast<size_t>(fullBlocks * SampleBuffer::kPeakBlock) * b.channels,
+                static_cast<size_t>(rem) * b.channels, streamCarry_.data());
+        }
+        streamCarryFrames_ = rem;
+    } else {
+        got = dec_->read(static_cast<uint64_t>(want), b.samples.data() + decoded_ * b.channels);
+        decoded_ += static_cast<int64_t>(got);
+        if (!seeded_) b.updatePeakTable(before, decoded_);
+    }
+
     if (got < static_cast<uint64_t>(want) || decoded_ >= b.frames) finish();
     return done_ ? 0 : 1;
 }
@@ -144,6 +211,36 @@ int32_t AudioImportJob::step(int64_t maxFrames) {
 // file), rebuild the overview from the real samples, release the decoder.
 void AudioImportJob::finish() {
     SampleBuffer& b = *buf_;
+    if (streaming_) {
+        if (decoded_ < b.frames) b.frames = decoded_;
+        if (!seeded_ && streamCarryFrames_ > 0 && b.peakBlocks() > 0) {
+            const int64_t lastBlk = b.peakBlocks() - 1;
+            float mn = 1.0f, mx = -1.0f;
+            double sq = 0.0;
+            for (int64_t f = 0; f < streamCarryFrames_; ++f) {
+                const float l = streamCarry_[static_cast<size_t>(f) * b.channels];
+                const float r = b.channels >= 2 ? streamCarry_[static_cast<size_t>(f) * b.channels + 1] : l;
+                const float mid = 0.5f * (l + r);
+                mn = std::min(mn, mid);
+                mx = std::max(mx, mid);
+                const double dmid = 0.5 * (static_cast<double>(l) + static_cast<double>(r));
+                sq += dmid * dmid;
+            }
+            b.peakTable[static_cast<size_t>(lastBlk) * 2] = mn;
+            b.peakTable[static_cast<size_t>(lastBlk) * 2 + 1] = mx;
+            b.rmsTable[static_cast<size_t>(lastBlk)] =
+                static_cast<float>(sq / static_cast<double>(streamCarryFrames_));
+        }
+        streamCarry_.clear();
+        streamCarry_.shrink_to_fit();
+        streamScratch_.clear();
+        streamScratch_.shrink_to_fit();
+        if (dec_) dec_->close();
+        dec_.reset();
+        b.source = StreamingAudioSource::open(path_, seeded_ ? &b.peakTable : nullptr, seeded_ ? &b.rmsTable : nullptr);
+        done_ = true;
+        return;
+    }
     if (decoded_ < b.frames) {
         b.frames = decoded_;
         b.samples.resize(static_cast<size_t>(decoded_) * b.channels);
@@ -164,17 +261,19 @@ int32_t AudioImportJob::peaks(float* out, int32_t maxPoints) const {
     const int32_t buckets = static_cast<int32_t>(std::min<int64_t>(maxPoints, b.frames));
     // Seeded and still decoding: read the cached blocks only — the samples under a partial
     // edge block may not be decoded yet, and scanning those zeros would skew the bucket.
-    const bool fromTable = seeded_ && !done_;
+    const bool fromTable = (seeded_ || streaming_) && !done_;
     const int64_t ready = done_ ? b.frames : decoded_; // else only the decoded prefix
     for (int32_t i = 0; i < buckets; ++i) {
         const int64_t f0 = b.frames * i / buckets, f1 = b.frames * (i + 1) / buckets;
         float mn = 1.0f, mx = -1.0f; // "not decoded yet"
         if (fromTable) {
-            const int64_t b1 = std::max(
-                f0 / SampleBuffer::kPeakBlock + 1, (f1 + SampleBuffer::kPeakBlock - 1) / SampleBuffer::kPeakBlock);
-            for (int64_t k = f0 / SampleBuffer::kPeakBlock; k < b1 && k < b.peakBlocks(); ++k) {
-                mn = std::min(mn, b.peakTable[k * 2]);
-                mx = std::max(mx, b.peakTable[k * 2 + 1]);
+            if (f0 < ready || seeded_) {
+                const int64_t b1 = std::max(
+                    f0 / SampleBuffer::kPeakBlock + 1, (f1 + SampleBuffer::kPeakBlock - 1) / SampleBuffer::kPeakBlock);
+                for (int64_t k = f0 / SampleBuffer::kPeakBlock; k < b1 && k < b.peakBlocks(); ++k) {
+                    mn = std::min(mn, b.peakTable[k * 2]);
+                    mx = std::max(mx, b.peakTable[k * 2 + 1]);
+                }
             }
         } else if (f0 < ready) {
             b.peakRange(f0, std::min(f1, ready), mn, mx);

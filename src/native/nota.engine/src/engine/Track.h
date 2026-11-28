@@ -17,6 +17,7 @@
 #include "Modulation.h"
 #include "media/SampleBuffer.h"
 #include "SessionPlayer.h"
+#include "TrackContent.h"
 #include "media/Warp.h"
 #include "audio_io/AudioInput.h" // kMaxInputChannels
 #include <algorithm>
@@ -29,6 +30,8 @@
 #include <vector>
 
 namespace nota {
+
+class TimelineIndex;
 
 // Per-clip ADSR amplitude shape for audio clips, in PLAYED time (clip-local beats, so it
 // follows trims/reverse the way the ear hears the clip). Attack ramps 0→1 from the clip
@@ -423,22 +426,33 @@ class Track {
     bool frozen() const { return frozen_.load(std::memory_order_relaxed); }
     void setFrozen(bool f) { frozen_.store(f, std::memory_order_relaxed); }
 
-    // Immutable after publish (only touched while building a snapshot).
-    std::vector<AudioClip> clips;           // audio tracks
-    std::vector<AudioTake> takes;           // audio loop-recording passes (specs/067), recording order
-    std::vector<MidiClip> midiClips;        // instrument tracks
+    // Immutable after publish (only touched while building a snapshot via .write()).
+    CowSlice<AudioClip> clips;              // audio tracks
+    CowSlice<AudioTake> takes;              // audio loop-recording passes (specs/067), recording order
+    CowSlice<MidiClip> midiClips;           // instrument tracks
+    std::shared_ptr<const TimelineIndex> timelineIndex; // O(log N) interval index built in publishRaw()
     // Articulation map (specs/085), instrument tracks: the compiled table the scheduler reads and
     // the map itself as the UI's JSON (saved with the project, restored by undo). Both immutable
     // and shared between snapshots; an edit swaps them as a pair. Null = no map.
     std::shared_ptr<const ArticulationTable> articulationTable;
     std::shared_ptr<const std::string> articulationMapJson;
-    std::vector<SessionSlot> sessionSlots;  // Session view, one per scene (M5)
-    std::vector<TrackLane> automation; // parameter automation lanes (M9)
+    CowSlice<SessionSlot> sessionSlots;     // Session view, one per scene (M5)
+    CowSlice<TrackLane> automation;         // parameter automation lanes (M9)
 
     // CV modulation (Phase 3, Modular editor). Sources + edges to device params.
-    // Config lives in atomics (live-tweakable); add/remove is structural (clone).
-    std::vector<Modulator> modulators;
-    std::vector<CvLink> cvLinks;
+    // Config lives in atomics (live-tweakable); add/remove is structural (CoW clone).
+    CowSlice<Modulator> modulators;
+    CowSlice<CvLink> cvLinks;
+
+    void sealContent() noexcept {
+        clips.seal();
+        takes.seal();
+        midiClips.seal();
+        sessionSlots.seal();
+        automation.seal();
+        modulators.seal();
+        cvLinks.seal();
+    }
     // Where each Arp on this track (top level or in a rack chain) sends its CC lane, as published
     // with this snapshot: the audio thread reads the route from here, so a new device order and
     // the targets that fit it go live together (an Arp is shared by every snapshot and keeps
@@ -540,8 +554,6 @@ inline int32_t sessionClipIndex(int32_t scene) {
 }
 
 const AudioClip* audioClipRef(const Track& t, int32_t clipIndex);
-inline AudioClip* audioClipRef(Track& t, int32_t clipIndex) {
-    return const_cast<AudioClip*>(audioClipRef(static_cast<const Track&>(t), clipIndex));
-}
+AudioClip* audioClipWrite(Track& t, int32_t clipIndex);
 
 } // namespace nota

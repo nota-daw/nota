@@ -13,7 +13,9 @@
 #include "Chamber.h"
 
 #include "dsp/math/FastMath.h"
+#include "dsp/math/Simd.h"
 #include "dsp/math/SimdAudio.h"
+#include "dsp/primitives/Convolution.h"
 #include "dsp/primitives/Hadamard.h"
 
 #include <signalsmith-linear/fft.h>
@@ -271,16 +273,6 @@ void Biquad::highShelf(double f, double db, double sr) {
 // Zero-latency partitioned convolution
 // ============================================================================
 
-void cmac(float* __restrict ar, float* __restrict ai, const float* __restrict xr, const float* __restrict xi,
-    const float* __restrict hr, const float* __restrict hi, int b) {
-    ar[0] += xr[0] * hr[0]; // bin 0 packs DC (re) and Nyquist (im): two real products
-    ai[0] += xi[0] * hi[0];
-    for (int i = 1; i < b; ++i) {
-        ar[i] += xr[i] * hr[i] - xi[i] * hi[i];
-        ai[i] += xr[i] * hi[i] + xi[i] * hr[i];
-    }
-}
-
 class ConvKernel {
   public:
     struct Path {
@@ -428,9 +420,7 @@ class ConvKernel {
                     for (int p = 0; p < nPaths; ++p) {
                         const float* win = &hist[static_cast<size_t>(paths[p].in) * 2 * f + pos + 1];
                         const float* tp = &taps[static_cast<size_t>(paths[p].k) * f];
-                        float acc = 0.0f;
-                        for (int t = 0; t < f; ++t) acc += tp[t] * win[t];
-                        (paths[p].out == 0 ? oL : oR)[i] += acc;
+                        (paths[p].out == 0 ? oL : oR)[i] += nota::simd::dot(tp, win, f);
                     }
                 }
                 if (++pos >= f) pos = 0;
@@ -581,7 +571,7 @@ class ConvKernel {
                         if (!live[static_cast<size_t>(ph.in) * P + s]) continue;
                         const size_t xo = (static_cast<size_t>(ph.in) * P + s) * B;
                         const size_t ho = (static_cast<size_t>(ph.k) * P + j) * B;
-                        cmac(accR, accI, &Xr[xo], &Xi[xo], &Hr[ho], &Hi[ho], B);
+                        nota::dsp::accumulatePackedSpectrum(accR, accI, &Xr[xo], &Xi[xo], &Hr[ho], &Hi[ho], B);
                         any[ph.out] = true;
                     }
                 }
@@ -814,7 +804,7 @@ void Chamber::flushSpill() {
 
 void Chamber::process(float* buf, int32_t frames) {
     if (!prepared_ || frames <= 0) return;
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     flushSpill();
     if (!xfOld_)
         if (auto* k = ready_.exchange(nullptr, std::memory_order_acq_rel)) install(k);
@@ -1045,9 +1035,6 @@ void Chamber::process(float* buf, int32_t frames) {
     kernA_.store((cur_ ? 1 : 0) + (fade_ ? 1 : 0) + (ramp_ ? 1 : 0) + (xfOld_ ? 1 : 0), std::memory_order_relaxed);
     kernSecA_.store(cur_ ? cur_->seconds : 0.0f, std::memory_order_relaxed);
     bpmA_.store(static_cast<float>(60.0 * sr / spb_), std::memory_order_relaxed);
-    const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    cpuS_ = cpuS_ * 0.9 + (el / (frames / sr)) * 0.1;
-    cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
 }
 
 const char* Chamber::paramName(int32_t i) const {
@@ -1083,7 +1070,7 @@ int32_t Chamber::scopeRead(float* out, int32_t maxSamples) const {
     out[S_OutL] = mOutL_.load(std::memory_order_relaxed);
     out[S_OutR] = mOutR_.load(std::memory_order_relaxed);
     out[S_DuckDb] = mDuck_.load(std::memory_order_relaxed);
-    out[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    out[S_Cpu] = readScopeCpuLoad();
     out[S_Latency] = static_cast<float>(latA_.load(std::memory_order_relaxed));
     out[S_SampleRate] = static_cast<float>(srA_.load(std::memory_order_relaxed));
     out[S_Building] =

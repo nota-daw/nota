@@ -202,10 +202,9 @@ class Prism final : public Device {
     std::atomic<uint32_t> traceWA_{0};
     int traceDiv_ = 256, traceCount_ = 0;
     std::atomic<float> gr_[kBands] = {}, boost_[kBands] = {}, level_[kBands] = {};
-    std::atomic<float> mOutL_{0}, mOutR_{0}, mIn_{0}, cpuA_{0}, srA_{44100}, clipA_{0}, xlA_{180}, xhA_{2400};
+    std::atomic<float> mOutL_{0}, mOutR_{0}, mIn_{0}, srA_{44100}, clipA_{0}, xlA_{180}, xhA_{2400};
     std::atomic<int32_t> bandsA_{3};
     std::atomic<bool> scActA_{false};
-    double cpuS_ = 0.0;
 };
 
 } // namespace nota

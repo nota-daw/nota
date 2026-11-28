@@ -66,6 +66,7 @@ void OperatorSynth::setSampleRate(double sr) {
 }
 
 void OperatorSynth::noteExpression(int32_t pitch, int32_t dim, float value) {
+    wake();
     if (pitch < 0) {
         gexpr_.set(dim, value);
         return;
@@ -78,8 +79,7 @@ void OperatorSynth::noteExpression(int32_t pitch, int32_t dim, float value) {
 }
 
 void OperatorSynth::wake() {
-    idle_ = false;
-    quietSamples_ = 0;
+    gate_.wake();
 }
 
 std::string OperatorSynth::pluginParamId(int32_t i) const {
@@ -147,6 +147,7 @@ void OperatorSynth::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> OperatorSynth::clone() const {
@@ -204,6 +205,9 @@ void OperatorSynth::allNotesOff() {
 }
 
 void OperatorSynth::render(float* out, int32_t frames) {
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip) return;
     const int algo = std::clamp((int)std::lround(get(Algo) * (kNumAlgos - 1.0f)), 0, kNumAlgos - 1);
     const int8_t* tgt = kAlgo[algo];
     const double fb = get(Feedback) * 0.9;
@@ -360,13 +364,7 @@ void OperatorSynth::render(float* out, int32_t frames) {
             publishEnvTele(envTele_ + o * kEnvTeleFloats, on, on ? lv->stage[o] : Stage::Off,
                 on ? &lv->shape[o] : nullptr, on ? lv->env[o] : 0.0f, (float)sus[o]);
     }
-    if (live == 0 && peak <= 1.0e-5f) {
-        quietSamples_ += (uint64_t)frames;
-        if (quietSamples_ > kIdleSamples) idle_ = true;
-    } else {
-        quietSamples_ = 0;
-        idle_ = false;
-    }
+    gate_.observe(live > 0 || peak > 1.0e-5f, frames, gateEpoch);
 }
 
 // The harmonic bars (kSpecBins), then — for a caller that asks for more — the four operator

@@ -16,6 +16,16 @@
 namespace nota {
 namespace simd_audio {
 
+// Peak absolute amplitude of a flat or interleaved float buffer (delegates to Simd.h).
+inline float peakAbs(const float* src, int32_t count) noexcept {
+    return nota::simd::maxAbs(src, count);
+}
+
+// Single-pass peak absolute amplitude finder and sum-of-squares accumulator (delegates to Simd.h).
+inline void peakAndSumSquares(const float* src, int32_t count, float& outPeak, double& outSumSquares) noexcept {
+    nota::simd::peakAndSumSquares(src, count, outPeak, outSumSquares);
+}
+
 // Fast, early-exiting silence detection for flat or interleaved float audio buffers.
 // Returns true if all samples have an absolute amplitude <= threshold (default 1e-5f ≈ -100 dBFS).
 inline bool isSilent(const float* src, int32_t count, float threshold = 1.0e-5f) noexcept {
@@ -67,126 +77,6 @@ inline bool isSilent(const float* src, int32_t count, float threshold = 1.0e-5f)
         if (std::fabs(src[i]) > threshold) return false;
     }
     return true;
-}
-
-// Peak absolute amplitude of a flat or interleaved float buffer (0 when empty). For a
-// peak a device needs only once per block: one pass after the loop is cheaper than a
-// running max inside a per-sample loop.
-inline float peakAbs(const float* src, int32_t count) noexcept {
-    if (!src || count <= 0) return 0.0f;
-    int32_t i = 0;
-    float peak = 0.0f;
-#if defined(NOTA_SIMD_NEON)
-    float32x4_t m0 = vdupq_n_f32(0.0f), m1 = vdupq_n_f32(0.0f);
-    for (; i + 8 <= count; i += 8) {
-        m0 = vmaxq_f32(m0, vabsq_f32(vld1q_f32(src + i)));
-        m1 = vmaxq_f32(m1, vabsq_f32(vld1q_f32(src + i + 4)));
-    }
-    peak = vmaxvq_f32(vmaxq_f32(m0, m1));
-#elif defined(NOTA_SIMD_SSE)
-    static const __m128 absMask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff));
-    __m128 m0 = _mm_setzero_ps(), m1 = _mm_setzero_ps();
-    for (; i + 8 <= count; i += 8) {
-        m0 = _mm_max_ps(m0, _mm_and_ps(_mm_loadu_ps(src + i), absMask));
-        m1 = _mm_max_ps(m1, _mm_and_ps(_mm_loadu_ps(src + i + 4), absMask));
-    }
-    __m128 m = _mm_max_ps(m0, m1);
-    m = _mm_max_ps(m, _mm_movehl_ps(m, m));
-    m = _mm_max_ss(m, _mm_shuffle_ps(m, m, 1));
-    peak = _mm_cvtss_f32(m);
-#endif
-    for (; i < count; ++i) peak = std::max(peak, std::fabs(src[i]));
-    return peak;
-}
-
-// Single-pass peak absolute amplitude finder and sum-of-squares accumulator for float audio buffers.
-inline void peakAndSumSquares(const float* src, int32_t count, float& outPeak, double& outSumSquares) noexcept {
-    if (!src || count <= 0) {
-        outPeak = 0.0f;
-        outSumSquares = 0.0;
-        return;
-    }
-    int32_t i = 0;
-    float peak = 0.0f;
-    double sumSq = 0.0;
-#if defined(NOTA_SIMD_NEON)
-    float32x4_t maxv = vdupq_n_f32(0.0f);
-    float32x4_t sq0 = vdupq_n_f32(0.0f);
-    float32x4_t sq1 = vdupq_n_f32(0.0f);
-    float32x4_t sq2 = vdupq_n_f32(0.0f);
-    float32x4_t sq3 = vdupq_n_f32(0.0f);
-    for (; i + 16 <= count; i += 16) {
-        const float32x4_t r0 = vld1q_f32(src + i);
-        const float32x4_t r1 = vld1q_f32(src + i + 4);
-        const float32x4_t r2 = vld1q_f32(src + i + 8);
-        const float32x4_t r3 = vld1q_f32(src + i + 12);
-        maxv = vmaxq_f32(maxv, vabsq_f32(r0));
-        maxv = vmaxq_f32(maxv, vabsq_f32(r1));
-        maxv = vmaxq_f32(maxv, vabsq_f32(r2));
-        maxv = vmaxq_f32(maxv, vabsq_f32(r3));
-        sq0 = vmlaq_f32(sq0, r0, r0);
-        sq1 = vmlaq_f32(sq1, r1, r1);
-        sq2 = vmlaq_f32(sq2, r2, r2);
-        sq3 = vmlaq_f32(sq3, r3, r3);
-    }
-    for (; i + 4 <= count; i += 4) {
-        const float32x4_t r = vld1q_f32(src + i);
-        maxv = vmaxq_f32(maxv, vabsq_f32(r));
-        sq0 = vmlaq_f32(sq0, r, r);
-    }
-    peak = vmaxvq_f32(maxv);
-    const float32x4_t sqSum = vaddq_f32(vaddq_f32(sq0, sq1), vaddq_f32(sq2, sq3));
-    sumSq = static_cast<double>(vaddvq_f32(sqSum));
-#elif defined(NOTA_SIMD_SSE)
-    static const __m128 absMask = _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff));
-    __m128 maxv = _mm_setzero_ps();
-    __m128 sq0 = _mm_setzero_ps(), sq1 = _mm_setzero_ps(), sq2 = _mm_setzero_ps(), sq3 = _mm_setzero_ps();
-    for (; i + 16 <= count; i += 16) {
-        const __m128 r0 = _mm_loadu_ps(src + i);
-        const __m128 r1 = _mm_loadu_ps(src + i + 4);
-        const __m128 r2 = _mm_loadu_ps(src + i + 8);
-        const __m128 r3 = _mm_loadu_ps(src + i + 12);
-        maxv = _mm_max_ps(maxv, _mm_and_ps(r0, absMask));
-        maxv = _mm_max_ps(maxv, _mm_and_ps(r1, absMask));
-        maxv = _mm_max_ps(maxv, _mm_and_ps(r2, absMask));
-        maxv = _mm_max_ps(maxv, _mm_and_ps(r3, absMask));
-#if defined(NOTA_SIMD_FMA)
-        sq0 = _mm_fmadd_ps(r0, r0, sq0);
-        sq1 = _mm_fmadd_ps(r1, r1, sq1);
-        sq2 = _mm_fmadd_ps(r2, r2, sq2);
-        sq3 = _mm_fmadd_ps(r3, r3, sq3);
-#else
-        sq0 = _mm_add_ps(sq0, _mm_mul_ps(r0, r0));
-        sq1 = _mm_add_ps(sq1, _mm_mul_ps(r1, r1));
-        sq2 = _mm_add_ps(sq2, _mm_mul_ps(r2, r2));
-        sq3 = _mm_add_ps(sq3, _mm_mul_ps(r3, r3));
-#endif
-    }
-    for (; i + 4 <= count; i += 4) {
-        const __m128 r = _mm_loadu_ps(src + i);
-        maxv = _mm_max_ps(maxv, _mm_and_ps(r, absMask));
-#if defined(NOTA_SIMD_FMA)
-        sq0 = _mm_fmadd_ps(r, r, sq0);
-#else
-        sq0 = _mm_add_ps(sq0, _mm_mul_ps(r, r));
-#endif
-    }
-    maxv = _mm_max_ps(maxv, _mm_movehl_ps(maxv, maxv));
-    maxv = _mm_max_ss(maxv, _mm_shuffle_ps(maxv, maxv, 1));
-    peak = _mm_cvtss_f32(maxv);
-    const __m128 sqSum = _mm_add_ps(_mm_add_ps(sq0, sq1), _mm_add_ps(sq2, sq3));
-    alignas(16) float sqArr[4];
-    _mm_store_ps(sqArr, sqSum);
-    sumSq = static_cast<double>(sqArr[0] + sqArr[1] + sqArr[2] + sqArr[3]);
-#endif
-    for (; i < count; ++i) {
-        const float x = src[i];
-        const float ax = std::fabs(x);
-        if (ax > peak) peak = ax;
-        sumSq += static_cast<double>(x) * static_cast<double>(x);
-    }
-    outPeak = peak;
-    outSumSquares = sumSq;
 }
 
 // Vectorized stereo buffer scaling: dst[i*2] = src[i*2] * gl, dst[i*2+1] = src[i*2+1] * gr
@@ -435,6 +325,23 @@ inline void interleaveStereoWetDryMix(
     }
 }
 
+// Wet/dry planar mix: dst = dry*dst + wet*src (Planar PluginEffect path).
+inline void mixPlanarWetDry(
+    float* dstL, float* dstR, const float* srcL, const float* srcR, int32_t frames, float wet, float dry) noexcept {
+    if (!dstL || !dstR || !srcL || !srcR || frames <= 0) return;
+    if (dry == 0.0f && wet == 1.0f) {
+        for (int32_t i = 0; i < frames; ++i) {
+            dstL[i] = srcL[i];
+            dstR[i] = srcR[i];
+        }
+        return;
+    }
+    for (int32_t i = 0; i < frames; ++i) {
+        dstL[i] = dstL[i] * dry + srcL[i] * wet;
+        dstR[i] = dstR[i] * dry + srcR[i] * wet;
+    }
+}
+
 // Linear gain ramp over interleaved stereo (fade-out, loop declick).
 inline void applyLinearGainRampStereo(float* buf, int32_t frames, float startGain, float endGain) noexcept {
     if (buf == nullptr || frames <= 0) return;
@@ -462,8 +369,8 @@ using simd_audio::deinterleaveStereo;
 using simd_audio::interleaveStereo;
 using simd_audio::interleaveStereoAdd;
 using simd_audio::interleaveStereoWetDryMix;
+using simd_audio::mixPlanarWetDry;
 using simd_audio::isSilent;
-using simd_audio::peakAndSumSquares;
 using simd_audio::scaleStereo;
 using simd_audio::StereoMeterAccumulator;
 

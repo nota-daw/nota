@@ -122,7 +122,10 @@ class Monolith final : public Instrument {
 
     // The mod wheel (CC1) moves the Mod Wheel control, as a learned knob would (specs/020).
     void controller(int32_t ctl, float value) override;
-    void setSampleRate(double sr) override { sampleRate_ = sr > 0 ? sr : 44100.0; }
+    void setSampleRate(double sr) override {
+        sampleRate_ = sr > 0 ? sr : 44100.0;
+        gate_.prepare(sampleRate_, 0.0);
+    }
     int32_t activeVoiceCount() const override { return active_.load(std::memory_order_relaxed); }
     int32_t heldNotes(int32_t* out, int32_t maxN) const override;
 
@@ -153,6 +156,7 @@ class Monolith final : public Instrument {
         aStage_ = Stage::Off;
         fStage_ = Stage::Off;
         aEnv_ = fEnv_ = 0.0f;
+        wake();
     }
 
     // Sleep contract: the single mono voice is the only tail (Decay/Release;
@@ -160,7 +164,11 @@ class Monolith final : public Instrument {
     // amp contour is Off with no held notes — then amp is exactly zero, so the
     // render loop writes exact silence despite always running.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
     // Contour telemetry for the editor's graphs: the filter contour's stage and progress,
     // then the loudness contour's (stage 0 A · 1 D · 2 S · 3 R · 4 none).
     int32_t scopeRead(float* out, int32_t maxN) const override {
@@ -246,7 +254,7 @@ class Monolith final : public Instrument {
     uint32_t rng_ = 0x1234567u;
     std::atomic<int32_t> active_{0};
     std::atomic<float> pn_[kNumParams];
-    bool idle_ = false; // sleep flag: amp contour Off, nothing held
+    dsp::SilenceGate gate_{0};
 };
 
 } // namespace nota

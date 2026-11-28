@@ -84,7 +84,7 @@ void Crush::wake() {
 }
 
 void Crush::process(float* buf, int32_t frames) {
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     if (resetReq_.exchange(false, std::memory_order_acq_rel)) resetMeters();
 
     const float bitsV = std::clamp(get(Bits), 0.0f, 1.0f);
@@ -280,11 +280,6 @@ void Crush::process(float* buf, int32_t frames) {
     inHoldA_.store(db(inHold_), std::memory_order_relaxed);
     outHoldA_.store(db(outHold_), std::memory_order_relaxed);
     autoGA_.store(20.0f * std::log10(std::max(1e-6f, autoG_)), std::memory_order_relaxed);
-    if (frames > 0) {
-        const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-        cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-        cpuA_.store((float)cpuS_, std::memory_order_relaxed);
-    }
 }
 
 void Crush::deviceAction(int32_t id, int32_t /*iarg*/, float /*farg*/) {
@@ -318,7 +313,7 @@ int32_t Crush::scopeRead(float* out, int32_t maxSamples) const {
     t[S_Levels] = std::pow(2.0f, bits);
     t[S_QuantNoise] = -(6.02f * bits + 1.76f);
     t[S_AutoGain] = get(AutoGain) >= 0.5f ? autoGA_.load(std::memory_order_relaxed) : 0.0f;
-    t[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    t[S_Cpu] = readScopeCpuLoad();
     t[S_Latency] = 0.0f;
     t[S_DrivenPeak] = drvPkA_.load(std::memory_order_relaxed);
     t[S_Mode] = (float)modeIndex();

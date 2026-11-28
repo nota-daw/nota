@@ -72,9 +72,11 @@ Monolith::Monolith() {
 }
 
 void Monolith::controller(int32_t ctl, float value) {
-    if (ctl == kCtlModWheel) pn_[ModWheel].store(std::clamp(value, 0.0f, 1.0f), std::memory_order_relaxed);
+    if (ctl == kCtlModWheel) {
+        pn_[ModWheel].store(std::clamp(value, 0.0f, 1.0f), std::memory_order_relaxed);
+        wake();
+    }
     Instrument::controller(ctl, value);
-    wake();
 }
 
 int32_t Monolith::heldNotes(int32_t* out, int32_t maxN) const {
@@ -130,6 +132,7 @@ void Monolith::setState(const uint8_t* data, int32_t size) {
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+    wake();
 }
 
 std::shared_ptr<Instrument> Monolith::clone() const {
@@ -197,6 +200,9 @@ void Monolith::noteOff(int32_t pitch) {
 }
 
 void Monolith::render(float* out, int32_t frames) {
+    bool skip = false;
+    const uint32_t gateEpoch = gate_.beginBlock(&skip);
+    if (skip) return;
     // ---- per-block snapshot ----
     const double invSr = 1.0 / sampleRate_;
     const double masterMult = std::exp2((get(Tune) - 0.5) * 2.0 * 2.5 / 12.0); // ±2.5 st
@@ -358,11 +364,11 @@ void Monolith::render(float* out, int32_t frames) {
     publishEnvTele(envTele_, true, fStage_, &fShape_, fEnv_, fS);
     publishEnvTele(envTele_ + kEnvTeleFloats, true, aStage_, &aShape_, aEnv_, aS);
     // Sleep: amp contour Off with nothing held means amp is exactly zero.
-    idle_ = (aStage_ == Stage::Off && heldN_ == 0);
+    gate_.observe(!(aStage_ == Stage::Off && heldN_ == 0), frames, gateEpoch);
 }
 
 void Monolith::wake() {
-    idle_ = false;
+    gate_.wake();
 }
 
 double Monolith::rangeMult(Param p) const {

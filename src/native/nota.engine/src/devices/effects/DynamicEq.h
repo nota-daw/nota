@@ -143,8 +143,7 @@ class DynamicEq : public Device {
     std::atomic<float> gr_[kBands];   // published momentary gain (dB)
     std::atomic<float> lvlA_[kBands]; // published detector level (dBFS)
     float inPk_ = 0.0f, outPk_ = 0.0f;
-    double cpuS_ = 0.0;
-    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, cpuA_{0.0f}, srA_{44100.0f}, keyLive_{0.0f};
+    std::atomic<float> inPkA_{-120.0f}, outPkA_{-120.0f}, srA_{44100.0f}, keyLive_{0.0f};
 
     // Auto-sleep hangover.
     uint64_t quietSamples_ = 0;

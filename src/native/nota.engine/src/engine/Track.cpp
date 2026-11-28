@@ -92,4 +92,17 @@ const AudioClip* audioClipRef(const Track& t, int32_t clipIndex) {
     return s.hasClip && s.audio.sample ? &s.audio : nullptr;
 }
 
+AudioClip* audioClipWrite(Track& t, int32_t clipIndex) {
+    if (t.type() != TrackType::Audio) return nullptr;
+    if (clipIndex >= 0) {
+        if (clipIndex >= static_cast<int32_t>(t.clips.size())) return nullptr;
+        return &t.clips.write()[clipIndex];
+    }
+    const int32_t scene = sessionSceneOfClip(clipIndex);
+    if (scene < 0 || scene >= static_cast<int32_t>(t.sessionSlots.size())) return nullptr;
+    const SessionSlot& s = t.sessionSlots[scene];
+    if (!s.hasClip || !s.audio.sample) return nullptr;
+    return &t.sessionSlots.write()[scene].audio;
+}
+
 } // namespace nota

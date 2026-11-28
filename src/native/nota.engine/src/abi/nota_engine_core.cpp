@@ -134,6 +134,14 @@ int32_t nota_engine_graph_retire_selftest(NotaEngine* e) {
 float nota_engine_cpu_load(const NotaEngine* e) {
     return e ? CENG(e)->cpuLoad() : 0.0f;
 }
+NotaResult nota_engine_set_device_telemetry(NotaEngine* e, int32_t mode) {
+    if (!e || mode < NOTA_TELEMETRY_ON_DEMAND || mode > NOTA_TELEMETRY_ALWAYS_ON) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setTelemetryMode(static_cast<::nota::dsp::TelemetryMode>(mode));
+    return NOTA_OK;
+}
+int32_t nota_engine_device_telemetry(const NotaEngine* e) {
+    return e ? static_cast<int32_t>(CENG(e)->telemetryMode()) : NOTA_TELEMETRY_ON_DEMAND;
+}
 NotaResult nota_engine_set_render_threads(NotaEngine* e, int32_t count) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setRenderThreads(count) ? NOTA_OK : NOTA_ERR_ALREADY_RUNNING;
@@ -143,6 +151,53 @@ int32_t nota_engine_render_threads(const NotaEngine* e) {
 }
 double nota_engine_render_threads_cpu_seconds(const NotaEngine* e) {
     return e ? CENG(e)->renderThreadsCpuSeconds() : 0.0;
+}
+
+NotaResult nota_engine_set_stream_threshold_bytes(NotaEngine* e, int64_t bytes) {
+    if (!e || bytes < 0) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setStreamThresholdBytes(bytes);
+    return NOTA_OK;
+}
+int64_t nota_engine_stream_threshold_bytes(const NotaEngine* e) {
+    return e ? CENG(e)->streamThresholdBytes() : 0;
+}
+NotaResult nota_engine_set_sample_load_policy(NotaEngine* e, int32_t policy) {
+    if (!e || policy < NOTA_SAMPLE_LOAD_AUTO || policy > NOTA_SAMPLE_LOAD_STREAM) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setSampleLoadPolicy(static_cast<::nota::SampleLoadPolicy>(policy));
+    return NOTA_OK;
+}
+int32_t nota_engine_sample_load_policy(const NotaEngine* e) {
+    return e ? static_cast<int32_t>(CENG(e)->sampleLoadPolicy()) : NOTA_SAMPLE_LOAD_AUTO;
+}
+int32_t nota_sample_is_streaming(const NotaEngine* e, int64_t sample_id) {
+    return e && CENG(e)->isSampleStreaming(sample_id) ? 1 : 0;
+}
+NotaResult nota_engine_streaming_stats(const NotaEngine* e, NotaStreamingStats* out) {
+    if (!e || !out) return NOTA_ERR_INVALID_ARG;
+    CENG(e)->streamingStats(*out);
+    return NOTA_OK;
+}
+
+NotaResult nota_engine_set_hybrid_buffering(NotaEngine* e, int32_t mode) {
+    if (!e || (mode != NOTA_HYBRID_OFF && mode != NOTA_HYBRID_AUTO)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setHybridBufferingMode(static_cast<::nota::HybridBufferMode>(mode));
+    return NOTA_OK;
+}
+int32_t nota_engine_hybrid_buffering(const NotaEngine* e) {
+    return e ? static_cast<int32_t>(CENG(e)->hybridBufferingMode()) : NOTA_HYBRID_OFF;
+}
+NotaResult nota_engine_hybrid_stats(const NotaEngine* e, NotaHybridBufferStats* out) {
+    if (!e || !out) return NOTA_ERR_INVALID_ARG;
+    const ::nota::HybridBufferStats st = CENG(e)->hybridStats();
+    out->active = st.active;
+    out->live_tracks = st.liveTracks;
+    out->anticipative_tracks = st.anticipativeTracks;
+    out->lookahead_frames = st.lookaheadFrames;
+    out->chunk_frames = st.chunkFrames;
+    out->cache_hits = st.cacheHits;
+    out->cache_misses = st.cacheMisses;
+    out->invalidations = st.invalidations;
+    return NOTA_OK;
 }
 
 // ---- Transport ------------------------------------------------------------
@@ -494,6 +549,9 @@ void nota_engine_reset(NotaEngine* e) {
 int32_t nota_engine_track_meter(const NotaEngine* e, int32_t track_id, NotaMeter* out) {
     if (!e || !out) return 0;
     return CENG(e)->trackMeter(track_id, out->peak_l, out->peak_r, out->rms_l, out->rms_r) ? 1 : 0;
+}
+int32_t nota_engine_read_track_meters(const NotaEngine* e, NotaTrackMeterEntry* out_entries, int32_t capacity) {
+    return e ? CENG(e)->readTrackMeters(out_entries, capacity) : 0;
 }
 NotaResult nota_engine_master_meter(const NotaEngine* e, NotaMeter* out) {
     if (!e || !out) return NOTA_ERR_INVALID_ARG;

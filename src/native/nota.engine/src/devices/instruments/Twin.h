@@ -32,6 +32,7 @@
 #include "devices/ParamLaneSteps.h"
 #include "devices/instruments/TwinSeq.h"
 #include "devices/instruments/TwinVoice.h"
+#include "dsp/poly/PolyVoiceScheduler.h"
 #include "engine/SnapshotHistory.h"
 
 #include <algorithm>
@@ -330,6 +331,7 @@ class Twin final : public Instrument {
     bool isIdle() const override {
         return idle_.load(std::memory_order_relaxed) && !wakeReq_.load(std::memory_order_relaxed);
     }
+    bool needsIdleRender() const override { return true; }
     void wake() override { wakeReq_.store(true, std::memory_order_release); }
 
     // ---- parameters -----------------------------------------------------------
@@ -468,6 +470,7 @@ class Twin final : public Instrument {
     hiir::Downsampler2xFpu<12> dn_[twin::kParts][2];
     float osL_[twin::kCtl * twin::kMaxOs] = {}, osR_[twin::kCtl * twin::kMaxOs] = {};
     float dsL_[twin::kCtl] = {}, dsR_[twin::kCtl] = {};
+    dsp::PolyVoiceScratchBank voiceScratch_{twin::kCtl * twin::kMaxOs};
     // effects, per part: Chorus, Flanger, Phaser, Delay, Reverb — built once, allocation-free after
     enum Fx { FxChorus = 0, FxFlanger, FxPhaser, FxDelay, FxReverb, kFxN };
     std::unique_ptr<Device> fx_[twin::kParts][kFxN];

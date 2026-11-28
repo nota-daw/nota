@@ -263,7 +263,6 @@ class Reverb : public Device {
     int preW_ = 0;
     double erSmp_[kEr] = {};
     float hpL_ = 0, hpR_ = 0, hpPrevL_ = 0, hpPrevR_ = 0, lpL_ = 0, lpR_ = 0, vlp_ = 0, monoS_ = 0;
-    double cpuS_ = 0.0;
     dsp::LevelHistory hist_; // the card's live tail graph
 
     // Auto-sleep hangover.
@@ -272,7 +271,7 @@ class Reverb : public Device {
     float feedPk_ = 0.0f; // peak tank feed (blocks sleep while the tail rings)
 
     std::atomic<bool> kill_{false}, reset_{false};
-    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, rt60A_{0}, preA_{0}, diffA_{0},
+    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, srA_{44100.0f}, rt60A_{0}, preA_{0}, diffA_{0},
         erOnA_{0};
     std::atomic<float> p_[kNumParams] = {};
 };

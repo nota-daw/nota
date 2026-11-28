@@ -77,7 +77,7 @@ void Reverb::wake() {
 
 void Reverb::process(float* buf, int32_t frames) {
     if (frames <= 0 || preL_.size() < 4) return;
-    const auto t0 = std::chrono::steady_clock::now();
+    const auto cpuTimer = blockTimer(frames, sr_);
     // Read first: an exchange on every block would write the flag's cache line each time.
     if (reset_.load(std::memory_order_relaxed) && reset_.exchange(false, std::memory_order_relaxed)) {
         kill_.store(true, std::memory_order_relaxed);
@@ -292,9 +292,6 @@ void Reverb::process(float* buf, int32_t frames) {
     diffA_.store(static_cast<float>(diffSmp), std::memory_order_relaxed);
     erOnA_.store(early ? 1.0f : 0.0f, std::memory_order_relaxed);
     srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
-    const double el = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-    cpuS_ = cpuS_ * 0.9 + (el / (frames / sr_)) * 0.1;
-    cpuA_.store(static_cast<float>(cpuS_), std::memory_order_relaxed);
 }
 
 const char* Reverb::paramName(int32_t i) const {
@@ -346,7 +343,7 @@ int32_t Reverb::scopeRead(float* out, int32_t maxSamples) const {
     out[S_WetPk] = mWet_.load(std::memory_order_relaxed);
     out[S_OutL] = mOutL_.load(std::memory_order_relaxed);
     out[S_OutR] = mOutR_.load(std::memory_order_relaxed);
-    out[S_Cpu] = cpuA_.load(std::memory_order_relaxed);
+    out[S_Cpu] = readScopeCpuLoad();
     out[S_SampleRate] = srA_.load(std::memory_order_relaxed);
     out[S_Latency] = static_cast<float>(latencySamples());
     out[S_Rt60] = rt60A_.load(std::memory_order_relaxed);

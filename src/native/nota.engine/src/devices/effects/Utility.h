@@ -297,7 +297,6 @@ class Utility : public Device {
     double wPreK_[kWin] = {}, wPreSq_[kWin] = {}; // the output before Gain and the ride
     float wPrePk_[kWin] = {};
     int winW_ = 0, winFill_ = 0;
-    double cpuS_ = 0.0;
     std::atomic<bool> resetReq_{false};
 
     // Auto-sleep hangover.
@@ -305,7 +304,7 @@ class Utility : public Device {
     bool idle_ = false;
 
     // Published telemetry (audio thread writes, UI reads lock-free; torn reads OK).
-    std::atomic<float> inPkA_{0}, outPkA_{0}, cpuA_{0}, srA_{44100.0f}, corr_{1.0f};
+    std::atomic<float> inPkA_{0}, outPkA_{0}, srA_{44100.0f}, corr_{1.0f};
     std::atomic<float> inLufsA_{-120}, outLufsA_{-120}, inMomA_{-120}, outMomA_{-120}, inRmsA_{-120}, outRmsA_{-120},
         inRms3A_{-120}, outRms3A_{-120}, inPeak1A_{-120}, outPeak1A_{-120}, inPeak3A_{-120}, outPeak3A_{-120},
         truePk3A_{-120}, preLufsA_{-120}, preRms3A_{-120}, prePeak3A_{-120}, limDbA_{0}, autoDbA_{0}, balDbA_{0},

@@ -11,17 +11,16 @@ float AutomationLane::valueAt(double beat) const {
     const auto& p = points;
     if (beat <= p.front().beat) return p.front().value;
     if (beat >= p.back().beat) return p.back().value;
-    for (size_t i = 1; i < p.size(); ++i) {
-        if (beat <= p[i].beat) {
-            const double b0 = p[i - 1].beat, b1 = p[i].beat;
-            const float v0 = p[i - 1].value, v1 = p[i].value;
-            const double span = b1 - b0;
-            if (span <= 0.0) return v1;
-            const double t = (beat - b0) / span;
-            return static_cast<float>(v0 + (v1 - v0) * shape(t, p[i - 1].curve));
-        }
-    }
-    return p.back().value;
+    // Mirror the original linear search: first i >= 1 with p[i].beat >= beat (O(log P)).
+    const auto it = std::lower_bound(p.begin() + 1, p.end(), beat,
+        [](const AutomationPoint& q, double b) { return q.beat < b; });
+    if (it == p.end()) return p.back().value;
+    const AutomationPoint& prev = *(it - 1);
+    const AutomationPoint& cur = *it;
+    const double span = cur.beat - prev.beat;
+    if (span <= 0.0) return cur.value;
+    const double t = (beat - prev.beat) / span;
+    return static_cast<float>(prev.value + (cur.value - prev.value) * shape(t, prev.curve));
 }
 
 float AutomationLane::pieceCurve(const std::vector<AutomationPoint>& p, double from, double to) {

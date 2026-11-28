@@ -253,7 +253,7 @@ struct SilenceDetector {
         const int32_t totalSamples = frames * 2;
         double sumSquares = 0.0;
         float maxPeak = 0.0f;
-        peakAndSumSquares(interleaved, totalSamples, maxPeak, sumSquares);
+        nota::simd::peakAndSumSquares(interleaved, totalSamples, maxPeak, sumSquares);
         lastMaxPeak = maxPeak;
 
         const double rms = std::sqrt(sumSquares / totalSamples);

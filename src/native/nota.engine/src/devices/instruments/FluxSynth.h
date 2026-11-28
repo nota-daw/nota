@@ -90,8 +90,12 @@ class FluxSynth final : public Instrument {
     // Sleep contract: release + Space tails ring past note-off (the engine-visible tail).
     // Settles after the hangover; noteOn/noteOff/setParam wake.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
+    bool isIdle() const override { return gate_.isSleeping(); }
     void wake() override;
+    void setSleepMode(dsp::PluginSleepMode mode) override {
+        Instrument::setSleepMode(mode);
+        gate_.setSleepMode(mode);
+    }
 
     // ---- parameters -------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -152,6 +156,8 @@ class FluxSynth final : public Instrument {
     };
 
     // ---- React analysis: fast/slow envelope, transient, spectral tilt -----
+    bool hasActiveSidechainSignal(int32_t frames) const noexcept;
+    NOTA_NOINLINE bool renderBlock(float* out, int32_t frames);
     void analyzeSidechain(int32_t frames);
     // The followers run once per block with time constants, so they behave the same at any
     // block size (tuned at 512 frames / 48 kHz: attack ~12 ms, release ~130 ms, slow ~350 ms).
@@ -212,8 +218,8 @@ class FluxSynth final : public Instrument {
 
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;
-    uint64_t quietSamples_ = 0;
-    bool idle_ = false;
+    dsp::SilenceGate gate_{kIdleSamples};
+    bool scActiveBlock_ = false;
 };
 
 } // namespace nota

@@ -139,6 +139,7 @@ class RhythmMachine final : public Instrument {
     bool handlesSustain() const override { return true; } // drums ignore the pedal (#99)
 
     void setSampleRate(double sr) override;
+    void setTelemetryMode(dsp::TelemetryMode mode) override;
     void setTransport(double beatStart, double spb, bool playing) override;
     void setTransportInfo(const TransportInfo& ti) override;
 
@@ -241,6 +242,7 @@ class RhythmMachine final : public Instrument {
     // transport start (a stopped machine with a pattern must not sleep through the downbeat).
     bool hasTail() const override { return true; }
     bool isIdle() const override { return idle_; }
+    bool needsIdleRender() const override { return true; }
     void wake() override {
         idle_ = false;
         quietSamples_ = 0;

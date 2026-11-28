@@ -42,6 +42,11 @@ int pluginChannelPtrs(const juce::AudioProcessor& p, juce::AudioBuffer<float>& s
 // The floor pluginChannelPtrs gets for this plugin. Message thread, at prepare.
 int minProcessChannels(const juce::AudioPluginInstance& p);
 
+// Whether an instance can safely execute processBlock() concurrently on audio workers
+// across distinct plugin instances (VST3 and vetted macOS AudioUnits; excludes known
+// shared-state Apple system utilities unless overridden cleanly by NOTA_SERIAL_AUDIOUNIT=1).
+bool isParallelRenderSafe(const juce::AudioPluginInstance* p);
+
 // Turn on every bus the plugin has, keeping main buses as set. Message thread.
 void enableEveryBus(juce::AudioPluginInstance& p);
 

@@ -96,6 +96,16 @@ void Vocoder::process(float* buf, int32_t frames) {
     outPkL *= pkFall;
     outPkR *= pkFall;
 
+    // Reuse unit conversions while the controls are steady. During a glide they still follow each sample.
+    const auto glides = [smA](double value, double target) { return value + (target - value) * smA != value; };
+    const bool tiltGlides = glides(tiltS_, tiltT);
+    const bool pitchGlides = glides(pitchS_, pitchT);
+    const bool mixGlides = glides(mixS_, mixT);
+    constexpr double halfPi = 1.5707963267948966;
+    double sawHz = std::exp2(pitchS_);
+    double tiltHigh = std::pow(10.0, tiltS_ / 40.0), tiltLow = 1.0 / tiltHigh;
+    double dryGain = std::cos(mixS_ * halfPi), wetGain = std::sin(mixS_ * halfPi);
+
     for (int32_t i = 0; i < frames; ++i) {
         if (--ctrl_ <= 0) { // control rate: params → band layout
             ctrl_ = kCtrl;
@@ -117,10 +127,21 @@ void Vocoder::process(float* buf, int32_t frames) {
         else if (duck_ < 1.0)
             duck_ = std::min(1.0, duck_ + duckStep);
 
-        tiltS_ += (tiltT - tiltS_) * smA;
-        pitchS_ += (pitchT - pitchS_) * smA;
+        if (tiltGlides) {
+            tiltS_ += (tiltT - tiltS_) * smA;
+            tiltHigh = std::pow(10.0, tiltS_ / 40.0);
+            tiltLow = 1.0 / tiltHigh;
+        }
+        if (pitchGlides) {
+            pitchS_ += (pitchT - pitchS_) * smA;
+            sawHz = std::exp2(pitchS_);
+        }
         uvS_ += (uvT - uvS_) * smA;
-        mixS_ += (mixT - mixS_) * smA;
+        if (mixGlides) {
+            mixS_ += (mixT - mixS_) * smA;
+            dryGain = std::cos(mixS_ * halfPi);
+            wetGain = std::sin(mixS_ * halfPi);
+        }
         gainS_ += (gainT - gainS_) * smA;
         modGS_ += (modG - modGS_) * smA;
         if (xf_ < 1.0) xf_ = std::min(1.0, xf_ + xfStep);
@@ -131,14 +152,14 @@ void Vocoder::process(float* buf, int32_t frames) {
         keyPk = std::max(keyPk, (float)std::fabs(m));
 
         // Carrier: crossfade between the previous and the current source.
-        const double saw = sawTick(std::exp2(pitchS_));
+        const double saw = sawTick(sawHz);
         const double nzL = noise(), nzR = noise();
         const double tL = sc ? (double)sc[2 * i] * scG : 0.0, tR = sc ? (double)sc[2 * i + 1] * scG : 0.0;
         double wTrk = 0.0, wSaw = 0.0, wNz = 0.0;
         addWeight(carCur_, xf_, wTrk, wSaw, wNz);
         addWeight(carPrev_, 1.0 - xf_, wTrk, wSaw, wNz);
         double cL = wTrk * tL + wSaw * saw, cR = wTrk * tR + wSaw * saw;
-        tiltTick(cL, cR, tiltS_);
+        tiltTick(cL, cR, tiltHigh, tiltLow);
         cL += wNz * nzL;
         cR += wNz * nzR;
 
@@ -197,8 +218,8 @@ void Vocoder::process(float* buf, int32_t frames) {
         const double passT = (carCur_ == CarrierTrack && !sc) ? 1.0 : 0.0;
         passS_ += (passT - passS_) * smA;
         if (std::fabs(passT - passS_) < 1e-5) passS_ = passT;
-        const double dG = std::cos(mixS_ * 1.5707963267948966), wG = std::sin(mixS_ * 1.5707963267948966);
-        const double vL = (dG * inL + wG * wetL) * gainS_, vR = (dG * inR + wG * wetR) * gainS_;
+        const double vL = (dryGain * inL + wetGain * wetL) * gainS_;
+        const double vR = (dryGain * inR + wetGain * wetR) * gainS_;
         const float oL = (float)(passS_ * inL + (1.0 - passS_) * vL);
         const float oR = (float)(passS_ * inR + (1.0 - passS_) * vR);
         buf[2 * i] = std::isfinite(oL) ? oL : 0.0f;
@@ -305,10 +326,15 @@ void Vocoder::addWeight(int src, double w, double& trk, double& saw, double& nz)
 }
 
 void Vocoder::computeBands() {
+    const double semitones = std::round((fmtS_ - 0.5) * 2.0 * kFormantSt);
+    const BandLayout next{n_, lowS_, highS_, qS_, semitones};
+    if (next == layout_) return;
+    layout_ = next;
+
     double lo = lowHz(lowS_), hi = highHz(highS_);
     lo = std::min(lo, hi * 0.5); // at least an octave
     const double q = kQLo + qS_ * (kQHi - kQLo);
-    const double shift = std::exp2(std::round((fmtS_ - 0.5) * 2.0 * kFormantSt) / 12.0);
+    const double shift = std::exp2(semitones / 12.0);
     const double nyq = 0.45 * sr_;
     for (int b = 0; b < n_; ++b) {
         Band& bd = band_[b];
@@ -316,7 +342,7 @@ void Vocoder::computeBands() {
         const double fs = bd.fa * shift;
         bd.live = fs <= nyq;
         bd.ca = bp(bd.fa, q, sr_);
-        bd.cs = bp(std::min(fs, nyq), q, sr_);
+        bd.cs = fs == bd.fa ? bd.ca : bp(std::min(fs, nyq), q, sr_);
     }
     norm_ = kNorm * std::sqrt(n_ / 16.0) * std::sqrt(q / 5.0); // L2 weights: √N brings a spread voice back to level
 }
@@ -335,6 +361,7 @@ void Vocoder::clearBands() {
 
 void Vocoder::reset() {
     clearBands();
+    layout_ = {}; // The coefficients depend on the sample rate as well as the layout.
     hpM_.clear();
     hpM2_.clear();
     hpNL_.clear();
@@ -375,12 +402,11 @@ double Vocoder::noise() { // xorshift32 → [−1, 1)
     return (double)(int32_t)rng_ * (1.0 / 2147483648.0);
 }
 
-void Vocoder::tiltTick(double& l, double& r, double db) { // shelf pair around 1 kHz: lows −db/2, highs +db/2
-    const double gh = std::pow(10.0, db / 40.0), gl = 1.0 / gh;
+void Vocoder::tiltTick(double& l, double& r, double highGain, double lowGain) { // shelf pair around 1 kHz
     tiltZL_ = l + (tiltZL_ - l) * tiltA_;
     tiltZR_ = r + (tiltZR_ - r) * tiltA_;
-    l = tiltZL_ * gl + (l - tiltZL_) * gh;
-    r = tiltZR_ * gl + (r - tiltZR_) * gh;
+    l = tiltZL_ * lowGain + (l - tiltZL_) * highGain;
+    r = tiltZR_ * lowGain + (r - tiltZR_) * highGain;
 }
 
 void Vocoder::flushDenormals() {

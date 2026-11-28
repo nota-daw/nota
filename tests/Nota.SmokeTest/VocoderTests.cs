@@ -304,6 +304,7 @@ internal static class VocoderTests
                 e.DeviceScope(voice, di, sc, sc.Length);
                 yield return (Finite(o) && Rms(o, Sr / 4) > 1e-3 && (int)sc[3] == nb, $"{nb} bands: audible, finite, scope reports {(int)sc[3]}");
             }
+
             e.DeviceSetParam(voice, di, PBands, Defaults[PBands]);
             foreach (float fm in new[] { 0f, 1f })
             {
@@ -341,6 +342,24 @@ internal static class VocoderTests
             });
             double ms = MaxStep(sweep, Sr / 4);
             yield return (Finite(sweep) && ms < ref0 * 1.5 + 0.02, $"sweeping Low / High / Q / Formant / Bands is click-free (max step {ms:0.000} vs static corners {ref0:0.000})");
+        }
+        {
+            var (e, voice, _, di) = Rig();
+            using var _e = e;
+            e.DeviceSetParam(voice, di, PBands, 1f);
+            Play(e, Sr / 2);
+
+            // Retune the settled 32-band bank while keeping its band count the same.
+            e.DeviceSetParam(voice, di, PLow, 1f);  // 1000 Hz
+            e.DeviceSetParam(voice, di, PHigh, 0f); // 2000 Hz
+            Play(e, Sr / 2);
+            var sc = new float[100];
+            int scopeCount = e.DeviceScope(voice, di, sc, sc.Length);
+            double firstCentre = 1000 * Math.Pow(2, 0.5 / 32);
+            double lastCentre = 1000 * Math.Pow(2, 31.5 / 32);
+            yield return (scopeCount == sc.Length && sc[3] == 32
+                && Math.Abs(sc[68] - firstCentre) < 0.1 && Math.Abs(sc[99] - lastCentre) < 0.1,
+                $"retuning the 32-band bank updates its centres ({sc[68]:0.0} … {sc[99]:0.0} Hz)");
         }
 
         // ---- recall, determinism, presets ---------------------------------------------------

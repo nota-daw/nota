@@ -129,6 +129,15 @@ public sealed partial class NotaEngine : IAudioEngine
         return NativeMethods.TrackMeter(_handle, trackId, out meter) != 0;
     }
 
+    public unsafe int ReadTrackMeters(Span<TrackMeterReading> destination)
+    {
+        ThrowIfDisposed();
+        if (destination.IsEmpty)
+            return NativeMethods.ReadTrackMeters(_handle, null, 0);
+        fixed (TrackMeterReading* p = destination)
+            return NativeMethods.ReadTrackMeters(_handle, p, destination.Length);
+    }
+
     /// <summary>Post-fader peak/RMS of the master bus over the last block.</summary>
     public NotaMeter MasterMeter()
     {
@@ -409,6 +418,12 @@ public sealed partial class NotaEngine : IAudioEngine
     public float CpuLoad
     { get { ThrowIfDisposed(); return NativeMethods.CpuLoad(_handle); } }
 
+    public DeviceTelemetryMode DeviceTelemetry
+    {
+        get { ThrowIfDisposed(); return (DeviceTelemetryMode)NativeMethods.DeviceTelemetry(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetDeviceTelemetry(_handle, (int)value)); }
+    }
+
     /// <summary>
     /// Dedicated parallel render threads (the audio thread helps too). Set while the device
     /// is stopped: a negative count restores the default, 0 renders on the audio thread alone.
@@ -422,6 +437,44 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>CPU time the render threads have used, summed, in seconds (≈ constant while idle).</summary>
     public double RenderThreadsCpuSeconds
     { get { ThrowIfDisposed(); return NativeMethods.RenderThreadsCpuSeconds(_handle); } }
+
+    public long StreamThresholdBytes
+    {
+        get { ThrowIfDisposed(); return NativeMethods.StreamThresholdBytes(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetStreamThresholdBytes(_handle, value)); }
+    }
+
+    public SampleLoadPolicy SampleLoadPolicy
+    {
+        get { ThrowIfDisposed(); return (SampleLoadPolicy)NativeMethods.SampleLoadPolicy(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetSampleLoadPolicy(_handle, (int)value)); }
+    }
+
+    public bool IsSampleStreaming(long sampleId)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.IsSampleStreaming(_handle, sampleId) != 0;
+    }
+
+    public NotaStreamingStats GetStreamingStats()
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.StreamingStats(_handle, out var st));
+        return st;
+    }
+
+    public HybridBufferMode HybridBuffering
+    {
+        get { ThrowIfDisposed(); return (HybridBufferMode)NativeMethods.HybridBuffering(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetHybridBuffering(_handle, (int)value)); }
+    }
+
+    public NotaHybridBufferStats GetHybridStats()
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.HybridStats(_handle, out var st));
+        return st;
+    }
 
     public void Dispose()
     {
