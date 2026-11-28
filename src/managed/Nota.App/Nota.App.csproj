@@ -114,9 +114,20 @@
   <PropertyGroup>
     <NotaCopyNative Condition="'$(NotaTargetMac)' == 'true' or '$(NotaTargetWin)' == 'true' or '$(NotaTargetLinux)' == 'true'">true</NotaCopyNative>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(NotaCopyNative)' == 'true' and '$(NotaEngineLib)' != ''">
+    <NotaEngineLibNormalized>$([MSBuild]::NormalizePath('$(NotaEngineLib)'))</NotaEngineLibNormalized>
+    <NotaNativeLibDir>$([MSBuild]::NormalizeDirectory('$([System.IO.Path]::GetDirectoryName("$(NotaEngineLibNormalized)"))'))</NotaNativeLibDir>
+    <NotaNativeSiblingPattern Condition="'$(NotaTargetMac)' == 'true'">$(NotaNativeLibDir)libnota_*.dylib</NotaNativeSiblingPattern>
+    <NotaNativeSiblingPattern Condition="'$(NotaTargetWin)' == 'true'">$(NotaNativeLibDir)nota_*.dll</NotaNativeSiblingPattern>
+    <NotaNativeSiblingPattern Condition="'$(NotaTargetLinux)' == 'true'">$(NotaNativeLibDir)libnota_*.so</NotaNativeSiblingPattern>
+  </PropertyGroup>
   <ItemGroup Condition="'$(NotaCopyNative)' == 'true' and Exists('$(NotaEngineLib)')">
     <None Include="$(NotaEngineLib)">
       <Link>$(NotaEngineLibName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(NotaNativeSiblingPattern)" Exclude="$(NotaEngineLibNormalized);$(NotaNativeLibDir)$(NotaEngineLibName)" Condition="'$(NotaNativeSiblingPattern)' != ''">
+      <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

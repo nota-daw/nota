@@ -279,17 +279,31 @@ internal static class EqAnalyzerTests
             r.Feed(8192);
             var s = r.Read();
             int pk = Argmax(s, PostAt);
+            // Prime one real 2048-frame callback interval (~46 ms) so SpectrumAnalyzer learns the
+            // callback cadence (gap_ ≈ 47 ms -> 1.5*gap_ ≈ 70 ms) before inter-callback polling starts.
+            Thread.Sleep(47);
+            r.Feed(2048);
+            s = r.Read(0);
             float lo = float.MaxValue, hi = float.MinValue;
             var sw = Stopwatch.StartNew();
-            long nextFeed = 0, lastFeed = 0, feedGap = 0;
+            long nextFeed = 46, lastFeed = 0, feedGap = 0;
             int counted = 0;
             // Only reads while the "callbacks" keep their period count: a stalled CI runner that
             // misses a feed by a whole period really has stopped the input for that long.
+            // Sleep first and service any due callback before polling telemetry so a runner wakeup
+            // past nextFeed never runs Eq::analyse() while a feed is overdue.
             while (sw.ElapsedMilliseconds < 8000 && counted < 60)
             {
+                Thread.Sleep(10);
                 long now = sw.ElapsedMilliseconds;
-                if (now >= nextFeed) { r.Feed(2048); feedGap = now - lastFeed; lastFeed = now; nextFeed += 46; }
-                s = r.Read(10);
+                if (now >= nextFeed)
+                {
+                    r.Feed(2048);
+                    feedGap = now - lastFeed;
+                    lastFeed = now;
+                    nextFeed = Math.Max(nextFeed + 46, now + 1);
+                }
+                s = r.Read(0);
                 if (feedGap > 70 || sw.ElapsedMilliseconds - lastFeed > 70) continue;
                 lo = Math.Min(lo, s[PostAt + pk]);
                 hi = Math.Max(hi, s[PostAt + pk]);

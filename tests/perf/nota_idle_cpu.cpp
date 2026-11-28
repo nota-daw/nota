@@ -22,7 +22,9 @@
 static double processCpuSeconds() {
     FILETIME created, exited, kernel, user;
     GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user);
-    auto secs = [](FILETIME f) { return (double)(((unsigned long long)f.dwHighDateTime << 32) | f.dwLowDateTime) * 1e-7; };
+    auto secs = [](FILETIME f) {
+        return (double)(((unsigned long long)f.dwHighDateTime << 32) | f.dwLowDateTime) * 1e-7;
+    };
     return secs(kernel) + secs(user);
 }
 #else
@@ -50,7 +52,7 @@ int main(int argc, char** argv) {
 
     const double pct = 100.0 * cpu / wall;
     const bool ok = pct <= limit;
-    std::printf("idle engine CPU: %.1f%% of one core over %.1f s (limit %.1f%%): %s\n", pct, wall, limit,
-                ok ? "PASS" : "FAIL");
+    std::printf(
+        "idle engine CPU: %.1f%% of one core over %.1f s (limit %.1f%%): %s\n", pct, wall, limit, ok ? "PASS" : "FAIL");
     return ok ? 0 : 1;
 }

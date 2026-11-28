@@ -1,0 +1,385 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// Nota Lens (device kind 22, mockup "Nota Lens") — an analyzer: FFT spectrum,
+// triggered oscilloscope and waterfall in one card. The audio passes through
+// untouched; process() only captures L/R into rings and runs the K-weighted
+// loudness follower. Everything expensive (FFT, the log-frequency curve, trigger
+// search, measurements) happens lazily on the message thread inside
+// ensureAnalyzed(), rate-limited by the Display Rate parameter — so the audio
+// thread stays a memcpy and the UI (or MCP) pulls whatever it needs:
+//
+//   scopeRead   → packed measurements (peak, RMS, crest, correlation, LUFS,
+//                 trigger state, period, Vpp, cursors …)
+//   layerWave   → L_Spectrum / L_Peak curves, the scope trace, the raw triggered
+//                 window (for WAV export) and the newest waterfall row
+//   deviceText  → the same analysis as text, for MCP
+//   deviceAction→ re-arm Single, reset peak hold, reset the trigger
+//
+// A core Device (JUCE-free); params normalized 0..1, denormalized where used.
+// Persistence / automation / clone flow generically through the base Device.
+// Verbatim — no FastMath (the message-thread analysis
+// feeds measurements, and steering-adjacent trigger/period math stays std::-exact).
+// No auto-sleep: process() must keep capturing rings and the loudness follower
+// through silence (silence is a valid measurement — noise floor, trigger
+// free-run, Single re-arm), and it is already ~memcpy-cheap, so skipping would
+// corrupt telemetry for no audible gain. isIdle() stays false; hasTail() is
+// false (the signal passes through untouched).
+
+#pragma once
+
+#include "common/DeviceMath.h"
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <complex>
+#include <cstdint>
+#include <cstdio>
+#include <mutex>
+#include <string>
+#include <vector>
+
+namespace nota {
+
+class Lens : public Device {
+  public:
+    enum {
+        Graph = 0, // 0 Spectrum · .5 Scope · 1 Waterfall (named "View" before #531)
+        Freeze,    // >= .5 holds the capture (rings stop advancing)
+        Source,    // 0 L+R · .5 first channel · 1 second channel
+        MidSide,   // >= .5 the channel pair is Mid/Side instead of L/R
+
+        FftSize,  // 0 512 · .333 2048 · .667 4096 · 1 16384
+        Window,   // 0 Hann · .5 Blackman-Harris · 1 Flat-top
+        Average,  // 1..16 frames
+        Smooth,   // 0..1 neighbour-bin smoothing
+        Decay,    // trace fall, exp 0.05..8 s
+        Tilt,     // 0..9 dB/oct pink-slope compensation
+        Floor,    // −120..−40 dB
+        PeakHold, // >= .5 draw the peak-hold trace
+        PeakTime, // hold before the peak falls, exp 0.5..30 s
+
+        ScaleTop,   // top of the dB axis, +24..−36 dB
+        ScaleRange, // visible span, 30..120 dB
+
+        TimeDiv,     // exp 0.02..20 ms per division (8 divisions across)
+        VoltDiv,     // exp 0.02..2 per division (4 divisions high)
+        TrigMode,    // 0 Auto · .5 Normal · 1 Single
+        TrigEdge,    // 0 rising · 1 falling
+        TrigLevel,   // −1..1
+        Holdoff,     // 0..200 ms
+        Persist,     // >= .5 afterglow
+        PersistTime, // exp 50..2000 ms
+        Traces,      // 1..8 ghost traces
+        Bright,      // 0..1 trace brightness
+
+        Cursors, // >= .5 show the A/B cursors
+        CursorA, // 0..1 across the window
+        CursorB,
+        CursorSnap, // >= .5 snap a cursor to the nearest peak
+
+        WfSpeed,    // 0 4 s · .5 12 s · 1 60 s of history
+        WfGain,     // −24..+24 dB
+        WfFloor,    // −120..−40 dB
+        WfContrast, // 0..1
+        WfOverlap,  // 0 0 % · .333 50 % · .667 75 % · 1 87.5 %
+
+        LogFreq,  // >= .5 logarithmic frequency axis
+        NoteGrid, // >= .5 draw the note grid
+        Rate,     // display refresh, 10..60 fps
+
+        // Tempo-synced scope and the key overlay (specs/050), appended.
+        Sync,    // >= .5 the scope spans beats on the song's grid
+        Span,    // 7 steps: 1/4 beat, 1/2 beat, 1 beat, 2 beats, 1 bar, 2 bars, 4 bars
+        KeyShow, // >= .5 draw the sidechain key's trace
+        KeyGain, // −24..+24 dB, display only
+        Layout,  // < .5 Overlay · >= .5 Stacked
+        View,    // card size, not sound: 0 = L, 1 = S (#531), 2 = XL (#540); presets skip it
+        kNumParams
+    };
+
+    // scopeRead payload — packed measurements, not a signal (mirrors Shutter).
+    enum {
+        M_PeakHz = 0, // loudest spectral peak
+        M_PeakDb,
+        M_RmsDb,   // analysis-signal RMS over the FFT window
+        M_LevelDb, // analysis-signal peak over the same window
+        M_CrestDb,
+        M_Corr,     // L/R correlation, −1..1
+        M_Lufs,     // momentary (400 ms) K-weighted loudness
+        M_TrigOk,   // 1 = the trace is locked to a trigger
+        M_PeriodMs, // measured period of the scope trace (0 = none)
+        M_FreqHz,   // 1 / period
+        M_Vpp,
+        M_Vrms,
+        M_WindowMs, // scope window (8 divisions)
+        M_BinHz,    // FFT resolution
+        M_FftN,
+        M_FftMs,    // FFT window in ms
+        M_CursorAv, // trace value under cursor A / B
+        M_CursorBv,
+        M_SampleRate,
+        M_Held,     // 1 = frozen or a finished Single capture
+        M_KeyLive,  // 1 = a sidechain key is arriving (specs/050)
+        M_Instance, // this Lens's serial, so a window can tell it from another Lens at its index
+        kScope
+    };
+
+    // layerWave layers.
+    // L_KeyTrace: the key over the main trace's window (Sync off). L_Sync: the synced frame —
+    // kSyncHead header values (S_*), then kSync columns of (main min, main max, key min,
+    // key max, age: 0 this pass · 1 the previous pass · NaN empty).
+    enum { L_Spectrum = 0, L_Peak, L_Trace, L_Raw, L_Waterfall, L_KeyTrace, L_Sync };
+    enum { S_Mode = 0, S_Playhead, S_Bpm, S_BeatsPerBar, S_SpanBeats, S_Start, S_KeyLive, kSyncHead = 8 };
+    static constexpr int kSync = 1024; // columns in a synced frame
+    static constexpr int kSyncCol = 5; // values per column
+
+    // deviceAction ids.
+    enum { A_Rearm = 0, A_ResetPeak, A_ResetTrigger };
+
+    static constexpr int kCurve = 512;  // points in a spectrum curve
+    static constexpr int kTrace = 512;  // points in a scope trace
+    static constexpr int kWfBins = 256; // bins in a waterfall row
+
+    Lens();
+    void setSampleRate(double sr, int32_t maxBlock) override;
+
+    // Analyzer: the signal passes through untouched.
+    void process(float* buf, int32_t frames) override;
+
+    int32_t scopeRead(float* out, int32_t maxSamples) const override;
+    int32_t layerWave(int32_t layer, float* out, int32_t maxSamples) const override;
+    void deviceAction(int32_t id, int32_t iarg, float farg) override;
+
+    // Text reports, for MCP (get_device_text) and the smoke test.
+    std::string deviceText(int32_t id) const override;
+
+    const char* displayName() const override { return "Nota Lens"; }
+    int32_t builtinKind() const override { return 22; }
+
+    int32_t paramCount() const override { return kNumParams; }
+    const char* paramName(int32_t i) const override;
+    float paramMin(int32_t /*i*/) const override { return 0.0f; }
+    float paramMax(int32_t i) const override { return i == View ? 2.0f : 1.0f; } // View: 0 = L, 1 = S, 2 = XL (#540)
+    float getParam(int32_t i) const override;
+    void setParam(int32_t i, float v) override;
+
+    // ---- unit helpers, shared with the card so both read the same numbers ----
+    static double timeDivSec(float v) { return expMap(v, 0.00002, 0.02); }
+    static double voltDiv(float v) { return expMap(v, 0.02, 2.0); }
+    // Span in beats for a Span param value; a "bar" is beatsPerBar beats.
+    static double spanBeats(float v, double beatsPerBar) {
+        static const double b[7] = {0.25, 0.5, 1, 2, -1, -2, -4}; // negative = bars
+        const double x = b[step(v, 7)];
+        return x > 0 ? x : -x * std::max(1.0, beatsPerBar);
+    }
+    static double keyGainDb(float v) { return -24.0 + 48.0 * std::clamp(static_cast<double>(v), 0.0, 1.0); }
+
+    // Tempo sync + the sidechain key (specs/050). Audio thread.
+    void setTransport(double beatStart, double samplesPerBeat, bool playing) override {
+        beat0_ = beatStart;
+        spb_ = samplesPerBeat;
+        playing_ = playing;
+    }
+    void setTransportInfo(const TransportInfo& ti) override {
+        bpb_.store(ti.tsDenom > 0 ? ti.tsNum * 4.0 / ti.tsDenom : 4.0, std::memory_order_relaxed);
+    }
+    int32_t sidechainSourceTrackId() const override { return scTrackId_.load(std::memory_order_relaxed); }
+    void setSidechainSourceTrackId(int32_t id) override { scTrackId_.store(id, std::memory_order_relaxed); }
+    void setSidechain(const float* interleaved, int32_t frames) override {
+        scBuf_ = interleaved;
+        scFrames_ = frames;
+    }
+    void setSidechainLate(bool late) override { scLate_ = late; }
+    bool acceptsSidechain() const override { return true; }
+    static int fftSizeOf(float v) {
+        static const int n[4] = {512, 2048, 4096, 16384};
+        return n[std::clamp(static_cast<int>(std::lround(v * 3.0f)), 0, 3)];
+    }
+
+  private:
+    static constexpr double kPi = 3.14159265358979323846;
+    static constexpr int kRing = 32768; // power of two, per channel
+    static constexpr int kMaxFft = 16384;
+    static constexpr int kMaxWin = 16384;  // longest scope window we keep raw
+    static constexpr int kLufsBlocks = 50; // 50 × 8 ms = 400 ms momentary window
+    static constexpr int kBands = 31;      // ISO third-octave centres, 20 Hz … 20 kHz
+
+    static constexpr double kBandHz[kBands] = {20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500,
+        630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000};
+
+    struct Peak {
+        double hz;
+        double db;
+    };
+
+    float get(int i) const { return p_[i].load(std::memory_order_relaxed); }
+    static double expMap(float v, double lo, double hi) {
+        return lo * std::pow(hi / lo, std::clamp(static_cast<double>(v), 0.0, 1.0));
+    }
+
+  public:
+    static int step(float v, int n) {
+        return std::clamp(static_cast<int>(std::lround(v * (static_cast<float>(n - 1)))), 0, n - 1);
+    }
+    int trigModeIdx() const { return step(get(TrigMode), 3); }
+
+    static int32_t copyOut(const float* src, int n, float* out, int32_t maxSamples) {
+        const int32_t k = std::min<int32_t>(n, maxSamples);
+        if (k > 0) std::copy(src, src + k, out);
+        return k;
+    }
+
+    // ---- K-weighting (BS.1770) ------------------------------------------
+    struct Biquad {
+        double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+    };
+    struct KState {
+        double z1[2] = {0, 0}, z2[2] = {0, 0};
+    };
+
+    void kInit();
+    float kFilter(float x, KState& st) const;
+
+    // ---- analysis signal --------------------------------------------------
+    // The channel pair is L/R or Mid/Side; Source picks the sum or one of them.
+    // The selection is hoisted out of the sample loops (pick), so a 16 k FFT
+    // window costs two array reads per sample, not four atomic loads.
+    float pick(uint32_t idx, bool ms, int src) const {
+        const size_t i = idx & (kRing - 1);
+        const float l = ringL_[i], r = ringR_[i];
+        if (ms) return src == 2 ? 0.5f * (l - r) : 0.5f * (l + r);
+        return src == 1 ? l : src == 2 ? r : 0.5f * (l + r);
+    }
+    bool msOn() const { return get(MidSide) >= 0.5f; }
+    // A key arrived within the last ~16 blocks.
+    bool keyLive() const {
+        const uint32_t seen = keySeen_.load(std::memory_order_relaxed);
+        return seen != 0 && frameSeq_.load(std::memory_order_relaxed) - seen < 16;
+    }
+    int srcIdx() const { return step(get(Source), 3); }
+
+    int windowSamples() const;
+    float traceAt(float pos) const;
+
+    // ---- the analysis pass ------------------------------------------------
+    // Called under mx_ from every read entry point; recomputes at most once per
+    // 1/Rate seconds and only when the audio thread has produced a new block.
+    void ensureAnalyzed() const;
+    void analyzeSpectrum(double dt) const;
+    void buildWindow(int kind, int n) const;
+
+    // Trigger search + trace capture. The trace is pinned to the trigger point
+    // (25 % pre-trigger, like the mockup's marker) so it stands still.
+    void analyzeScope() const;
+    // The synced frame from the beat-stamped history (specs/050).
+    void analyzeSync() const;
+    // Rings + history for one block of audio (main and, when routed, the key); the
+    // beat-stamped history only with `hist` (Sync on). Audio thread.
+    void capture(const float* main, const float* key, int32_t keyFrames, int32_t frames, double beat0, double spb,
+        bool playing, bool hist);
+    float pickKey(uint32_t idx, bool ms, int src) const {
+        const size_t i = idx & (kRing - 1);
+        const float l = ringKL_[i], r = ringKR_[i];
+        if (ms) return src == 2 ? 0.5f * (l - r) : 0.5f * (l + r);
+        return src == 1 ? l : src == 2 ? r : 0.5f * (l + r);
+    }
+
+    // Period by autocorrelation over the captured window (0 when nothing locks).
+    double measurePeriod() const;
+    double bandDb(double hz) const;
+    std::vector<Peak> topPeaks(int want) const;
+    static std::string noteName(double hz);
+
+    const char* viewName() const {
+        static const char* v[3] = {"Spectrum", "Scope", "Waterfall"};
+        return v[step(get(Graph), 3)];
+    }
+    const char* sourceName() const {
+        const bool ms = get(MidSide) >= 0.5f;
+        static const char* const lr[3] = {"L+R", "L", "R"};
+        static const char* const msn[3] = {"Mid", "Mid", "Side"};
+        const char* const* const names = ms ? msn : lr;
+        return names[step(get(Source), 3)];
+    }
+
+    static double db(double lin) { return 20.0 * std::log10(std::max(1e-10, lin)); }
+    static double nowSeconds() {
+        // A monotonic clock without <chrono> in the hot path's type soup.
+        using clock = std::chrono::steady_clock;
+        return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
+    }
+
+    double sr_ = 44100.0;
+    std::atomic<float> p_[kNumParams] = {};
+
+    // Capture rings (audio thread writes, message thread reads).
+    std::vector<float> ringL_, ringR_;
+    std::atomic<uint32_t> ringW_{0};
+    std::atomic<uint32_t> frameSeq_{0};
+    std::atomic<float> corr_{0.0f}, lufs_{-120.0f};
+
+    // Tempo sync + the key (specs/050). The transport and key pointer are audio-thread only.
+    double beat0_ = 0.0, spb_ = 0.0;
+    bool playing_ = false;
+    std::atomic<double> bpb_{4.0};
+    std::atomic<int32_t> scTrackId_{-1};
+    static inline std::atomic<uint32_t> nextInstance_{1};
+    const uint32_t instance_ = nextInstance_.fetch_add(1, std::memory_order_relaxed) & 0xFFFFFF; // exact in a float
+    const float* scBuf_ = nullptr;
+    int32_t scFrames_ = 0;
+    // The engine hands the key in the same block, or — a key cycle, a key from a group or a
+    // return (#676) — one block late (scLate_). Then the capture runs a block behind: the held
+    // block and its transport, captured with the next block's key.
+    bool scLate_ = false;
+    std::vector<float> pend_;
+    int32_t pendN_ = 0;
+    double pendBeat_ = 0.0, pendSpb_ = 0.0;
+    bool pendPlaying_ = false;
+    bool keyedPrev_ = false, syncPrev_ = false; // audio thread
+    std::atomic<uint32_t> keySeen_{0};          // frameSeq_ of the last block a key arrived in
+    std::vector<float> ringKL_, ringKR_;        // the key, beside ringL_/ringR_ (same head)
+
+    // Beat-stamped min/max history: one bin per binLen_ samples of the analysis channel. The
+    // audio thread fills bin binW_ (accumulators below) and publishes it by bumping binW_.
+    static constexpr int kBins = 65536; // power of two
+    struct Bin {
+        float mLo, mHi, kLo, kHi;
+        double beat;     // the transport beat at the bin's first sample
+        double spb;      // samples per beat then
+        uint32_t sample; // ringW_ at the bin's first sample
+        uint8_t flags;   // 1 playing · 2 key present · bits 2..4 the channel (Source, M/S)
+    };
+    static constexpr uint8_t kBinPlaying = 1, kBinKey = 2, kBinChan = 0x1C;
+    // A bin is drawn only under the channel it was measured on (Source, M/S).
+    static uint8_t chanBits(bool ms, int src) { return static_cast<uint8_t>(((ms ? 4 : 0) | (src & 3)) << 2); }
+    std::vector<Bin> bins_;
+    std::atomic<uint32_t> binW_{0};
+    int binLen_ = 32, binN_ = 0; // audio thread
+    Bin acc_{};                  // audio thread: the bin being filled
+
+    // Loudness follower (audio thread only).
+    Biquad kb_[2];
+    KState ks_[2];
+    std::vector<double> lufsRing_;
+    int lufsBlock_ = 353, lufsIdx_ = 0, lufsN_ = 0;
+    double lufsAcc_ = 0.0;
+
+    // Analysis state — message thread only, under mx_.
+    mutable std::mutex mx_;
+    mutable math::RealFft fft_;
+    mutable std::vector<std::complex<float>> freq_;
+    mutable std::vector<float> time_, win_, avg_, binDb_, smTmp_;
+    mutable std::vector<float> curve_, peak_, peakAge_, trace_, rawWin_, wfRow_, keyTrace_, sync_;
+    mutable double winSum_ = 1.0, lastAnalyzeS_ = -1.0;
+    mutable uint32_t lastSeq_ = 0xFFFFFFFFu;
+    mutable int fftN_ = 0, winKind_ = -1, rawLen_ = 0;
+    mutable uint32_t trigPos_ = 0;
+    mutable bool trigOk_ = false, armed_ = true, singleDone_ = false;
+    mutable float mPeakHz_ = 0, mPeakDb_ = -120, mRmsDb_ = -120, mLevelDb_ = -120;
+    mutable float mPeriodMs_ = 0, mVpp_ = 0, mVrms_ = 0;
+};
+
+} // namespace nota

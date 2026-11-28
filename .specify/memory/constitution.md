@@ -26,9 +26,12 @@ dropouts here. The full rules: [`ARCHITECTURE.md`](../../ARCHITECTURE.md#archite
 ### II. Boundary Discipline (NON-NEGOTIABLE)
 
 Only a pure C ABI crosses the managed/native boundary (AR-7) — no C++ types, no
-exceptions; extend `nota_engine.h` rather than working around it. JUCE stays confined to
-`pluginhost/`; the core engine's JUCE-freedom is an architectural and licensing
-constraint.
+exceptions; extend `src/native/nota.engine/include/nota/nota_engine.h` rather than working around
+it. Inside the native engine, modules enforce `PUBLIC include/` vs `PRIVATE src/` isolation
+across an acyclic DAG (`ARCHITECTURE.md`). JUCE stays confined to `modules/pluginhost/` and
+`modules/pluginscanner/src/backends/juce/` with hidden visibility and `0` exported `juce::*`
+symbols; Objective-C++ bridges live exclusively in `*_mac.mm`. The core engine's JUCE-freedom
+is an architectural and licensing constraint.
 
 ### III. Licensing Hygiene (NON-NEGOTIABLE)
 
@@ -68,12 +71,31 @@ If principles I–III seem to stand in the way of a feature, the feature changes
 escalates to a human maintainer. The rules themselves are not bent, even "temporarily",
 even with a comment explaining why.
 
+### IX. Native Code Readability, Architecture & Formatting Gates
+
+Native engine code (`src/native/nota.engine/`, `tests/perf/`, `scripts/bench/`) must preserve
+the modular decomposition, self-contained headers, strict C++20 safety, and formatting gates
+defined in [`ARCHITECTURE.md`](../../ARCHITECTURE.md#native-module-readability-and-formatting-gates)
+(no raw `new`/`delete` in `modules/*` domain/API code, `< 180`-line public `Engine::*` headers,
+`> 400`-line devices split into focused files with no `> 1,000`-line monoliths, OOP registries over
+`switch` factories, and zero leaked third-party/OS headers in public `include/**`).
+
 ## Quality Gates
 
 - `scripts/build.sh` (macOS; `scripts/build-linux.sh`, `scripts/build-win.ps1`) must exit
   green — it builds native + managed and runs the smoke test.
+- Native engine edit gates ([`ARCHITECTURE.md`](../../ARCHITECTURE.md#native-module-readability-and-formatting-gates),
+  [`.clangd`](../../.clangd)):
+  - **Mandatory `clang-format`**: before concluding any edit to native engine, perf, or benchmark
+    code (`src/native/nota.engine/`, `tests/perf/`, `scripts/bench/`), unconditionally run
+    `clang-format -i` (using root [`.clang-format`](../../.clang-format)) on every modified
+    C/C++/ObjC++ file.
+  - Strict C++20 builds (`NOTA_STRICT_WARNINGS_AS_ERRORS=ON` across `dev`/`dev-cpp`/`dev-asan`/
+    `release`), `test_headers_compile` standalone header verification, zero exported `juce::*`
+    symbols from `nota_pluginhost`/`nota_pluginscanner`, and zero `clangd` missing/unused-include
+    diagnostics must pass.
 - `/speckit-converge` must report **Converged** before a spec-driven change is submitted.
-- New public API surface at the C ABI boundary is reflected in `nota_engine.h` and
+- New public API surface at the C ABI boundary is reflected in `src/native/nota.engine/include/nota/nota_engine.h` and
   covered by the smoke test.
 
 ## Governance
@@ -84,4 +106,4 @@ This constitution governs AI agents working in this repository;
 above. Amendments require a pull request that updates the source-of-truth doc first,
 then this file, and must not weaken principles I–III.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-11 | **Last Amended**: 2026-11-02
+**Version**: 1.2.0 | **Ratified**: 2026-10-11 | **Last Amended**: 2026-11-27

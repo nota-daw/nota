@@ -100,17 +100,21 @@ before measuring, so a full run takes several minutes.
 ## Layout
 
 ```
-src/native/nota.engine/        # C++ engine + C ABI (libnota_engine.dylib)
-  include/nota/nota_engine.h   # the public boundary (C ABI)
-  src/                         # Engine core (Engine*.cpp), abi/, media/, audio_io/
-    devices/                   # base interfaces + effects/ instruments/ midi_fx/ racks/
-    engine/                    # Graph/Track/Transport/… + AudioThreadPool (.h/.cpp pairs)
-    dsp/core,math,primitives,poly/  # shared DSP building blocks
-  pluginhost/                  # JUCE-based VST3/AU hosting (the only JUCE-aware module)
-    hosting/                   # play-head, editors, plugin devices (in nota_pluginhost)
-    scanner/                   # catalog, out-of-process scan (nota_pluginscanner INTERFACE)
-    scanner/worker/            # nota-scanworker sources
-    bridge/                    # the two bridge headers
+src/native/nota.engine/        # Modular C++20 engine + optional C ABI (libnota_engine.*)
+  include/nota/nota_engine.h   # the public C ABI contract
+  cmake/                       # shared module helpers (NotaModuleHelpers.cmake) & CPM deps
+  modules/
+    core/                      # config file I/O, editor key queue (`nota_core`)
+    math/                      # FastMath, SIMD, FFT, windowing (`nota_math`)
+    media/                     # samples, warp, codecs, streaming, offline import (`nota_media`)
+    dsp/                       # DSP building blocks, RT primitives, device contracts (`nota_dsp`)
+    devices/                   # effects, instruments, MIDI FX, racks, DeviceIds (`nota_devices`)
+    pluginscanner/             # catalog, out-of-process scan + private JUCE backend (`nota_pluginscanner`)
+    pluginhost/                # JUCE VST3/AU hosting (`nota_pluginhost`)
+    io/                        # audio, MIDI, MPE, ASIO session, gamepad drivers (`nota_io`)
+    engine/                    # Engine core, render, transport, session, OOP C++ API (`nota_engine_core`)
+    c_abi/                     # optional pure-C P/Invoke wrapper (`nota_engine`, NOTA_BUILD_C_ABI=ON)
+  tests/                       # per-module CTest suites, header-compile checks, C++ OOP & C ABI tests
 src/managed/Nota.Domain/       # pure domain types
 src/managed/Nota.Application/  # ports (interfaces) and use cases
 src/managed/Nota.Infrastructure/  # P/Invoke interop, .nota persistence, services
@@ -121,17 +125,17 @@ tests/Nota.SmokeTest/          # end-to-end check: C# -> C ABI -> engine -> audi
 ```
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how these fit together and the rules that
-govern the boundary between them. Native convention: every device, engine model
-class, and DSP block is a `.h`/`.cpp` pair (declaration header + implementation
-TU, AGPL SPDX header on each), so editing one `.cpp` recompiles one TU.
-`nota_pluginscanner` is an INTERFACE target whose translation units compile
-inside `nota_pluginhost` — a second STATIC JUCE library would duplicate ~11k
-symbols at link time.
+govern the boundary between them. Native convention: every module publishes self-contained
+headers under `modules/<name>/include/nota/<name>/` and keeps private implementation details
+under `modules/<name>/src/` with hidden symbol visibility, explicit export macros (`AGPL`
+SPDX two-line header on every file), and CMake-generated symbol export filters
+(`NotaModuleHelpers.cmake`). `nota_pluginhost` and `pluginscanner/src/backends/juce/` own
+the private static JUCE linkages while exporting `0` JUCE symbols.
 
 ## Building the parts by hand
 
 ```bash
-# native
+# native (all modules + C ABI)
 cmake -G Ninja -S src/native/nota.engine -B src/native/nota.engine/build \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build src/native/nota.engine/build
@@ -140,26 +144,13 @@ cmake --build src/native/nota.engine/build
 dotnet build Nota.sln -c Release
 ```
 
-The managed projects copy the right native artifact for the platform out of the CMake
-build directory and place it next to the binary: `libnota_engine.dylib` +
-`nota-scanworker` (macOS), `nota_engine.dll` + `nota-scanworker.exe` (Windows), or
-`libnota_engine.so` + `nota-scanworker` (Linux). Override the paths with
-`-p:NotaEngineLib=...` / `-p:NotaScanWorker=...`.
+The managed projects copy the native shared libraries (`libnota_*.dylib` + `nota-scanworker`
+on macOS, `nota_*.dll` + `nota-scanworker.exe` on Windows, or `libnota_*.so` +
+`nota-scanworker` on Linux) out of the CMake build directory next to the app binary. Override
+the paths with `-p:NotaNativeDir=...`, `-p:NotaEngineLib=...`, or `-p:NotaScanWorker=...`.
 
 On memory-constrained machines and containers, cap parallelism so the large JUCE
 translation units are not OOM-killed: `export CMAKE_BUILD_PARALLEL_LEVEL=2`.
-
-### Nota Pentad as a standalone VST3 (optional)
-
-For checking the Pentad synth in another host, the same DSP (`src/devices/instruments/Pentad.h`/`.cpp`) also builds
-as a VST3 with JUCE's generic editor. It is off by default and not part of the app:
-
-```bash
-cmake -G Ninja -S src/native/nota.engine -B build-pentad -DCMAKE_BUILD_TYPE=Release \
-  -DNOTA_BUILD_PENTAD_VST3=ON
-cmake --build build-pentad --target NotaPentad_VST3
-# → build-pentad/NotaPentad_artefacts/Release/VST3/Nota Pentad.vst3
-```
 
 ## Building on Windows (x64)
 

@@ -1,0 +1,243 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Shared CMake helpers for Nota modular dynamically linked native libraries.
+
+include_guard(GLOBAL)
+include(CheckIPOSupported)
+
+set(NOTA_PUBLIC_HEADER_SPECS "" CACHE INTERNAL "List of public headers for standalone compilation check")
+
+function(nota_register_public_headers)
+    cmake_parse_arguments(ARG "" "TARGET;INCLUDE_ROOT" "HEADERS" ${ARGN})
+    foreach(hdr IN LISTS ARG_HEADERS)
+        get_filename_component(abs_hdr "${hdr}" ABSOLUTE)
+        list(APPEND NOTA_PUBLIC_HEADER_SPECS "${ARG_TARGET}|${ARG_INCLUDE_ROOT}|${abs_hdr}")
+    endforeach()
+    set(NOTA_PUBLIC_HEADER_SPECS "${NOTA_PUBLIC_HEADER_SPECS}" CACHE INTERNAL "List of public headers for standalone compilation check")
+endfunction()
+
+function(nota_enable_strict_cxx TARGET)
+    if(MSVC)
+        target_compile_options(${TARGET} PRIVATE
+            /W4 /permissive- /w14242 /w14265 /w14287 /we4289 /w14296 /w14311 /w14640
+            $<$<BOOL:${NOTA_STRICT_WARNINGS_AS_ERRORS}>:/WX>
+        )
+    else()
+        target_compile_options(${TARGET} PRIVATE
+            -Wall -Wextra -Wpedantic
+            -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual
+            -Wnull-dereference -Wformat=2
+            -Wconversion -Wsign-conversion
+            $<$<BOOL:${NOTA_STRICT_WARNINGS_AS_ERRORS}>:-Werror>
+        )
+    endif()
+
+    if(NOTA_ENABLE_SANITIZERS)
+        if(MSVC)
+            target_compile_options(${TARGET} PRIVATE /fsanitize=address)
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            target_compile_options(${TARGET} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+            target_link_options(${TARGET} PRIVATE -fsanitize=address,undefined)
+        endif()
+    endif()
+endfunction()
+
+function(nota_apply_common_target_settings TARGET)
+    target_compile_features(${TARGET} PUBLIC cxx_std_20)
+    target_compile_definitions(${TARGET} PRIVATE NOTA_VERSION_STRING="${PROJECT_VERSION}")
+
+    set_target_properties(${TARGET} PROPERTIES
+        CXX_EXTENSIONS OFF
+        C_VISIBILITY_PRESET hidden
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON
+        MACOSX_RPATH ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    )
+
+    if(NOT MSVC)
+        # CMake's CXX_VISIBILITY_PRESET does not cover Objective-C/C++ translation units (*_mac.mm).
+        target_compile_options(${TARGET} PRIVATE
+            $<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fvisibility=hidden>
+        )
+    endif()
+
+    if(APPLE)
+        set_target_properties(${TARGET} PROPERTIES
+            BUILD_RPATH "@loader_path"
+            INSTALL_RPATH "@loader_path"
+        )
+    elseif(UNIX)
+        set_target_properties(${TARGET} PROPERTIES
+            BUILD_RPATH "$ORIGIN"
+            INSTALL_RPATH "$ORIGIN"
+        )
+    endif()
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
+        target_compile_options(${TARGET} PRIVATE -fno-math-errno)
+    endif()
+
+    if(UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(${TARGET} PRIVATE -fno-semantic-interposition)
+    endif()
+
+    if(NOTA_ENABLE_LTO AND (MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+        check_ipo_supported(RESULT _nota_ipo_ok OUTPUT _nota_ipo_err LANGUAGES C CXX)
+        if(_nota_ipo_ok)
+            set_property(TARGET ${TARGET} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        endif()
+    endif()
+endfunction()
+
+function(_nota_write_file_if_changed OUT_PATH CONTENT)
+    get_filename_component(_dir "${OUT_PATH}" DIRECTORY)
+    file(MAKE_DIRECTORY "${_dir}")
+    if(EXISTS "${OUT_PATH}")
+        file(READ "${OUT_PATH}" _existing)
+        if(_existing STREQUAL "${CONTENT}")
+            return()
+        endif()
+    endif()
+    file(WRITE "${OUT_PATH}" "${CONTENT}")
+endfunction()
+
+function(_nota_itanium_encode_namespace OUT_VAR NAMESPACE)
+    string(REPLACE "::" ";" _parts "${NAMESPACE}")
+    set(_encoded "")
+    foreach(_part IN LISTS _parts)
+        if(NOT _part STREQUAL "")
+            string(LENGTH "${_part}" _len)
+            string(APPEND _encoded "${_len}${_part}")
+        endif()
+    endforeach()
+    set(${OUT_VAR} "${_encoded}" PARENT_SCOPE)
+endfunction()
+
+function(nota_apply_symbol_export_filter TARGET)
+    cmake_parse_arguments(
+        ARG
+        ""
+        "MACOS_EXPORTS;LINUX_VERSION_SCRIPT;VERSION_NODE"
+        "NAMESPACES;C_PREFIXES"
+        ${ARGN}
+    )
+
+    if((ARG_NAMESPACES OR ARG_C_PREFIXES) AND (ARG_MACOS_EXPORTS OR ARG_LINUX_VERSION_SCRIPT))
+        message(FATAL_ERROR "nota_apply_symbol_export_filter(${TARGET}): pass either NAMESPACES/C_PREFIXES or explicit MACOS_EXPORTS/LINUX_VERSION_SCRIPT, not both.")
+    endif()
+
+    if(ARG_NAMESPACES OR ARG_C_PREFIXES)
+        if(APPLE)
+            set(_macos_file "${CMAKE_CURRENT_BINARY_DIR}/generated/${TARGET}_exports.txt")
+            set(_content "# Auto-generated by CMake (NotaModuleHelpers.cmake) for ${TARGET}.\n")
+            if(ARG_NAMESPACES)
+                string(JOIN ", " _ns_list ${ARG_NAMESPACES})
+                string(APPEND _content "# C++ namespaces: ${_ns_list}\n")
+                foreach(_ns IN LISTS ARG_NAMESPACES)
+                    _nota_itanium_encode_namespace(_mangled "${_ns}")
+                    string(APPEND _content "__Z*${_mangled}*\n")
+                endforeach()
+            endif()
+            if(ARG_C_PREFIXES)
+                string(JOIN ", " _c_list ${ARG_C_PREFIXES})
+                string(APPEND _content "# C prefixes: ${_c_list}\n")
+                foreach(_pfx IN LISTS ARG_C_PREFIXES)
+                    string(APPEND _content "_${_pfx}*\n")
+                endforeach()
+            endif()
+            _nota_write_file_if_changed("${_macos_file}" "${_content}")
+            set(ARG_MACOS_EXPORTS "${_macos_file}")
+        elseif(UNIX)
+            set(_linux_file "${CMAKE_CURRENT_BINARY_DIR}/generated/${TARGET}_exports.map")
+            if(NOT ARG_VERSION_NODE)
+                string(TOUPPER "${TARGET}" _upper_target)
+                string(REGEX REPLACE "[^A-Z0-9_]" "_" _upper_target "${_upper_target}")
+                set(ARG_VERSION_NODE "${_upper_target}_1.0")
+            endif()
+
+            # Use C-style /* ... */ comments for both GNU ld and LLVM lld compatibility, and
+            # match raw Itanium-mangled symbols so vtable/typeinfo/thunks are retained alongside methods.
+            set(_content "/* Auto-generated by CMake (NotaModuleHelpers.cmake) for ${TARGET}. */\n")
+            string(APPEND _content "${ARG_VERSION_NODE} {\n  global:\n")
+            foreach(_ns IN LISTS ARG_NAMESPACES)
+                _nota_itanium_encode_namespace(_mangled "${_ns}")
+                string(APPEND _content "    _Z*${_mangled}*;\n")
+            endforeach()
+            foreach(_pfx IN LISTS ARG_C_PREFIXES)
+                string(APPEND _content "    ${_pfx}*;\n")
+            endforeach()
+            string(APPEND _content "  local:\n    *;\n};\n")
+            _nota_write_file_if_changed("${_linux_file}" "${_content}")
+            set(ARG_LINUX_VERSION_SCRIPT "${_linux_file}")
+        endif()
+    endif()
+
+    if(APPLE AND ARG_MACOS_EXPORTS)
+        target_link_options(${TARGET} PRIVATE "LINKER:-exported_symbols_list,${ARG_MACOS_EXPORTS}")
+        set_property(TARGET ${TARGET} APPEND PROPERTY LINK_DEPENDS "${ARG_MACOS_EXPORTS}")
+    elseif(UNIX AND NOT APPLE AND ARG_LINUX_VERSION_SCRIPT)
+        target_link_options(${TARGET} PRIVATE "LINKER:--version-script=${ARG_LINUX_VERSION_SCRIPT}")
+        set_property(TARGET ${TARGET} APPEND PROPERTY LINK_DEPENDS "${ARG_LINUX_VERSION_SCRIPT}")
+    endif()
+endfunction()
+
+function(nota_add_shared_module TARGET)
+    cmake_parse_arguments(
+        ARG
+        "NO_EXPORT_FILTER"
+        "ALIAS;OUTPUT_NAME;EXPORT_MACRO;INCLUDE_ROOT;EXPORT_VERSION_NODE"
+        "SOURCES;PUBLIC_HEADERS;EXPORT_NAMESPACES;EXPORT_C_PREFIXES"
+        ${ARGN}
+    )
+
+    if(NOT ARG_OUTPUT_NAME)
+        set(ARG_OUTPUT_NAME "${TARGET}")
+    endif()
+    if(NOT ARG_INCLUDE_ROOT)
+        set(ARG_INCLUDE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    endif()
+
+    add_library(${TARGET} SHARED ${ARG_SOURCES} ${ARG_PUBLIC_HEADERS})
+    if(ARG_ALIAS)
+        add_library(nota::${ARG_ALIAS} ALIAS ${TARGET})
+    endif()
+
+    set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME "${ARG_OUTPUT_NAME}")
+    nota_apply_common_target_settings(${TARGET})
+    nota_enable_strict_cxx(${TARGET})
+
+    if(ARG_EXPORT_MACRO)
+        target_compile_definitions(${TARGET} PRIVATE "${ARG_EXPORT_MACRO}_EXPORTS")
+    endif()
+
+    target_include_directories(${TARGET}
+        PUBLIC  "${ARG_INCLUDE_ROOT}"
+        PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+
+    if(ARG_PUBLIC_HEADERS)
+        nota_register_public_headers(
+            TARGET "${TARGET}"
+            INCLUDE_ROOT "${ARG_INCLUDE_ROOT}"
+            HEADERS ${ARG_PUBLIC_HEADERS}
+        )
+    endif()
+
+    if(NOT ARG_NO_EXPORT_FILTER)
+        if(NOT ARG_EXPORT_NAMESPACES AND NOT ARG_EXPORT_C_PREFIXES AND ARG_ALIAS)
+            set(ARG_EXPORT_NAMESPACES "nota::${ARG_ALIAS}")
+        endif()
+        if(ARG_EXPORT_NAMESPACES OR ARG_EXPORT_C_PREFIXES)
+            set(_filter_args NAMESPACES ${ARG_EXPORT_NAMESPACES})
+            if(ARG_EXPORT_C_PREFIXES)
+                list(APPEND _filter_args C_PREFIXES ${ARG_EXPORT_C_PREFIXES})
+            endif()
+            if(ARG_EXPORT_VERSION_NODE)
+                list(APPEND _filter_args VERSION_NODE "${ARG_EXPORT_VERSION_NODE}")
+            endif()
+            nota_apply_symbol_export_filter(${TARGET} ${_filter_args})
+        endif()
+    endif()
+endfunction()

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+﻿# SPDX-License-Identifier: AGPL-3.0-only
 #
 # Package Nota for Windows: build the native engine, publish the self-contained
 # app, then build an Inno Setup installer (scripts/nota.iss). Uses the (default,
@@ -47,7 +47,7 @@ dotnet publish src/managed/Nota.App -c Release -r $Rid --self-contained true `
 
 # The csproj copies the native artifacts into the publish output for a win RID;
 # copy them explicitly too as a safety net.
-Copy-Item (Join-Path $NativeOut 'nota_engine.dll') $PubDir -Force
+Copy-Item (Join-Path $NativeOut 'nota_*.dll') $PubDir -Force
 $scanWorker = Join-Path $NativeOut 'nota-scanworker.exe'
 if (Test-Path $scanWorker) { Copy-Item $scanWorker $PubDir -Force }
 # No debug symbols in the installer (DebugType=none above; this also drops any .pdb a

@@ -28,6 +28,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Engine performance (#1050, specs/115)**: Copy-on-Write (`CowSlice`) backing for track clip/automation/slot snapshots with incremental `publishRaw()` / single-pass `recomputePdc()` / unchanged `recomputeRouting()` skipping, session-sized `StereoScratchArena` & `RenderScratch` buffers (`2048` live frames growing safely for offline bounces), `Eq` per-band coefficient caching + `double2` stereo SIMD filter chains (`float64x2_t` NEON / `__m128d` SSE2), clean header-only `Simd` (`complexMulAdd`, `dot`, `maxAbs`, `peakAndSumSquares`) + `SimdAudio` + `accumulatePackedSpectrum` (`Chamber`, `Convolution`), `-fno-math-errno`, and Release ThinLTO.
 
 ### Changed
+- **Modular C++20 native engine & optional C ABI boundary** (#1116, specs/116-modular-engine) split the monolithic native engine into 9 self-contained CMake shared-library modules under `src/native/nota.engine/modules/` (`math`, `media`, `dsp`, `devices`, `pluginscanner`, `pluginhost`, `io`, `engine`, and optional `c_abi` toggled via `NOTA_BUILD_C_ABI`):
+  - Pure C++20 consumers can link `nota::engine` (`libnota_engine_core`) and sibling modules directly through header-isolated OOP handles (`nota::Engine` via `<nota/engine/NotaEngine.h>`) with `-DNOTA_BUILD_C_ABI=OFF`, while P/Invoke consumers keep the unchanged `nota_*` symbol contract through `nota::c_abi` (`libnota_engine`).
+  - Replaced legacy plugin scanning with format-agnostic `IPluginFormatBackend` / `PluginFormatRegistry` + `nota_pluginscanner` / `nota-scanworker`, separated codecs into `AudioCodecRegistry` (`nota_media`), separated audio/MIDI/gamepad drivers into `nota_io`, and updated `.csproj` / platform packaging scripts to stage sibling `nota_*.{dll,dylib,so}` libraries alongside `nota_engine`.
 - **Timeline indexing and precompiled render routing plans** (#1050, specs/115) replace linear
   per-block arrangement scans and track-graph lookups with immutable snapshot indices.
   Per-track `TimelineIndex` structures resolve active MIDI/audio clips, overlapping notes, and
@@ -51,6 +54,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Fixed
 - **Scrollbars stay thin and themed on hover (#1113)**: Replaced Avalonia `FluentTheme`'s `ScrollBar` template with a dedicated Nota `ControlTheme` in `NotaTheme.axaml` (9 px track with 0 minimum constraints, 5 px rounded pill thumb, transparent track with no arrow buttons, and hidden `ScrollViewer` corner separator), so hovering or expanding a scrollbar only transitions the thumb colour instead of widening to 16 px with unstyled Fluent track, arrow, and thumb fills.
 - **Open VST3 and AudioUnit plugin editor keep-awake (#1050)**: Native VST3 and AudioUnit plugin UIs no longer freeze when the plugin goes silent, sits on a stopped audio track, muted track, group/return bus, or nested rack, or runs inside the Hybrid anticipative pool (`SilenceGate::holdAwake_`, lock-free `EditorHost::open_`, track/bus/rack active-editor propagation, and live Hybrid bypass without overwriting `PluginSleepMode`).
+
+### Removed
+- **Standalone `Nota Pentad` VST3 wrapper (#1116, specs/116-modular-engine)**: Removed the unused `plugins/pentad/` VST3 build target (`NOTA_BUILD_PENTAD_VST3`) while keeping the built-in Nota Pentad synthesizer (`kind = 14`) and `nota-render-probe`.
 
 ## [0.61.1] — 2026-11-24
 

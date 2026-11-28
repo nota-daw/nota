@@ -1,0 +1,420 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+
+#include "nota/io/audio/asio/AsioSession.h"
+#include "nota/io/audio/asio/AsioSampleFormat.h"
+#include "nota/io/audio/asio/AsioDriverApi.h"
+#include "nota/io/audio/OutputRouter.h"
+#include "nota/io/audio/AudioIoTypes.h"
+
+#include <algorithm>
+#include <chrono>
+#include <atomic>
+#include <cstddef>
+#include <string>
+#include <memory>
+#include <cstdint>
+#include <thread>
+#include <utility>
+#include <vector>
+
+namespace nota::io::audio::asio {
+namespace {
+
+std::atomic<AsioSession*> g_active{nullptr};
+
+void onBufferSwitch(int32_t index, int64_t pos) {
+    if (AsioSession* s = g_active.load(std::memory_order_acquire)) s->bufferSwitch(index, pos);
+}
+
+void onSampleRateDidChange(double rate) {
+    if (AsioSession* s = g_active.load(std::memory_order_acquire)) s->sampleRateChanged(rate);
+}
+
+int32_t onMessage(int32_t selector, int32_t value) {
+    AsioSession* s = g_active.load(std::memory_order_acquire);
+    return s ? s->message(selector, value) : 0;
+}
+
+int64_t nowNs() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+bool waitOutSwitch(const std::atomic<bool>& inSwitch) {
+    for (int i = 0; i < 500 && inSwitch.load(std::memory_order_seq_cst); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return !inSwitch.load(std::memory_order_seq_cst);
+}
+
+} // namespace
+
+AsioSession::~AsioSession() {
+    close();
+}
+
+void AsioSession::setRenderCallback(RenderCallback cb) {
+    if (state_ != State::Running) render_ = std::move(cb);
+}
+
+void AsioSession::setXrunCallback(XrunCallback cb) {
+    if (state_ != State::Running) xrun_ = std::move(cb);
+}
+
+bool AsioSession::setInputCallback(const InputCallback* cb) {
+    input_.store(cb, std::memory_order_seq_cst);
+    return cb || waitOutSwitch(inSwitch_);
+}
+
+bool AsioSession::quiesce() {
+    live_.store(nullptr, std::memory_order_seq_cst);
+    if (waitOutSwitch(inSwitch_)) return true;
+    wedged_ = true;
+    return false;
+}
+
+bool AsioSession::failOpen(Failure why, std::string detail) {
+    if (driver_ && driver_->timedOut()) why = Failure::Timeout;
+    fail(why, std::move(detail));
+    return false;
+}
+
+void AsioSession::fail(Failure why, std::string detail) {
+    releaseDriver();
+    failure_ = why;
+    failureDetail_ = std::move(detail);
+    state_ = State::Failed;
+}
+
+bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt) {
+    close();
+    state_ = State::Closed;
+    failure_ = Failure::None;
+    failureDetail_.clear();
+    driverName_.clear();
+    rateRefused_ = false;
+    driverRate_ = 0.0;
+    if (wedged_) {
+        driver.reset();
+        return failOpen(Failure::Timeout, "an earlier audio callback never returned — restart Nota to use ASIO again");
+    }
+    driver_ = std::move(driver);
+    if (!driver_) return failOpen(Failure::LoadFailed, {});
+
+    if (!driver_->init()) return failOpen(Failure::InitFailed, driver_->errorMessage());
+    driverName_ = driver_->driverName();
+
+    int32_t ins = 0, outs = 0;
+    if (!driver_->getChannels(ins, outs)) return failOpen(Failure::InitFailed, driver_->errorMessage());
+    if (outs <= 0) return failOpen(Failure::NoOutputs, {});
+
+    double rate = 0.0;
+    driver_->getSampleRate(rate);
+    if (opt.sampleRate > 0.0 && opt.sampleRate != rate) {
+        if (driver_->canSampleRate(opt.sampleRate) && driver_->setSampleRate(opt.sampleRate)) {
+            driver_->getSampleRate(rate);
+        } else {
+            rateRefused_ = true;
+        }
+    }
+    if (rate <= 0.0) return failOpen(Failure::InitFailed, "no sample clock");
+    sampleRate_ = rate;
+
+    int32_t minSize = 0, maxSize = 0, preferred = 0, granularity = 0;
+    if (!driver_->getBufferSize(minSize, maxSize, preferred, granularity)) {
+        return failOpen(Failure::InitFailed, driver_->errorMessage());
+    }
+    bufferFrames_ = preferred > 0 ? preferred : minSize;
+    if (bufferFrames_ <= 0) return failOpen(Failure::InitFailed, "no buffer size");
+
+    auto readChannels = [&](bool input, int32_t count, std::vector<ChannelInfo>& out) {
+        out.clear();
+        for (int32_t i = 0; i < count; ++i) {
+            ChannelInfo ci;
+            ci.index = i;
+            ci.isInput = input;
+            if (!driver_->getChannelInfo(ci)) return false;
+            if (ci.name.empty()) ci.name = (input ? "In " : "Out ") + std::to_string(i + 1);
+            out.push_back(std::move(ci));
+        }
+        return true;
+    };
+    if (!readChannels(false, outs, outChannels_) || !readChannels(true, ins, inChannels_)) {
+        return failOpen(Failure::InitFailed, driver_->errorMessage());
+    }
+
+    outL_ = (opt.outputPair >= 0 && opt.outputPair < outs) ? opt.outputPair : 0;
+    outR_ = outL_ + 1 < outs ? outL_ + 1 : -1;
+    routing_.store(packRouting(OutputRouting{outL_, 2, -1, 2}), std::memory_order_relaxed);
+    inPair_ = ins > 0 ? ((opt.inputPair >= 0 && opt.inputPair < ins) ? opt.inputPair : 0) : -1;
+    inCount_ = std::min(ins, kMaxInputChannels);
+
+    auto unsupported = [&](const ChannelInfo& c) { return !isSupported(c.type); };
+    for (int32_t ch : {outL_, outR_}) {
+        if (ch >= 0 && unsupported(outChannels_[static_cast<std::size_t>(ch)])) {
+            return failOpen(
+                Failure::UnsupportedFormat, sampleTypeName(outChannels_[static_cast<std::size_t>(ch)].type));
+        }
+    }
+
+    auto buildIo = [&](bool allInputs) {
+        io_ = std::make_unique<Io>();
+        Io& io = *io_;
+        io.driver = driver_.get();
+        io.frames = bufferFrames_;
+        for (int32_t i = 0; i < outs; ++i) {
+            io.buffers.push_back(BufferInfo{false, i, {nullptr, nullptr}});
+            io.outTypes.push_back(outChannels_[static_cast<std::size_t>(i)].type);
+        }
+        io.outL = outL_;
+        io.outR = outR_;
+        io.inCount = inCount_;
+        io.inBufs.assign(static_cast<std::size_t>(inCount_), -1);
+        io.inTypes.assign(static_cast<std::size_t>(inCount_), SampleType::Float32LSB);
+        for (int32_t c = 0; c < inCount_; ++c) {
+            const bool wanted = allInputs || c == inPair_ || c == inPair_ + 1;
+            if (!wanted || unsupported(inChannels_[static_cast<std::size_t>(c)])) continue;
+            io.inBufs[static_cast<std::size_t>(c)] = static_cast<int32_t>(io.buffers.size());
+            io.inTypes[static_cast<std::size_t>(c)] = inChannels_[static_cast<std::size_t>(c)].type;
+            io.buffers.push_back(BufferInfo{true, c, {nullptr, nullptr}});
+        }
+        io.interleaved.assign(static_cast<std::size_t>(bufferFrames_) * 2u, 0.0f);
+        io.cueInterleaved.assign(static_cast<std::size_t>(bufferFrames_) * 2u, 0.0f);
+        io.inInterleaved.assign(
+            static_cast<std::size_t>(bufferFrames_) * static_cast<std::size_t>(std::max(inCount_, 1)), 0.0f);
+    };
+
+    g_active.store(this, std::memory_order_release);
+    Callbacks cb;
+    cb.bufferSwitch = &onBufferSwitch;
+    cb.sampleRateDidChange = &onSampleRateDidChange;
+    cb.message = &onMessage;
+    buildIo(true);
+    bool created =
+        driver_->createBuffers(io_->buffers.data(), static_cast<int32_t>(io_->buffers.size()), bufferFrames_, cb);
+    if (!created && inCount_ > 2) {
+        buildIo(false);
+        created =
+            driver_->createBuffers(io_->buffers.data(), static_cast<int32_t>(io_->buffers.size()), bufferFrames_, cb);
+    }
+    if (!created) return failOpen(Failure::InitFailed, driver_->errorMessage());
+    Io& io = *io_;
+    buffersCreated_ = true;
+    for (const auto& b : io.buffers) {
+        if (!b.isInput) {
+            for (void* half : b.buffers) {
+                clear(io.outTypes[static_cast<std::size_t>(b.channel)], half, bufferFrames_);
+            }
+        }
+    }
+
+    inputLatency_ = outputLatency_ = 0;
+    driver_->getLatencies(inputLatency_, outputLatency_);
+    io.outputReady = driver_->probeOutputReady();
+    resetRequested_.store(false, std::memory_order_relaxed);
+    state_ = State::Prepared;
+    return true;
+}
+
+bool AsioSession::start() {
+    if (state_ == State::Running) return true;
+    if (state_ != State::Prepared || !driver_ || !io_) return false;
+    lastPosition_ = -1;
+    lastTickNs_.store(nowNs(), std::memory_order_relaxed);
+    io_->render = render_;
+    live_.store(io_.get(), std::memory_order_seq_cst);
+    if (!driver_->start()) {
+        quiesce();
+        return failOpen(Failure::InitFailed, driver_->errorMessage());
+    }
+    started_ = true;
+    state_ = State::Running;
+    return true;
+}
+
+void AsioSession::stop() {
+    quiesce();
+    if (started_ && driver_) driver_->stop();
+    started_ = false;
+    if (state_ == State::Running) state_ = State::Prepared;
+}
+
+void AsioSession::close() {
+    stop();
+    releaseDriver();
+    if (state_ != State::Failed) state_ = State::Closed;
+}
+
+void AsioSession::releaseDriver() {
+    if (quiesce()) {
+        if (driver_) {
+            if (started_) driver_->stop();
+            if (buffersCreated_) driver_->disposeBuffers();
+        }
+        driver_.reset();
+        io_.reset();
+    } else {
+        (void)driver_.release();
+        (void)io_.release();
+    }
+    started_ = false;
+    buffersCreated_ = false;
+    AsioSession* self = this;
+    g_active.compare_exchange_strong(self, nullptr, std::memory_order_acq_rel);
+    inChannels_.clear();
+    outChannels_.clear();
+    outL_ = outR_ = inPair_ = -1;
+    inCount_ = 0;
+    sampleRate_ = 0.0;
+    bufferFrames_ = 0;
+    inputLatency_ = outputLatency_ = 0;
+    if (state_ == State::Running || state_ == State::Prepared) state_ = State::Closed;
+}
+
+std::string AsioSession::failureText() const {
+    std::string s;
+    switch (failure_) {
+    case Failure::None: return {};
+    case Failure::NotInstalled: s = "the driver isn't installed"; break;
+    case Failure::LoadFailed: s = "the driver couldn't be loaded"; break;
+    case Failure::InitFailed: s = "the driver didn't start — another program may be using it"; break;
+    case Failure::UnsupportedFormat: s = "the driver uses a sample format Nota can't read"; break;
+    case Failure::NoOutputs: s = "the driver has no outputs"; break;
+    case Failure::Timeout: s = "the driver stopped responding"; break;
+    case Failure::Stopped: s = "the driver stopped sending audio"; break;
+    }
+    if (!failureDetail_.empty()) s += " (" + failureDetail_ + ")";
+    return s;
+}
+
+bool AsioSession::openControlPanel() {
+    return driver_ && (state_ == State::Prepared || state_ == State::Running) && driver_->controlPanel();
+}
+
+int32_t AsioSession::pollEvent() {
+    if (driver_ && driver_->panelOpen()) {
+        lastTickNs_.store(nowNs(), std::memory_order_relaxed);
+        return kEventNone;
+    }
+    if (resetRequested_.exchange(false, std::memory_order_acq_rel)) {
+        double now = 0.0;
+        if (driver_ && driver_->getSampleRate(now) && now > 0.0 && now != sampleRate_) driverRate_ = now;
+        return kEventResetRequested;
+    }
+    if (state_ == State::Running) {
+        const int64_t silentNs = nowNs() - lastTickNs_.load(std::memory_order_relaxed);
+        if (silentNs > std::chrono::duration_cast<std::chrono::nanoseconds>(watchdog_).count()) {
+            quiesce();
+            failure_ = Failure::Stopped;
+            failureDetail_.clear();
+            state_ = State::Failed;
+            return kEventDriverFailed;
+        }
+    }
+    return kEventNone;
+}
+
+void AsioSession::bufferSwitch(int32_t index, int64_t pos) {
+    inSwitch_.store(true, std::memory_order_seq_cst);
+    Io* const live = live_.load(std::memory_order_seq_cst);
+    if (!live || index < 0 || index > 1) {
+        inSwitch_.store(false, std::memory_order_release);
+        return;
+    }
+    Io& s = *live;
+    lastTickNs_.store(nowNs(), std::memory_order_relaxed);
+    const int32_t n = s.frames;
+    if (pos >= 0) {
+        if (lastPosition_ >= 0) {
+            const int64_t step = pos - lastPosition_;
+            if (step > 0 && step % n != 0) resetRequested_.store(true, std::memory_order_relaxed);
+        }
+        lastPosition_ = pos;
+    }
+
+    float* io = s.interleaved.data();
+    if (const InputCallback* in = input_.load(std::memory_order_seq_cst); in && s.inCount > 0) {
+        float* ins = s.inInterleaved.data();
+        for (int32_t c = 0; c < s.inCount; ++c) {
+            const int32_t b = s.inBufs[static_cast<std::size_t>(c)];
+            if (b >= 0) {
+                toFloat(s.buffers[static_cast<std::size_t>(b)].buffers[index], s.inTypes[static_cast<std::size_t>(c)],
+                    ins + c, n, s.inCount);
+            } else {
+                for (int32_t i = 0; i < n; ++i) {
+                    ins[static_cast<std::size_t>(i) * static_cast<std::size_t>(s.inCount) +
+                        static_cast<std::size_t>(c)] = 0.0f;
+                }
+            }
+        }
+        (*in)(ins, n, s.inCount);
+    }
+
+    float* cue = s.cueInterleaved.data();
+    if (s.render) {
+        s.render(io, cue, n);
+    } else {
+        std::fill(io, io + static_cast<std::size_t>(n) * 2u, 0.0f);
+        std::fill(cue, cue + static_cast<std::size_t>(n) * 2u, 0.0f);
+    }
+
+    const auto outBuf = [&](int32_t ch) { return s.buffers[static_cast<std::size_t>(ch)].buffers[index]; };
+    const auto outType = [&](int32_t ch) { return s.outTypes[static_cast<std::size_t>(ch)]; };
+    const auto outs = static_cast<int32_t>(s.outTypes.size());
+    const ResolvedRouting rr = resolveRouting(unpackRouting(routing_.load(std::memory_order_relaxed)), outs);
+    const auto place = [&](float* src, int32_t first, int32_t width) {
+        if (width == 1) {
+            for (int32_t i = 0; i < n; ++i) src[i * 2] = 0.5f * (src[i * 2] + src[i * 2 + 1]);
+        }
+        for (int32_t c = 0; c < width; ++c) {
+            const int32_t ch = first + c;
+            if (isSupported(outType(ch))) fromFloat(src + c, 2, outType(ch), outBuf(ch), n);
+            else
+                clear(outType(ch), outBuf(ch), n);
+        }
+    };
+    if (rr.mainWidth > 0) place(io, rr.mainFirst, rr.mainWidth);
+    if (rr.cueWidth > 0) place(cue, rr.cueFirst, rr.cueWidth);
+    const auto used = [&](int32_t ch, int32_t first, int32_t width) { return ch >= first && ch < first + width; };
+    for (int32_t ch = 0; ch < outs; ++ch) {
+        if (!used(ch, rr.mainFirst, rr.mainWidth) && !used(ch, rr.cueFirst, rr.cueWidth)) {
+            clear(outType(ch), outBuf(ch), n);
+        }
+    }
+
+    if (s.outputReady) s.driver->outputReady();
+    inSwitch_.store(false, std::memory_order_release);
+}
+
+void AsioSession::sampleRateChanged(double) {
+    resetRequested_.store(true, std::memory_order_relaxed);
+}
+
+int32_t AsioSession::message(int32_t selector, int32_t value) {
+    switch (selector) {
+    case kSelectorSupported:
+        switch (value) {
+        case kEngineVersion:
+        case kResetRequest:
+        case kBufferSizeChange:
+        case kResyncRequest:
+        case kLatenciesChanged:
+        case kSupportsTimeInfo:
+        case kOverload: return 1;
+        default: return 0;
+        }
+    case kEngineVersion: return 2;
+    case kResetRequest:
+    case kBufferSizeChange:
+    case kLatenciesChanged: resetRequested_.store(true, std::memory_order_relaxed); return 1;
+    case kResyncRequest:
+    case kOverload:
+        if (xrun_) xrun_();
+        return 1;
+    case kSupportsTimeInfo: return 1;
+    default: return 0;
+    }
+}
+
+} // namespace nota::io::audio::asio

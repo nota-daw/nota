@@ -14,7 +14,7 @@ the **registration path (§2)** and the **card interface (§3)** differ — effe
 and MIDI effects register through a much lighter path than instruments.
 
 The canonical example is **Nota Volt** (virtual-analog synth, kind 6):
-`src/native/nota.engine/src/devices/instruments/VoltSynth.h` + `.cpp` (DSP) + `DeviceCards/Instruments/VoltInstrumentCard.cs` (UI).
+`src/native/nota.engine/modules/devices/src/instruments/volt/VoltSynth.h` + `.cpp` (DSP) + `DeviceCards/Instruments/VoltInstrumentCard.cs` (UI).
 Its editor is the reference build of the card layout — **read it first when designing
 a synth UI, together with `DESIGN.md` § Device cards and the rendered specimens in
 `DESIGN.html`.** Good
@@ -28,14 +28,19 @@ effects** (`builtinKind()`): 0 EQ, 1 Compressor, 2 Reverb, 3 Delay, 4 Utility,
 0 Arp, + Chord / Scale / Note Length / Velocity / Random. **Grep the current
 registration for the next free kind before picking one** — this list drifts.
 
-## 1. DSP class (`.h` + `.cpp` pair)
+## 1. DSP class (per-device folder in `modules/devices/`)
 
-Put the device in its family folder — `src/native/nota.engine/src/devices/
-instruments/<Name>.h` + `.cpp` (`final : public Instrument`), `devices/effects/`
-(audio effect, `: public Device`, in-place stereo `process(buf, frames)`), or
-`devices/midi_fx/` (`: public MidiDevice`, MIDI effect) — and add both files to
-`src/native/nota.engine/CMakeLists.txt`. The header declares, the TU implements;
-**every new file carries the AGPL SPDX two-line header. Allocation-free after
+Put the device in its own subdirectory under `src/native/nota.engine/modules/devices/src/` —
+`instruments/<name>/` (`final : public Instrument`), `effects/<name>/` (audio effect,
+`: public Device`, in-place stereo `process(buf, frames)`), or `midi_fx/<name>/`
+(`: public MidiDevice`, MIDI effect) — and add the `.cpp` sources to
+`src/native/nota.engine/modules/devices/CMakeLists.txt` (`NOTA_DEVICES_SOURCES`). Split larger
+devices (`> 400` lines) into focused `*Params.h`, `*Dsp.*`, and `*Device.*` files rather than
+`> 1,000`-line monoliths. The header declares, the TU implements; keep public headers free of
+third-party/OS headers (`nota/dsp/` contracts only), avoid raw `new`/`delete` in domain code,
+pass `NOTA_STRICT_WARNINGS_AS_ERRORS=ON`, and unconditionally run `clang-format -i` (root
+`.clang-format`) on modified native files before finishing.
+**Every new file carries the AGPL SPDX two-line header. Allocation-free after
 construction** (pre-size buffers). Rules:
 
 - **Parameters via the plugin-param interface** (`pluginParamCount/Id/Name/Get/Set/
@@ -65,13 +70,13 @@ Grep the exemplar and copy every site. **Instruments** carry the most sites
 (they need their own track + C ABI); **audio/MIDI effects register through a much
 lighter path — see the end of this section.**
 
-### Instruments (`grep -rn Volt` / `grep -rn Aurora`)
+### Instruments (`grep -rn VoltSynth` / `grep -rn Twin`)
 
-**Native:** `Engine.h` decl `add<Name>Track`; `Engine_Devices.cpp` (the method +
-`#include` + `cloneInstrument` switch + `makeBuiltinInstrument` switch);
-`devices/racks/RackCore.h` `makeInstrument` switch + include; C ABI
-`nota_engine_add_<name>_track` in `src/abi/nota_engine_track.cpp` **and** the decl in
-`include/nota/nota_engine.h` (the `_nota_*` export list is a wildcard — no change).
+**Native:** add the kind and slug to `modules/devices/include/nota/devices/DeviceIds.h` and
+`modules/devices/src/DeviceIds.cpp`, register the factory in
+`modules/devices/src/Registration.cpp` (`DeviceRegistry::instance()` replaces legacy switches —
+no edits to `Engine` track creation or `RackCore` needed unless exposing a dedicated C ABI
+helper in `modules/c_abi/src/nota_engine_track.cpp` and `include/nota/nota_engine.h`).
 
 **Managed:** `NativeMethods.Tracks.cs` (`[LibraryImport]`), `NotaEngine.Tracks.cs`
 (wrapper), `IAudioEngine.cs` (interface); `Nota.Application/Palette/BuiltinDeviceCatalog.cs`
@@ -93,12 +98,12 @@ picker (that path made empty-id lanes → "drew a curve, no effect").
 
 ### Audio effects (`grep -rn AutoFilter` / `grep -rn Vintage`) — much lighter
 
-No track, no C ABI, no `Engine.h` method: effects are added generically by
-`addTrackBuiltinDevice(trackId, kind)`. Only:
-- **Native:** the `.h`/`.cpp` pair in `devices/effects/` with `: public Device` and `builtinKind()` returning the kind,
-  then register that kind in the **three switches** in `Engine_Devices.cpp` —
-  `addTrackBuiltinDevice` **+** `cloneDevice` **+** `makeBuiltinDevice` — plus the
-  `#include`. Params use the plain `Device` interface (`paramCount/paramName/
+No track, no C ABI, no `Engine` method: effects are added generically by `kind` or `slug` via
+`DeviceRegistry`. Only:
+- **Native:** the `<Name>.h`/`.cpp` (or `Params`/`Dsp`/`Device`) files in
+  `modules/devices/src/effects/<name>/` with `: public Device` and `builtinKind()` returning the
+  kind, then add the enum/slug in `DeviceIds.{h,cpp}` and one `regFx(...)` entry in
+  `modules/devices/src/Registration.cpp`. Params use the plain `Device` interface (`paramCount/paramName/
   paramMin/paramMax/getParam/setParam`); **prefer normalized 0..1** (mirror
   AutoFilter/Vintage, not the older raw-unit Amp/EQ). Persist / clone / automation
   are **generic** through the base `Device` (by `builtinKind()` + params) — no
@@ -111,8 +116,7 @@ No track, no C ABI, no `Engine.h` method: effects are added generically by
 
 ### MIDI effects (`grep -rn Arpeggiator` / `grep -rn MidiScale`)
 
-Mirror an existing `MidiDevice` (e.g. `devices/midi_fx/Arpeggiator.h`) with `midiKind()`; register
-in the engine's MIDI-device factory + `MidiDeviceCardFactory` `[kind]` + a `MidiEffect`
+Mirror an existing `MidiDevice` (e.g. `modules/devices/src/midi_fx/arpeggiator/Arpeggiator.h`) with `midiKind()`; add its enum/slug in `DeviceIds.{h,cpp}`, register `regMidi(...)` in `modules/devices/src/Registration.cpp`, and add `MidiDeviceCardFactory` `[kind]` + a `MidiEffect`
 entry with its descriptor in `BuiltinDeviceCatalog.cs` (and its category in `DeviceCategories.cs`). Params/persist/clone are generic like audio effects. Cards sit
 **before** the instrument in the chain.
 
@@ -270,6 +274,8 @@ Colours/tokens: never hardcode — reuse the `DeviceCardKit` brushes (`Card2`, `
   with the env var, `screencapture`, crop with `sips`, then **revert the hook and
   rebuild.** To shoot a non-default tab, briefly flip the tab's default `Content`.
 
-Build native (`cmake --build build --target nota_engine`) and managed
-(`dotnet build src/managed/Nota.App`) after each layer; the C ABI is wildcard-
-exported so a new `_nota_*` function needs no export-list edit.
+Before finishing, unconditionally run `clang-format -i` (root `.clang-format`) on all modified
+native C/C++/ObjC++ files, verify standalone header/strict builds (`cmake --build build --target
+nota_devices nota_engine nota_header_check_nota_devices` / `NOTA_STRICT_WARNINGS_AS_ERRORS=ON` +
+`clangd` include diagnostics clean), and build managed (`dotnet build src/managed/Nota.App`); the C ABI
+is `_nota_*` wildcard-exported so a new `_nota_*` function needs no export-list edit.

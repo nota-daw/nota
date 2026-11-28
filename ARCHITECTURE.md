@@ -41,13 +41,17 @@ engine embeddable and the UI replaceable.
 | `src/managed/Nota.Presentation` | View-models. |
 | `src/managed/Nota.App` | Avalonia views, windows, device cards, input handling. Composition root. |
 | `src/managed/Nota.Mcp` | MCP server so an AI agent can drive the app. Off unless enabled in Preferences. |
-| `src/native/nota.engine/include/nota` | The public C ABI header — the whole contract. |
-| `src/native/nota.engine/src` | Engine core (`Engine*.cpp`, `Engine.h`), DSP, devices, backends. JUCE-free. |
-| `src/native/nota.engine/src/devices/` | Base interfaces (`Device`, `Instrument`, `MidiDevice`, factories) plus `effects/` (25 audio effects), `instruments/` (18 instruments), `midi_fx/` (6 MIDI effects), `racks/` (4 rack containers) — every device as a `.h`/`.cpp` pair (see below). |
-| `src/native/nota.engine/src/engine/` | Engine model classes (`Graph`, `Track`, `Transport`, `SessionPlayer`, `Automation`, `Modulation`, `MidiClip`, `MidiController`, `NoteExpression`, `CommandQueue`, `SnapshotHistory`, `Audition`) plus the multi-core `AudioThreadPool` — each as a `.h`/`.cpp` pair. |
-| `src/native/nota.engine/src/dsp/` | Shared C++20 DSP building blocks: `core/` (spans, params, silence detection, RT attributes), `math/` (`FastMath`, SIMD, PRNG), `primitives/` (filters, delay, oscillators, envelopes, oversampler, convolution), `poly/` (voices, voice manager). |
-| `src/native/nota.engine/src/abi/` | C ABI translation units (`nota_engine_*.cpp`) and `media/` (samples, warp, analysis) and `audio_io/` (platform backends). |
-| `src/native/nota.engine/pluginhost` | JUCE-based VST3/AU hosting: `hosting/` (play-head, editors, plugin devices), `scanner/` (thread-safe `PluginCatalog`, out-of-process scan, `nota_pluginscanner` INTERFACE target), `scanner/worker/` (`nota-scanworker`), `bridge/` (`PluginHostBridge.h`, the engine's only door into hosting). |
+| `src/native/nota.engine/include/nota` | The public C ABI header — the managed interop contract (`nota_engine.h`). |
+| `src/native/nota.engine/modules/core` | Process-wide non-DSP runtime support (config file I/O, data directory resolution, editor key forwarding queue) (`nota_core`). |
+| `src/native/nota.engine/modules/math` | SIMD vector ops, FastMath, complex/FFT, windowing (`nota_math`). |
+| `src/native/nota.engine/modules/media` | Sample buffers, streaming playback, tempo/warp, codecs (`FLAC`, `LAME`), import (`nota_media`). |
+| `src/native/nota.engine/modules/dsp` | Shared C++20 DSP primitives, filters, voices, RT utilities, device & plugin contracts (`nota_dsp`). |
+| `src/native/nota.engine/modules/devices` | Built-in effects, instruments, MIDI FX, racks, and `DeviceIds` registry (`nota_devices`). |
+| `src/native/nota.engine/modules/pluginscanner` | Thread-safe `PluginCatalog`, format registry, out-of-process scan + `nota-scanworker` (`nota_pluginscanner`). |
+| `src/native/nota.engine/modules/pluginhost` | JUCE-based VST3/AU hosting, play-head, editor windows, plugin device adapters (`nota_pluginhost`). |
+| `src/native/nota.engine/modules/io` | Audio, MIDI, MPE, ASIO session, and gamepad hardware drivers (`nota_io`). |
+| `src/native/nota.engine/modules/engine` | Engine graph/transport/render/mixer/session/recording domain services + OOP C++20 API (`nota_engine_core`). |
+| `src/native/nota.engine/modules/c_abi` | Optional thin `nota_*` C ABI wrapper delegating to `nota_engine_core` (`nota_engine`). |
 | `src/native/nota.engine/vendor` | Vendored third-party sources (see `LICENSES/third-party.md`). |
 | `tests/Nota.SmokeTest` | End-to-end smoke test driven through the C ABI. |
 | `scripts` | Per-platform build and packaging scripts. |
@@ -87,38 +91,44 @@ that crashes when a plugin builds its editor.
 
 `Engine` owns the transport, an immutable graph of audio and instrument tracks, the
 mixer, sends and return buses, the metronome, file playback, recording, and
-sample-accurate MIDI. Its implementation is split by concern across
-`Engine_Tracks.cpp`, `Engine_Render.cpp`, `Engine_Session.cpp`, `Engine_Rack.cpp`,
-`Engine_Devices.cpp`, `Engine_Automation.cpp`, `Engine_Modulation.cpp`,
-`Engine_Recording.cpp`, while the engine model classes (`Graph`, `Track`,
-`Transport`, `SessionPlayer`, `Automation`, `Modulation`, `MidiClip`,
-`MidiController`, `NoteExpression`, `CommandQueue`, `SnapshotHistory`, `Audition`)
-live as `.h`/`.cpp` pairs in `src/engine/`. Rendering dispatches Pass 1 leaf
+sample-accurate MIDI. Its internals are organized into domain directories under
+`modules/engine/src/` (`core/`, `model/`, `render/`, `tracks/`, `clips/`, `devices/`,
+`session/`, `recording/`, `automation/`, `io/`), wrapped by OOP C++20 handles under
+`modules/engine/include/nota/engine/` (`NotaEngine.h`) and exposed to C/P/Invoke via
+`modules/c_abi/`. Rendering dispatches Pass 1 leaf
 tracks in parallel over the lock-free `AudioThreadPool` (per-worker scratch
 buffers) and sums leaves/groups/returns with the SIMD mixer; per-device silence
 is propagated down every chain (see the auto-sleep convention below).
 
-Device I/O sits behind `AudioBackend` so the platform layer stays swappable:
+Device I/O lives in `modules/io/` behind `IAudioDriver` / `IMidiDriver` / `IGamepadDriver`:
 | Platform | Audio | MIDI |
 |---|---|---|
-| macOS | CoreAudio (`CoreAudioBackend.mm`) | CoreMIDI |
-| Windows | WASAPI via miniaudio, or ASIO (`audio_io/windows/`) | WinMM via RtMidi |
+| macOS | CoreAudio (`CoreAudioDriver`) | CoreMIDI |
+| Windows | WASAPI via miniaudio, or ASIO (`modules/io/include/nota/io/audio/asio/`) | WinMM via RtMidi |
 | Linux | PulseAudio / ALSA via miniaudio | ALSA via RtMidi |
 
 miniaudio runtime-links PulseAudio/ALSA with `dlopen`, so those libraries are not needed
 at link time.
 
 ASIO (specs/049) is one duplex driver with one callback, while the engine opens output
-(`AudioBackend`) and capture (`AudioInput`) separately. Both are thin facades
-(`AsioBackend`, `AsioInput`) over one process-wide `AsioSession`, which owns the driver:
+and capture streams separately over one process-wide `AsioSession`, which owns the driver:
 each buffer switch converts the chosen input pair, hands it to the input rings, renders,
 converts the result to the chosen output pair and zeroes every other output. The session
-lives in `audio_io/asio/` and builds on every platform — it reaches the driver through
-`AsioDriverApi`, so `FakeAsioDriver` tests it in the smoke test; only the registry list, the
-COM adapter (its own STA control thread, with timeouts) and the facades are Windows-only.
+lives in `modules/io/` and builds on every platform — it reaches the driver through
+`AsioDriverApi`, so `FakeAsioDriver` tests it cleanly; only the registry list, the
+COM adapter (its own STA control thread, with timeouts) and the Windows glue are Windows-only.
 Driver resets reach the app as a polled device event and go through the normal apply path;
 a driver that won't start falls back to WASAPI. Backends report device latency
 (`inputLatencyFrames` / `outputLatencyFrames`), which moves recorded takes earlier.
+
+### Native module, readability, and formatting gates
+
+The native codebase (`src/native/nota.engine/`) enforces modular boundaries, file readability, and strict C++20 checks across `modules/{math,media,dsp,devices,pluginscanner,pluginhost,io,engine,c_abi}`:
+
+- **Module DAG & header isolation**: every module exposes only `include/` as `PUBLIC` and keeps `src/` `PRIVATE` (`cmake/NotaModuleHelpers.cmake`). Public headers (`modules/*/include/nota/**`) must stay cycle-free, compile standalone (`test_headers_compile`), and never include third-party SDK headers (`dr_*`, `FLAC`, `lame`, `juce`, `miniaudio`, `rtmidi`, `signalsmith`, `nlohmann`) or OS framework headers. Objective-C++ bridges live exclusively in `*_mac.mm` files (never override `.cpp` language to `OBJCXX`). Central OOP registries (`AudioCodecRegistry`, `DeviceRegistry`, `PluginFormatRegistry`, `AudioDriverRegistry`, `MidiDriverRegistry`) replace monolithic `switch` factories.
+- **File size & decomposition**: public `Engine::*` domain headers under `modules/engine/include/nota/engine/` stay concise (`< 180` lines each). Engine internals are decomposed by domain (`core/`, `model/`, `render/`, `tracks/`, `clips/`, `devices/`, `session/`, `recording/`, `automation/`, `io/`), and larger built-in devices (`> 400` lines) split into focused `Params` / `Dsp` / `Device` files so no `> 1,000`-line monolithic device or engine TU blocks comprehension.
+- **Modern C++20 & strict verification**: modular libraries use RAII ownership (zero raw `new`/`delete` inside `modules/*` domain/API code outside C ABI handle boundaries), `[[nodiscard]]`, `explicit` single-argument constructors, and `std::span`/`std::string_view`/`std::bit_cast`. All modules and native tests must build cleanly with `NOTA_STRICT_WARNINGS_AS_ERRORS=ON` (`-Werror`, `-Wconversion`, `-Wsign-conversion`, `-Wold-style-cast`, `-Wshadow`, `-Wnon-virtual-dtor`), pass `dev-asan` (ASan + UBSan) and `test_headers_compile`, and produce zero `clangd` missing/unused-include diagnostics under root `.clangd`.
+- **Mandatory `clang-format`**: before concluding any edit to native engine, perf, or benchmark code (`src/native/nota.engine/`, `tests/perf/`, `scripts/bench/`), unconditionally run `clang-format -i` (using root `.clang-format`) on every modified C/C++/ObjC++ file.
 
 ### Warping
 
@@ -158,16 +168,19 @@ an Instrument Rack whose chains are pads gated by a trigger note.
 
 ### Native DSP file conventions
 
-Every built-in device is a `.h`/`.cpp` pair in its family folder —
-`devices/effects/` (25 audio effects + the `ChamberIrSynth` IR helper),
-`devices/instruments/` (18 pairs, including the extracted `RhythmVoiceDsp` and
-`MosaicProgram` helpers), `devices/midi_fx/` (6 MIDI effects),
-`devices/racks/` (4 rack containers). Shared DSP lives in `dsp/{core,math,
-primitives,poly}/` and the engine model in `src/engine/`. Conventions:
+Every built-in device lives in its own subdirectory under `modules/devices/src/` —
+`effects/<name>/` (audio effects), `instruments/<name>/` (instruments), `midi_fx/<name>/`
+(MIDI effects), and `racks/` (rack containers) — registered via `DeviceRegistry` in
+`modules/devices/src/Registration.cpp` (no duplicated `switch` factories). Shared DSP lives in
+`modules/dsp/`, math/SIMD in `modules/math/`, and engine services in `modules/engine/`.
+Conventions:
 
-- Every new file carries the AGPL SPDX two-line header; Device/Instrument
-  subclasses split into a declaration header plus an implementation TU, so
-  touching one device's `.cpp` recompiles only that TU.
+- Every new file carries the AGPL SPDX two-line header; Device/Instrument subclasses split into
+  focused declaration headers plus implementation TUs (with larger devices `> 400` lines split
+  into `*Params.h`, `*Dsp.*`, `*Device.*` files, avoiding `> 1,000`-line monoliths), so touching
+  one device's `.cpp` recompiles only that TU.
+- Keep public headers concise/self-contained and run `clang-format -i` (root `.clang-format`)
+  before finishing any native edit.
 - Control-rate math stays `std`-exact; `FastMath` approximations apply only to
   downstream/published sample values.
 - Auto-sleep via `hasTail()` / `isIdle()` / `wake()` (`Device.h`): a tail-less
@@ -177,19 +190,16 @@ primitives,poly}/` and the engine model in `src/engine/`. Conventions:
 
 ## Plugin hosting
 
-JUCE is confined to `pluginhost/`, built as a separate static library and reached through
-`pluginhost/bridge/PluginHostBridge.h`. **No JUCE type crosses that line** — the core engine has no JUCE
+JUCE is confined to `modules/pluginhost/` (and `modules/pluginscanner/src/backends/juce/`), built as shared libraries with hidden visibility and reached through
+`dsp/PluginContracts.h`, `pluginhost/PluginHostModule.h`, and `pluginscanner/PluginScannerModule.h`. **No JUCE type crosses that line** — the core engine has no JUCE
 dependency at all. VST3 is hosted everywhere; AU is macOS-only. Plugin scanning runs
 out-of-process in `nota-scanworker` so a crashing plugin cannot take the app down.
 
-Scanning is separated from hosting: `pluginhost/scanner/` holds the thread-safe
-`PluginCatalog`, the `OutOfProcessScanner` coordinator, and the `nota_pluginhost_*`
-scan ABI, while `pluginhost/hosting/` holds the play-head, editor window, and
-plugin device classes. `nota_pluginscanner` is an INTERFACE target — its
-translation units compile once inside `nota_pluginhost`, the single JUCE owner
-(a second STATIC JUCE lib would duplicate ~11k symbols at the `nota_engine`
-link). Scanner code includes only bridge headers and JUCE, never engine
-internals (`Engine.h`, `Track.h`, `Graph.h`, `Device.h`).
+Scanning is separated from hosting: `modules/pluginscanner/` holds the thread-safe
+`PluginCatalog`, format registry, `OutOfProcessScanner` coordinator, and
+`nota-scanworker`, while `modules/pluginhost/` holds the play-head, editor window, and
+plugin device classes. JUCE symbols stay hidden (`-fvisibility=hidden`) and unexported from
+both shared libraries so hosted plugins never coalesce symbols against Nota's JUCE.
 
 A plugin is found by its JUCE identifier, `<format>-<name>-<path hash>-<uid>`. When no
 catalog entry matches exactly, the lookup falls back to format + name + uid, so a project
@@ -276,7 +286,7 @@ keeps the audio thread free of UI concerns.
 ## Build
 
 The native engine is built by CMake + Ninja, separately from the managed app; the app's
-project copies the resulting `libnota_engine.{dylib,so}` / `nota_engine.dll` plus
+project copies the resulting `libnota_*.{dylib,so}` / `nota_*.dll` shared libraries plus
 `nota-scanworker` next to the managed binary for P/Invoke. See [`README.md`](README.md)
 for commands and [`BUILD.md`](BUILD.md) for details.
 

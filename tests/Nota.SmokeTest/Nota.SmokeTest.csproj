@@ -19,10 +19,19 @@
     <NotaEngineLibName Condition="$([MSBuild]::IsOSPlatform('Windows'))">nota_engine.dll</NotaEngineLibName>
     <NotaEngineLibName Condition="'$(NotaEngineLibName)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">libnota_engine.so</NotaEngineLibName>
     <NotaEngineLibName Condition="'$(NotaEngineLibName)' == ''">libnota_engine.dylib</NotaEngineLibName>
+    <NotaEngineLibNormalized Condition="'$(NotaEngineLib)' != ''">$([MSBuild]::NormalizePath('$(NotaEngineLib)'))</NotaEngineLibNormalized>
+    <NotaNativeLibDir Condition="'$(NotaEngineLib)' != ''">$([MSBuild]::NormalizeDirectory('$([System.IO.Path]::GetDirectoryName("$(NotaEngineLibNormalized)"))'))</NotaNativeLibDir>
+    <NotaNativeSiblingPattern Condition="'$(NotaEngineLib)' != '' and $([MSBuild]::IsOSPlatform('Windows'))">$(NotaNativeLibDir)nota_*.dll</NotaNativeSiblingPattern>
+    <NotaNativeSiblingPattern Condition="'$(NotaNativeSiblingPattern)' == '' and '$(NotaEngineLib)' != '' and $([MSBuild]::IsOSPlatform('Linux'))">$(NotaNativeLibDir)libnota_*.so</NotaNativeSiblingPattern>
+    <NotaNativeSiblingPattern Condition="'$(NotaNativeSiblingPattern)' == '' and '$(NotaEngineLib)' != ''">$(NotaNativeLibDir)libnota_*.dylib</NotaNativeSiblingPattern>
   </PropertyGroup>
   <ItemGroup Condition="Exists('$(NotaEngineLib)')">
     <None Include="$(NotaEngineLib)">
       <Link>$(NotaEngineLibName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(NotaNativeSiblingPattern)" Exclude="$(NotaEngineLibNormalized);$(NotaNativeLibDir)$(NotaEngineLibName)" Condition="'$(NotaNativeSiblingPattern)' != ''">
+      <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

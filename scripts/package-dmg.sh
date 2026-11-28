@@ -169,9 +169,10 @@ echo "==> Verifying:"
 echo -n "   apphost: "; lipo -archs "${CONTENTS}/MacOS/${APP_NAME}.App"
 echo -n "   engine:  "; lipo -archs "${CONTENTS}/MacOS/libnota_engine.dylib"
 echo -n "   scanner: "; lipo -archs "${CONTENTS}/MacOS/nota-scanworker"
-for bin in "${APP_NAME}.App" libnota_engine.dylib nota-scanworker; do
-  [ "$(lipo -archs "${CONTENTS}/MacOS/${bin}")" = "${ARCH}" ] || \
-    { echo "error: ${bin} is not ${ARCH}-only" >&2; rm -f "${DMG}"; exit 1; }
+for path in "${CONTENTS}/MacOS/${APP_NAME}.App" "${CONTENTS}/MacOS"/libnota_*.dylib "${CONTENTS}/MacOS/nota-scanworker"; do
+  [ -e "${path}" ] || { echo "error: missing $(basename "${path}")" >&2; rm -f "${DMG}"; exit 1; }
+  [ "$(lipo -archs "${path}")" = "${ARCH}" ] || \
+    { echo "error: $(basename "${path}") is not ${ARCH}-only" >&2; rm -f "${DMG}"; exit 1; }
 done
 
 echo "==> Done: ${DMG}"

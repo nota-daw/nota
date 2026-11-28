@@ -1009,7 +1009,7 @@ audio effects after it keep running and keep their settings; saved with the proj
   Wheel-Mod (LFO ↔ noise), 5/10/16 voices, round-robin or oldest-note stealing,
   Poly/Unison/Mono, poly unison stacks, glide, the Release switch, and **Vintage Drift**
   (seeded per-voice spread — a render is identical for the same seed, so freezing is
-  exact). 40 factory presets. Also builds as a standalone VST3 for other hosts.
+  exact). 40 factory presets.
 - **Nota Twin** — morphing analog poly, 4–12 voices: every sound control has a **side A and a
   side B**, and **Morph** sweeps the whole sound between them, effects and modulation depths
   included. Two oscillators running triangle → saw → square with a Metal folder, sync and FM;
